@@ -19,6 +19,7 @@ Makefile.in
 .libs/
 .deps/
 /src/bloom-telnet
+/build/
 
 # Test outputs
 *.log
