@@ -1,7 +1,6 @@
 ;; Bootstrap Lisp file for bloom-telnet
 ;; This file is always loaded on startup before any user-provided Lisp file
 ;; All variables defined here can be overridden in your custom Lisp configuration file
-
 ;; ============================================================================
 ;; COMPLETION PATTERN CONFIGURATION
 ;; ============================================================================
@@ -53,8 +52,7 @@
 (defvar *input-history-size* 100
   "Maximum number of input history entries to keep.")
 
-(defvar *prompt* "> "
-  "Input prompt string.")
+(defvar *prompt* "> " "Input prompt string.")
 
 ;; ============================================================================
 ;; WORD STORE HELPER FUNCTIONS
@@ -131,7 +129,8 @@
            (vec-size (length vec)))
       (if (>= *completion-word-order-index* vec-size)
         (set! *completion-word-order-index* 0))
-      (let* ((slot (normalize-order-index *completion-word-order-index* vec-size))
+      (let* ((slot
+              (normalize-order-index *completion-word-order-index* vec-size))
              (old (vector-ref vec slot)))
         (insert-word-into-slot! vec *completion-word-store* slot old word)
         (advance-order-index vec-size)
@@ -154,7 +153,8 @@
   (and (string? word) (string-prefix? prefix-lower (string-downcase word))
        (null? (hash-ref seen word))))
 
-(defun scan-circular-buffer (vec vec-size start prefix-lower seen max-results)
+(defun scan-circular-buffer
+  (vec vec-size start prefix-lower seen max-results)
   (let ((acc '())
         (count 0))
     (do ((i 0 (+ i 1)))
@@ -190,12 +190,15 @@
            (vec-size (length vec))
            (start *completion-word-order-index*)
            (seen (make-hash-table))
-           (result (scan-circular-buffer vec vec-size start p seen *completion-max-results*))
+           (result
+            (scan-circular-buffer vec vec-size start p seen
+             *completion-max-results*))
            (acc (car result))
            (count (cdr result)))
       (if (> count 0)
         acc
-        (scan-hash-keys *completion-word-store* p seen acc count *completion-max-results*)))))
+        (scan-hash-keys *completion-word-store* p seen acc count
+         *completion-max-results*)))))
 
 ;; ============================================================================
 ;; EXTENSIBLE HOOK SYSTEM
@@ -214,7 +217,9 @@
   (let ((prio (if priority priority 50)))
     (let ((entry (assoc hook-name *hooks*)))
       (if entry
-        (unless (assoc fn-symbol (map (lambda (p) (cons (cdr p) (car p))) (cdr entry)))
+        (unless
+          (assoc fn-symbol
+           (map (lambda (p) (cons (cdr p) (car p))) (cdr entry)))
           (let ((new-pair (cons prio fn-symbol))
                 (inserted #f)
                 (new-list '()))
@@ -226,11 +231,13 @@
                 (set! new-list (cons cur new-list))))
             (unless inserted (set! new-list (cons new-pair new-list)))
             (set! *hooks*
-             (map (lambda (e)
-                    (if (eq? (car e) hook-name)
-                      (cons hook-name (reverse new-list))
-                      e)) *hooks*))))
-        (set! *hooks* (cons (cons hook-name (list (cons prio fn-symbol))) *hooks*)))))
+             (map
+              (lambda (e)
+                (if (eq? (car e) hook-name)
+                  (cons hook-name (reverse new-list))
+                  e)) *hooks*))))
+        (set! *hooks*
+         (cons (cons hook-name (list (cons prio fn-symbol))) *hooks*)))))
   nil)
 
 (defun remove-hook (hook-name fn-symbol)
@@ -238,11 +245,12 @@
   (let ((entry (assoc hook-name *hooks*)))
     (when entry
       (set! *hooks*
-       (map (lambda (e)
-              (if (eq? (car e) hook-name)
-                (cons hook-name
-                 (filter (lambda (pair) (not (eq? (cdr pair) fn-symbol))) (cdr e)))
-                e)) *hooks*))))
+       (map
+        (lambda (e)
+          (if (eq? (car e) hook-name)
+            (cons hook-name
+             (filter (lambda (pair) (not (eq? (cdr pair) fn-symbol))) (cdr e)))
+            e)) *hooks*))))
   nil)
 
 (defun run-hook (hook-name &rest args)
@@ -271,6 +279,7 @@
   nil)
 
 (defvar *user-input-handled* nil)
+
 (defvar *user-input-result* nil)
 
 (defun run-user-input-hooks (text cursor-pos)
@@ -316,6 +325,7 @@
 ;; TIMER SYSTEM
 ;; ============================================================================
 (defvar *timer-list* '() "List of active timers.")
+
 (defvar *timer-next-id* 1 "Next timer ID to assign.")
 
 (defun run-at-time (time repeat function &rest args)
@@ -337,9 +347,7 @@
       *timer-list*))
     found))
 
-(defun list-timers ()
-  "Return list of active timers."
-  *timer-list*)
+(defun list-timers () "Return list of active timers." *timer-list*)
 
 (defun run-timers ()
   "Run all due timers. Called automatically by main loop."
@@ -392,7 +400,6 @@
 ;; These functions provide no-op stubs for GUI features used by contrib scripts.
 ;; In the GUI version, divider-mode shows status icons in the divider line.
 ;; In TUI mode, we just ignore these calls silently.
-
 (defun divider-mode-set (mode-symbol icon priority)
   "Stub: Set divider mode indicator (no-op in TUI)."
   nil)
@@ -404,3 +411,4 @@
 (defun notify (message)
   "Display a notification message. In TUI, echoes to terminal."
   (terminal-echo (concat "\r\n" message "\r\n")))
+

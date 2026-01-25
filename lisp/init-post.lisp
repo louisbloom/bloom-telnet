@@ -3,7 +3,6 @@
 ;; This file is loaded after init.lisp and after the system is ready.
 ;; For a TUI client, this file handles any startup messages and hooks
 ;; that need the main loop to be running.
-
 ;; ============================================================================
 ;; HELPER FUNCTIONS FOR DISPLAY
 ;; ============================================================================
@@ -38,13 +37,10 @@
 ;; STARTUP MESSAGE
 ;; ============================================================================
 ;; Display simple startup info with capability-aware colors
-
 ;; Helper function to get appropriate color for startup message
-(defun startup-color ()
-  (terminal-best-fg-color 100 149 237))  ; Cornflower blue
+(defun startup-color () (terminal-best-fg-color 100 149 237)) ; Cornflower blue
 
-(defun startup-reset ()
-  (terminal-reset-color))
+(defun startup-reset () (terminal-reset-color))
 
 ;; Display startup message with adaptive coloring
 (terminal-echo (startup-color))
@@ -55,9 +51,7 @@
 
 ;; Show terminal capability summary if color is supported
 (if (> (terminal-color-level) 0)
-  (progn
-    (terminal-echo "  Terminal: ")
-    (terminal-echo (terminal-type))
+  (progn (terminal-echo "  Terminal: ") (terminal-echo (terminal-type))
     (terminal-echo " (")
     (let ((level (terminal-color-level)))
       (cond
@@ -68,16 +62,4 @@
     (terminal-echo ")\r\n")))
 
 (terminal-echo (startup-reset))
-
-;; ============================================================================
-;; ANSI COLOR TEST (optional - can be commented out)
-;; ============================================================================
-;; Display ANSI color test
-;; (terminal-echo "\033[38;2;100;149;237mANSI Colors:\033[0m ")
-;; (terminal-echo
-;;  "\033[38;2;180;180;180m16:\033[0m \033[31m#\033[32m#\033[33m#\033[34m#\033[35m#\033[36m#\033[37m#\033[90m#\033[91m#\033[92m#\033[93m#\033[94m#\033[95m#\033[96m#\033[97m#\033[0m ")
-;; (terminal-echo
-;;  "\033[38;2;180;180;180m256:\033[0m \033[38;5;196m#\033[38;5;208m#\033[38;5;220m#\033[38;5;46m#\033[38;5;51m#\033[38;5;21m#\033[38;5;129m#\033[0m ")
-;; (terminal-echo
-;;  "\033[38;2;180;180;180m24-bit:\033[0m \033[38;2;255;0;0m#\033[38;2;255;255;0m#\033[38;2;0;255;0m#\033[38;2;0;255;255m#\033[38;2;0;0;255m#\033[38;2;255;0;255m#\033[0m\r\n")
 

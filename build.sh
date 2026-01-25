@@ -197,18 +197,34 @@ format_sources() {
 		log_warn "shfmt not found. Skipping shell script formatting."
 	fi
 
-	# Format Lisp files with bloom-repl
-	LISP_FMT="/home/thomasc/bloom/bloom-lisp/lisp/lisp-fmt.lisp"
-	if command -v bloom-repl &>/dev/null && [ -f "$LISP_FMT" ]; then
-		if [ -d "lisp" ]; then
-			log_info "Formatting Lisp files with bloom-repl..."
-			find lisp/ -name "*.lisp" | while read -r file; do
-				bloom-repl "$LISP_FMT" "$file" -i
-			done
+	# Format Lisp files with lisp-fmt.lisp
+	if [ -d "lisp" ]; then
+		log_info "Formatting Lisp files with lisp-fmt.lisp..."
+		local repl_path=""
+		if [ -x "$INSTALL_PREFIX/bin/bloom-repl" ]; then
+			repl_path="$INSTALL_PREFIX/bin/bloom-repl"
+		elif command -v bloom-repl &>/dev/null; then
+			repl_path="bloom-repl"
 		fi
-	else
-		if [ -d "lisp" ]; then
-			log_warn "bloom-repl or lisp-fmt.lisp not found. Skipping Lisp formatting."
+
+		# Find lisp-fmt.lisp in bloom-lisp installation or sibling directory
+		local lisp_fmt=""
+		if [ -f "$INSTALL_PREFIX/share/bloom-lisp/lisp-fmt.lisp" ]; then
+			lisp_fmt="$INSTALL_PREFIX/share/bloom-lisp/lisp-fmt.lisp"
+		elif [ -f "../bloom-lisp/lisp/lisp-fmt.lisp" ]; then
+			lisp_fmt="../bloom-lisp/lisp/lisp-fmt.lisp"
+		fi
+
+		if [ -n "$repl_path" ] && [ -n "$lisp_fmt" ]; then
+			find lisp/ -name "*.lisp" | while read -r file; do
+				"$repl_path" "$lisp_fmt" -- -i "$file"
+			done
+		else
+			if [ -z "$repl_path" ]; then
+				log_warn "bloom-repl not found. Skipping Lisp formatting."
+			elif [ -z "$lisp_fmt" ]; then
+				log_warn "lisp-fmt.lisp not found. Skipping Lisp formatting."
+			fi
 		fi
 	fi
 
