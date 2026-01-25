@@ -3,8 +3,8 @@
 #ifndef BLOOM_TELNET_LISP_H
 #define BLOOM_TELNET_LISP_H
 
-#include <stddef.h>
 #include "dynamic_buffer.h"
+#include <stddef.h>
 
 /* Initialize Lisp interpreter, environment, and load init file */
 int lisp_x_init(void);
@@ -21,9 +21,10 @@ void lisp_x_call_telnet_input_hook(const char *text, size_t len);
 /* Run all due timers - calls (run-timers) in Lisp each frame */
 void lisp_x_run_timers(void);
 
-/* Call telnet-input-filter-hook with telnet data (with ANSI codes) before displaying
- * Returns transformed text or original */
-const char *lisp_x_call_telnet_input_filter_hook(const char *text, size_t len, size_t *out_len);
+/* Call telnet-input-filter-hook with telnet data (with ANSI codes) before
+ * displaying Returns transformed text or original */
+const char *lisp_x_call_telnet_input_filter_hook(const char *text, size_t len,
+                                                 size_t *out_len);
 
 /* Call user-input-hook with user input before sending to telnet
  * Returns transformed text or original */
@@ -54,7 +55,8 @@ void lisp_x_load_init_post(void);
 /* Get prompt string from Lisp config (default: "> ") */
 const char *lisp_x_get_prompt(void);
 
-/* Completion callback for lineedit - returns NULL-terminated array of completions */
+/* Completion callback for lineedit - returns NULL-terminated array of
+ * completions */
 char **lisp_x_complete(const char *buffer, int cursor_pos, void *userdata);
 
 #endif /* BLOOM_TELNET_LISP_H */

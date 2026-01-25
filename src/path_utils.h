@@ -3,14 +3,15 @@
 #ifndef PATH_UTILS_H
 #define PATH_UTILS_H
 
-#include <stddef.h>
 #include <limits.h>
+#include <stddef.h>
 
 /* Maximum path length for all path buffers */
 #ifdef _WIN32
-#define TELNET_MAX_PATH 32768  /* Windows: UNICODE_STRING max (32767 chars + null) */
+#define TELNET_MAX_PATH                                                        \
+  32768 /* Windows: UNICODE_STRING max (32767 chars + null) */
 #else
-#define TELNET_MAX_PATH PATH_MAX  /* Unix/Linux/macOS system maximum */
+#define TELNET_MAX_PATH PATH_MAX /* Unix/Linux/macOS system maximum */
 #endif
 
 /* Convert Unix path to platform-native path (in-place).
@@ -26,18 +27,20 @@ int path_is_installed_bin_directory(const char *path);
  * If exe is in .../bin/, returns .../share/bloom-telnet/
  * Returns 1 if successful and fills out_path, 0 otherwise.
  */
-int path_construct_data_directory(const char *base_path, char *out_path, size_t out_path_size);
+int path_construct_data_directory(const char *base_path, char *out_path,
+                                  size_t out_path_size);
 
 /* Construct executable-relative path for a file.
  * Returns 1 if path should be used (not in bin directory), 0 otherwise.
  * If returning 1, fills out_path with the constructed path.
  */
-int path_construct_exe_relative(const char *base_path, const char *filename, char *out_path, size_t out_path_size);
+int path_construct_exe_relative(const char *base_path, const char *filename,
+                                char *out_path, size_t out_path_size);
 
 /* Check if a path is absolute.
- * Windows: Returns 1 if path starts with drive letter (C:, D:, etc.) or UNC (\\)
- * Unix: Returns 1 if path starts with /
- * Returns: 1 if absolute, 0 if relative
+ * Windows: Returns 1 if path starts with drive letter (C:, D:, etc.) or UNC
+ * (\\) Unix: Returns 1 if path starts with / Returns: 1 if absolute, 0 if
+ * relative
  */
 int path_is_absolute(const char *path);
 
@@ -47,15 +50,17 @@ int path_is_absolute(const char *path);
 int file_exists(const char *path);
 
 /* Get the executable's base path (directory containing the executable).
- * Returns: Newly allocated string that must be freed by caller, or NULL on error.
- * Note: Returns path with trailing separator.
+ * Returns: Newly allocated string that must be freed by caller, or NULL on
+ * error. Note: Returns path with trailing separator.
  */
 char *path_get_exe_directory(void);
 
 /* Construct installed resource path: ${DATA_DIR}/${subdir}/${filename}
- * Handles path_get_exe_directory(), data directory construction, and normalization.
- * Returns: 1 if path constructed (exe is in bin/), 0 if not installed
+ * Handles path_get_exe_directory(), data directory construction, and
+ * normalization. Returns: 1 if path constructed (exe is in bin/), 0 if not
+ * installed
  */
-int path_construct_installed_resource(const char *subdir, const char *filename, char *out_path, size_t out_path_size);
+int path_construct_installed_resource(const char *subdir, const char *filename,
+                                      char *out_path, size_t out_path_size);
 
 #endif /* PATH_UTILS_H */

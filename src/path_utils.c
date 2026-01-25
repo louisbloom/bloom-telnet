@@ -2,9 +2,9 @@
 
 #include "path_utils.h"
 #include <bloom-lisp/file_utils.h>
-#include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -17,127 +17,136 @@
  * On Unix: no-op
  */
 void path_normalize_for_platform(char *path) {
-    if (!path)
-        return;
+  if (!path)
+    return;
 
 #ifdef _WIN32
-    for (char *p = path; *p; p++) {
-        if (*p == '/')
-            *p = '\\';
-    }
+  for (char *p = path; *p; p++) {
+    if (*p == '/')
+      *p = '\\';
+  }
 #endif
-    // Unix: no-op, already using /
+  // Unix: no-op, already using /
 }
 
 /* Check if path ends with /bin/ or \bin\ - indicates installed location */
 int path_is_installed_bin_directory(const char *path) {
-    if (!path)
-        return 0;
-    size_t len = strlen(path);
-    if (len < 4)
-        return 0;
-
-    const char *end = path + len;
-    /* Check if ends with /bin/ or \bin\ */
-    if (len >= 5 && (end[-1] == '/' || end[-1] == '\\')) {
-        if ((end[-5] == '/' || end[-5] == '\\') && end[-4] == 'b' && end[-3] == 'i' && end[-2] == 'n') {
-            return 1;
-        }
-    }
-    /* Check if ends with /bin or \bin (no trailing separator) */
-    if ((end[-4] == '/' || end[-4] == '\\') && end[-3] == 'b' && end[-2] == 'i' && end[-1] == 'n') {
-        return 1;
-    }
+  if (!path)
     return 0;
+  size_t len = strlen(path);
+  if (len < 4)
+    return 0;
+
+  const char *end = path + len;
+  /* Check if ends with /bin/ or \bin\ */
+  if (len >= 5 && (end[-1] == '/' || end[-1] == '\\')) {
+    if ((end[-5] == '/' || end[-5] == '\\') && end[-4] == 'b' &&
+        end[-3] == 'i' && end[-2] == 'n') {
+      return 1;
+    }
+  }
+  /* Check if ends with /bin or \bin (no trailing separator) */
+  if ((end[-4] == '/' || end[-4] == '\\') && end[-3] == 'b' && end[-2] == 'i' &&
+      end[-1] == 'n') {
+    return 1;
+  }
+  return 0;
 }
 
 /* Construct POSIX-compliant data directory from executable path.
  * If exe is in .../bin/, returns .../share/bloom-telnet/
  * Returns 1 if successful and fills out_path, 0 otherwise.
  */
-int path_construct_data_directory(const char *base_path, char *out_path, size_t out_path_size) {
-    if (!base_path || !path_is_installed_bin_directory(base_path)) {
-        return 0;
-    }
+int path_construct_data_directory(const char *base_path, char *out_path,
+                                  size_t out_path_size) {
+  if (!base_path || !path_is_installed_bin_directory(base_path)) {
+    return 0;
+  }
 
-    // Copy base path and strip trailing separator
-    size_t len = strlen(base_path);
-    char temp_path[1024]; // Reasonable size for path manipulation
-    strncpy(temp_path, base_path, sizeof(temp_path) - 1);
-    temp_path[sizeof(temp_path) - 1] = '\0';
+  // Copy base path and strip trailing separator
+  size_t len = strlen(base_path);
+  char temp_path[1024]; // Reasonable size for path manipulation
+  strncpy(temp_path, base_path, sizeof(temp_path) - 1);
+  temp_path[sizeof(temp_path) - 1] = '\0';
 
-    // Remove trailing separator if present
+  // Remove trailing separator if present
+  if (len > 0 && (temp_path[len - 1] == '/' || temp_path[len - 1] == '\\')) {
+    temp_path[len - 1] = '\0';
+    len--;
+  }
+
+  // Find and remove the "bin" part (should be last 3 chars)
+  if (len >= 3 && temp_path[len - 3] == 'b' && temp_path[len - 2] == 'i' &&
+      temp_path[len - 1] == 'n') {
+    // Remove "bin"
+    temp_path[len - 3] = '\0';
+    // Remove separator before "bin" if present
+    len -= 3;
     if (len > 0 && (temp_path[len - 1] == '/' || temp_path[len - 1] == '\\')) {
-        temp_path[len - 1] = '\0';
-        len--;
+      temp_path[len - 1] = '\0';
     }
+  } else {
+    return 0; // Unexpected format
+  }
 
-    // Find and remove the "bin" part (should be last 3 chars)
-    if (len >= 3 && temp_path[len - 3] == 'b' && temp_path[len - 2] == 'i' && temp_path[len - 1] == 'n') {
-        // Remove "bin"
-        temp_path[len - 3] = '\0';
-        // Remove separator before "bin" if present
-        len -= 3;
-        if (len > 0 && (temp_path[len - 1] == '/' || temp_path[len - 1] == '\\')) {
-            temp_path[len - 1] = '\0';
-        }
-    } else {
-        return 0; // Unexpected format
-    }
+  // Append share/bloom-telnet (using Unix separator internally)
+  snprintf(out_path, out_path_size, "%s/share/bloom-telnet", temp_path);
 
-    // Append share/bloom-telnet (using Unix separator internally)
-    snprintf(out_path, out_path_size, "%s/share/bloom-telnet", temp_path);
+  // Normalize for platform at the end
+  path_normalize_for_platform(out_path);
 
-    // Normalize for platform at the end
-    path_normalize_for_platform(out_path);
-
-    return 1;
+  return 1;
 }
 
 /* Construct executable-relative path for a file.
  * Returns 1 if path should be used (not in bin directory), 0 otherwise.
  * If returning 1, fills out_path with the constructed path.
  */
-int path_construct_exe_relative(const char *base_path, const char *filename, char *out_path, size_t out_path_size) {
-    if (!base_path || path_is_installed_bin_directory(base_path)) {
-        return 0;
-    }
+int path_construct_exe_relative(const char *base_path, const char *filename,
+                                char *out_path, size_t out_path_size) {
+  if (!base_path || path_is_installed_bin_directory(base_path)) {
+    return 0;
+  }
 
-    size_t base_len = strlen(base_path);
-    const char *sep = (base_len > 0 && (base_path[base_len - 1] == '/' || base_path[base_len - 1] == '\\')) ? "" : "/";
+  size_t base_len = strlen(base_path);
+  const char *sep = (base_len > 0 && (base_path[base_len - 1] == '/' ||
+                                      base_path[base_len - 1] == '\\'))
+                        ? ""
+                        : "/";
 
-    // Construct path using Unix separator internally
-    snprintf(out_path, out_path_size, "%s%s%s", base_path, sep, filename);
+  // Construct path using Unix separator internally
+  snprintf(out_path, out_path_size, "%s%s%s", base_path, sep, filename);
 
-    // Normalize for platform at the end
-    path_normalize_for_platform(out_path);
+  // Normalize for platform at the end
+  path_normalize_for_platform(out_path);
 
-    return 1;
+  return 1;
 }
 
 /* Check if a path is absolute.
- * Windows: Returns 1 if path starts with drive letter (C:, D:, etc.) or UNC (\\)
- * Unix: Returns 1 if path starts with /
- * Returns: 1 if absolute, 0 if relative
+ * Windows: Returns 1 if path starts with drive letter (C:, D:, etc.) or UNC
+ * (\\) Unix: Returns 1 if path starts with / Returns: 1 if absolute, 0 if
+ * relative
  */
 int path_is_absolute(const char *path) {
-    if (!path || path[0] == '\0') {
-        return 0;
-    }
+  if (!path || path[0] == '\0') {
+    return 0;
+  }
 
 #ifdef _WIN32
-    /* Check for drive letter (C:, D:, etc.) */
-    if (path[0] != '\0' && path[1] == ':' && (path[2] == '\\' || path[2] == '/' || path[2] == '\0')) {
-        return 1;
-    }
-    /* Check for UNC path (\\server\share) */
-    if (path[0] == '\\' && path[1] == '\\') {
-        return 1;
-    }
-    return 0;
+  /* Check for drive letter (C:, D:, etc.) */
+  if (path[0] != '\0' && path[1] == ':' &&
+      (path[2] == '\\' || path[2] == '/' || path[2] == '\0')) {
+    return 1;
+  }
+  /* Check for UNC path (\\server\share) */
+  if (path[0] == '\\' && path[1] == '\\') {
+    return 1;
+  }
+  return 0;
 #else
-    /* Unix: absolute paths start with / */
-    return (path[0] == '/');
+  /* Unix: absolute paths start with / */
+  return (path[0] == '/');
 #endif
 }
 
@@ -145,89 +154,91 @@ int path_is_absolute(const char *path) {
  * Returns: 1 if exists, 0 if not
  */
 int file_exists(const char *path) {
-    FILE *f = file_open(path, "r");
-    if (f) {
-        fclose(f);
-        return 1;
-    }
-    return 0;
+  FILE *f = file_open(path, "r");
+  if (f) {
+    fclose(f);
+    return 1;
+  }
+  return 0;
 }
 
 /* Get the executable's base path (directory containing the executable).
- * Returns: Newly allocated string that must be freed by caller, or NULL on error.
- * Note: Returns path with trailing separator.
+ * Returns: Newly allocated string that must be freed by caller, or NULL on
+ * error. Note: Returns path with trailing separator.
  */
 char *path_get_exe_directory(void) {
 #ifdef _WIN32
-    char path[TELNET_MAX_PATH];
-    DWORD len = GetModuleFileNameA(NULL, path, sizeof(path));
-    if (len == 0 || len >= sizeof(path)) {
-        return NULL;
-    }
+  char path[TELNET_MAX_PATH];
+  DWORD len = GetModuleFileNameA(NULL, path, sizeof(path));
+  if (len == 0 || len >= sizeof(path)) {
+    return NULL;
+  }
 
-    /* Find last separator and truncate to get directory */
-    char *last_sep = strrchr(path, '\\');
-    if (!last_sep) {
-        last_sep = strrchr(path, '/');
-    }
-    if (last_sep) {
-        last_sep[1] = '\0';  /* Keep trailing separator */
-    }
+  /* Find last separator and truncate to get directory */
+  char *last_sep = strrchr(path, '\\');
+  if (!last_sep) {
+    last_sep = strrchr(path, '/');
+  }
+  if (last_sep) {
+    last_sep[1] = '\0'; /* Keep trailing separator */
+  }
 
-    return strdup(path);
+  return strdup(path);
 #else
-    /* Linux: read /proc/self/exe symlink */
-    char path[TELNET_MAX_PATH];
-    ssize_t len = readlink("/proc/self/exe", path, sizeof(path) - 1);
-    if (len < 0) {
-        /* Fallback: try current directory */
-        if (getcwd(path, sizeof(path)) == NULL) {
-            return NULL;
-        }
-        size_t cwd_len = strlen(path);
-        if (cwd_len > 0 && path[cwd_len - 1] != '/') {
-            if (cwd_len + 1 < sizeof(path)) {
-                path[cwd_len] = '/';
-                path[cwd_len + 1] = '\0';
-            }
-        }
-        return strdup(path);
+  /* Linux: read /proc/self/exe symlink */
+  char path[TELNET_MAX_PATH];
+  ssize_t len = readlink("/proc/self/exe", path, sizeof(path) - 1);
+  if (len < 0) {
+    /* Fallback: try current directory */
+    if (getcwd(path, sizeof(path)) == NULL) {
+      return NULL;
     }
-    path[len] = '\0';
-
-    /* Find last separator and truncate to get directory */
-    char *last_sep = strrchr(path, '/');
-    if (last_sep) {
-        last_sep[1] = '\0';  /* Keep trailing separator */
+    size_t cwd_len = strlen(path);
+    if (cwd_len > 0 && path[cwd_len - 1] != '/') {
+      if (cwd_len + 1 < sizeof(path)) {
+        path[cwd_len] = '/';
+        path[cwd_len + 1] = '\0';
+      }
     }
-
     return strdup(path);
+  }
+  path[len] = '\0';
+
+  /* Find last separator and truncate to get directory */
+  char *last_sep = strrchr(path, '/');
+  if (last_sep) {
+    last_sep[1] = '\0'; /* Keep trailing separator */
+  }
+
+  return strdup(path);
 #endif
 }
 
 /* Construct installed resource path: ${DATA_DIR}/${subdir}/${filename}
- * Handles path_get_exe_directory(), data directory construction, and normalization.
- * Returns: 1 if path constructed (exe is in bin/), 0 if not installed
+ * Handles path_get_exe_directory(), data directory construction, and
+ * normalization. Returns: 1 if path constructed (exe is in bin/), 0 if not
+ * installed
  */
-int path_construct_installed_resource(const char *subdir, const char *filename, char *out_path, size_t out_path_size) {
-    if (!subdir || !filename || !out_path || out_path_size == 0) {
-        return 0;
-    }
+int path_construct_installed_resource(const char *subdir, const char *filename,
+                                      char *out_path, size_t out_path_size) {
+  if (!subdir || !filename || !out_path || out_path_size == 0) {
+    return 0;
+  }
 
-    char *base_path = path_get_exe_directory();
-    if (!base_path) {
-        return 0;
-    }
+  char *base_path = path_get_exe_directory();
+  if (!base_path) {
+    return 0;
+  }
 
-    char data_dir[TELNET_MAX_PATH];
-    if (!path_construct_data_directory(base_path, data_dir, sizeof(data_dir))) {
-        free(base_path);
-        return 0;
-    }
+  char data_dir[TELNET_MAX_PATH];
+  if (!path_construct_data_directory(base_path, data_dir, sizeof(data_dir))) {
     free(base_path);
+    return 0;
+  }
+  free(base_path);
 
-    snprintf(out_path, out_path_size, "%s/%s/%s", data_dir, subdir, filename);
-    path_normalize_for_platform(out_path);
+  snprintf(out_path, out_path_size, "%s/%s/%s", data_dir, subdir, filename);
+  path_normalize_for_platform(out_path);
 
-    return 1;
+  return 1;
 }
