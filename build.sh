@@ -228,6 +228,14 @@ format_sources() {
 		fi
 	fi
 
+	# Format Python files with black
+	if command -v black &>/dev/null; then
+		log_info "Formatting Python files with black..."
+		find . -name "*.py" -not -path "./$BUILD_DIR/*" | xargs black 2>/dev/null || true
+	else
+		log_warn "black not found. Skipping Python formatting."
+	fi
+
 	# Format markdown files with prettier
 	if command -v prettier &>/dev/null; then
 		log_info "Formatting markdown files with prettier..."
@@ -272,7 +280,7 @@ main() {
 			echo "  --install         Only install the project (skip build and run)"
 			echo "  --bear            Generate compile_commands.json using bear"
 			echo "  --no-debug        Disable debug build"
-			echo "  --format          Format source files with clang-format, shfmt, and prettier"
+			echo "  --format          Format source files with clang-format, shfmt, black, and prettier"
 			echo "  --prefix=PATH     Set installation prefix (default: $HOME/.local)"
 			echo "  --help            Show this help message"
 			exit 0

@@ -193,9 +193,11 @@ static int run_event_loop(void) {
   char recv_buffer[4096];
   const char *prompt = lisp_x_get_prompt();
 
-  /* Print initial prompt */
-  printf("%s", prompt);
-  fflush(stdout);
+  /* Print initial prompt (only when not connected) */
+  if (!g_connected) {
+    printf("%s", prompt);
+    fflush(stdout);
+  }
 
   while (!g_quit_requested) {
 #ifdef _WIN32
@@ -230,8 +232,12 @@ static int run_event_loop(void) {
 
       free(line);
       prompt = lisp_x_get_prompt();
-      printf("%s", prompt);
-      fflush(stdout);
+      /* Update prompt visibility based on connection state */
+      lineedit_set_show_prompt(g_lineedit, g_connected ? 0 : 1);
+      if (!g_connected) {
+        printf("%s", prompt);
+        fflush(stdout);
+      }
     }
 
     /* Check telnet socket */
@@ -240,6 +246,7 @@ static int run_event_loop(void) {
           telnet_receive(g_telnet, recv_buffer, sizeof(recv_buffer) - 1);
       if (received < 0) {
         g_connected = 0;
+        lineedit_set_show_prompt(g_lineedit, 1);
         printf("\r\n*** Connection lost ***\r\n%s", prompt);
         fflush(stdout);
       } else if (received > 0) {
@@ -324,8 +331,12 @@ static int run_event_loop(void) {
 
       free(line);
       prompt = lisp_x_get_prompt();
-      printf("%s", prompt);
-      fflush(stdout);
+      /* Update prompt visibility based on connection state */
+      lineedit_set_show_prompt(g_lineedit, g_connected ? 0 : 1);
+      if (!g_connected) {
+        printf("%s", prompt);
+        fflush(stdout);
+      }
     }
 
     /* Handle telnet socket */
@@ -336,6 +347,7 @@ static int run_event_loop(void) {
             telnet_receive(g_telnet, recv_buffer, sizeof(recv_buffer) - 1);
         if (received < 0) {
           g_connected = 0;
+          lineedit_set_show_prompt(g_lineedit, 1);
           printf("\r\n*** Connection lost ***\r\n%s", prompt);
           fflush(stdout);
         } else if (received > 0) {
@@ -464,6 +476,7 @@ int main(int argc, char *argv[]) {
     } else {
       g_connected = 1;
       telnet_set_terminal_size(g_telnet, g_term_cols, g_term_rows);
+      lineedit_set_show_prompt(g_lineedit, 0);
       printf("Connected.\n");
     }
   }
