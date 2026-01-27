@@ -37,8 +37,8 @@ static Telnet *g_telnet = NULL;
 static LineEditState *g_lineedit = NULL;
 static int g_connected = 0;
 static int g_quit_requested = 0;
-static int g_term_rows = 24;
-static int g_term_cols = 80;
+int g_term_rows = 24;
+int g_term_cols = 80;
 
 #ifndef _WIN32
 static struct termios g_orig_termios;
@@ -377,7 +377,9 @@ static int run_event_loop(void) {
 int main(int argc, char *argv[]) {
   const char *hostname = NULL;
   int port = 23;
-  const char *load_file = NULL;
+  const char **load_files = NULL;
+  int load_file_count = 0;
+  int load_file_capacity = 0;
 
   /* Parse command line arguments */
   for (int i = 1; i < argc; i++) {
@@ -390,7 +392,11 @@ int main(int argc, char *argv[]) {
       return 0;
     } else if ((strcmp(argv[i], "-l") == 0 || strcmp(argv[i], "--load") == 0) &&
                i + 1 < argc) {
-      load_file = argv[++i];
+      if (load_file_count >= load_file_capacity) {
+        load_file_capacity = load_file_capacity ? load_file_capacity * 2 : 4;
+        load_files = realloc(load_files, load_file_capacity * sizeof(char *));
+      }
+      load_files[load_file_count++] = argv[++i];
     } else if (argv[i][0] != '-') {
       if (!hostname) {
         hostname = argv[i];
@@ -434,10 +440,10 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  /* Load additional script if specified */
-  if (load_file) {
-    if (lisp_x_load_file(load_file) < 0) {
-      fprintf(stderr, "Failed to load: %s\n", load_file);
+  /* Load additional scripts if specified */
+  for (int i = 0; i < load_file_count; i++) {
+    if (lisp_x_load_file(load_files[i]) < 0) {
+      fprintf(stderr, "Failed to load: %s\n", load_files[i]);
     }
   }
 
@@ -490,6 +496,7 @@ int main(int argc, char *argv[]) {
   int result = run_event_loop();
 
   /* Cleanup handled by atexit */
+  free(load_files);
   printf("\nGoodbye.\n");
 
   return result;

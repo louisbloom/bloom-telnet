@@ -168,8 +168,14 @@ static LispObject *builtin_terminal_echo(LispObject *args, Environment *env) {
     return lisp_make_error("terminal-echo: argument must be a string");
   }
 
-  /* Output to stdout - the TUI will handle this */
-  printf("%s", text_obj->value.string);
+  /* Output to stdout, converting \n to \r\n for proper terminal display */
+  const char *text = text_obj->value.string;
+  for (const char *p = text; *p; p++) {
+    if (*p == '\n' && (p == text || *(p - 1) != '\r')) {
+      putchar('\r');
+    }
+    putchar(*p);
+  }
   fflush(stdout);
 
   return NIL;
@@ -204,154 +210,84 @@ static LispObject *builtin_telnet_send(LispObject *args, Environment *env) {
   return NIL;
 }
 
-/* Builtin: terminal-color-level - Returns color support level (0-4) */
-static LispObject *builtin_terminal_color_level(LispObject *args,
-                                                Environment *env) {
+/* Builtin: termcap - Unified terminal capability query */
+static LispObject *builtin_termcap(LispObject *args, Environment *env) {
   (void)env;
-  (void)args;
-  return lisp_make_integer(termcaps_get_color_level());
-}
-
-/* Builtin: terminal-supports-truecolor? - Returns t if 24-bit RGB supported */
-static LispObject *builtin_terminal_supports_truecolor(LispObject *args,
-                                                       Environment *env) {
-  (void)env;
-  (void)args;
-  return termcaps_supports_truecolor() ? LISP_TRUE : NIL;
-}
-
-/* Builtin: terminal-supports-256color? - Returns t if 256+ colors supported */
-static LispObject *builtin_terminal_supports_256color(LispObject *args,
-                                                      Environment *env) {
-  (void)env;
-  (void)args;
-  return termcaps_supports_256color() ? LISP_TRUE : NIL;
-}
-
-/* Builtin: terminal-supports-unicode? - Returns t if unicode supported */
-static LispObject *builtin_terminal_supports_unicode(LispObject *args,
-                                                     Environment *env) {
-  (void)env;
-  (void)args;
-  return termcaps_supports_unicode() ? LISP_TRUE : NIL;
-}
-
-/* Builtin: terminal-type - Returns $TERM value */
-static LispObject *builtin_terminal_type(LispObject *args, Environment *env) {
-  (void)env;
-  (void)args;
-  const char *term_type = termcaps_get_term_type();
-  return lisp_make_string(term_type ? term_type : "");
-}
-
-/* Builtin: terminal-encoding - Returns detected encoding string */
-static LispObject *builtin_terminal_encoding(LispObject *args,
-                                             Environment *env) {
-  (void)env;
-  (void)args;
-  const char *encoding = termcaps_get_encoding();
-  return lisp_make_string(encoding ? encoding : "ASCII");
-}
-
-/* Builtin: terminal-caps-describe - Returns human-readable capability summary
- */
-static LispObject *builtin_terminal_caps_describe(LispObject *args,
-                                                  Environment *env) {
-  (void)env;
-  (void)args;
-  const char *desc = termcaps_describe();
-  return lisp_make_string(desc ? desc : "Terminal capabilities not available");
-}
-
-/* Builtin: terminal-best-fg-color - Returns optimal escape sequence for RGB
- * color */
-static LispObject *builtin_terminal_best_fg_color(LispObject *args,
-                                                  Environment *env) {
-  (void)env;
+  extern int g_term_cols;
+  extern int g_term_rows;
 
   if (args == NIL) {
-    return lisp_make_error(
-        "terminal-best-fg-color requires 3 arguments (r g b)");
+    return lisp_make_error("termcap requires at least 1 argument");
   }
 
-  LispObject *r_obj = lisp_car(args);
+  LispObject *key = lisp_car(args);
+  if (key->type != LISP_SYMBOL) {
+    return lisp_make_error("termcap: first argument must be a symbol");
+  }
+
+  const char *name = key->value.symbol->name;
   args = lisp_cdr(args);
-  if (args == NIL) {
-    return lisp_make_error(
-        "terminal-best-fg-color requires 3 arguments (r g b)");
+
+  /* Simple queries */
+  if (strcmp(name, "cols") == 0)
+    return lisp_make_integer(g_term_cols);
+  if (strcmp(name, "rows") == 0)
+    return lisp_make_integer(g_term_rows);
+  if (strcmp(name, "type") == 0) {
+    const char *t = termcaps_get_term_type();
+    return lisp_make_string(t ? t : "");
+  }
+  if (strcmp(name, "encoding") == 0) {
+    const char *e = termcaps_get_encoding();
+    return lisp_make_string(e ? e : "ASCII");
+  }
+  if (strcmp(name, "color-level") == 0)
+    return lisp_make_integer(termcaps_get_color_level());
+  if (strcmp(name, "truecolor?") == 0)
+    return termcaps_supports_truecolor() ? LISP_TRUE : NIL;
+  if (strcmp(name, "256color?") == 0)
+    return termcaps_supports_256color() ? LISP_TRUE : NIL;
+  if (strcmp(name, "unicode?") == 0)
+    return termcaps_supports_unicode() ? LISP_TRUE : NIL;
+  if (strcmp(name, "describe") == 0) {
+    const char *d = termcaps_describe();
+    return lisp_make_string(d ? d : "");
+  }
+  if (strcmp(name, "reset") == 0) {
+    const char *s = termcaps_format_reset();
+    return lisp_make_string(s ? s : "");
   }
 
-  LispObject *g_obj = lisp_car(args);
-  args = lisp_cdr(args);
-  if (args == NIL) {
-    return lisp_make_error(
-        "terminal-best-fg-color requires 3 arguments (r g b)");
+  /* Color queries with RGB args */
+  if (strcmp(name, "fg-color") == 0 || strcmp(name, "bg-color") == 0) {
+    if (args == NIL)
+      return lisp_make_error("termcap: fg-color/bg-color need r g b");
+    LispObject *r_obj = lisp_car(args);
+    args = lisp_cdr(args);
+    if (args == NIL)
+      return lisp_make_error("termcap: fg-color/bg-color need r g b");
+    LispObject *g_obj = lisp_car(args);
+    args = lisp_cdr(args);
+    if (args == NIL)
+      return lisp_make_error("termcap: fg-color/bg-color need r g b");
+    LispObject *b_obj = lisp_car(args);
+
+    if (r_obj->type != LISP_INTEGER || g_obj->type != LISP_INTEGER ||
+        b_obj->type != LISP_INTEGER) {
+      return lisp_make_error("termcap: color args must be integers");
+    }
+
+    int r = (int)r_obj->value.integer;
+    int g = (int)g_obj->value.integer;
+    int b = (int)b_obj->value.integer;
+
+    const char *seq = (strcmp(name, "fg-color") == 0)
+                          ? termcaps_format_fg_color(r, g, b)
+                          : termcaps_format_bg_color(r, g, b);
+    return lisp_make_string(seq ? seq : "");
   }
 
-  LispObject *b_obj = lisp_car(args);
-
-  if (r_obj->type != LISP_INTEGER || g_obj->type != LISP_INTEGER ||
-      b_obj->type != LISP_INTEGER) {
-    return lisp_make_error(
-        "terminal-best-fg-color: arguments must be integers");
-  }
-
-  int r = (int)r_obj->value.integer;
-  int g = (int)g_obj->value.integer;
-  int b = (int)b_obj->value.integer;
-
-  const char *seq = termcaps_format_fg_color(r, g, b);
-  return lisp_make_string(seq ? seq : "");
-}
-
-/* Builtin: terminal-best-bg-color - Returns optimal escape sequence for RGB
- * background */
-static LispObject *builtin_terminal_best_bg_color(LispObject *args,
-                                                  Environment *env) {
-  (void)env;
-
-  if (args == NIL) {
-    return lisp_make_error(
-        "terminal-best-bg-color requires 3 arguments (r g b)");
-  }
-
-  LispObject *r_obj = lisp_car(args);
-  args = lisp_cdr(args);
-  if (args == NIL) {
-    return lisp_make_error(
-        "terminal-best-bg-color requires 3 arguments (r g b)");
-  }
-
-  LispObject *g_obj = lisp_car(args);
-  args = lisp_cdr(args);
-  if (args == NIL) {
-    return lisp_make_error(
-        "terminal-best-bg-color requires 3 arguments (r g b)");
-  }
-
-  LispObject *b_obj = lisp_car(args);
-
-  if (r_obj->type != LISP_INTEGER || g_obj->type != LISP_INTEGER ||
-      b_obj->type != LISP_INTEGER) {
-    return lisp_make_error(
-        "terminal-best-bg-color: arguments must be integers");
-  }
-
-  int r = (int)r_obj->value.integer;
-  int g = (int)g_obj->value.integer;
-  int b = (int)b_obj->value.integer;
-
-  const char *seq = termcaps_format_bg_color(r, g, b);
-  return lisp_make_string(seq ? seq : "");
-}
-
-/* Builtin: terminal-reset-color - Returns reset escape sequence */
-static LispObject *builtin_terminal_reset_color(LispObject *args,
-                                                Environment *env) {
-  (void)env;
-  (void)args;
-  const char *seq = termcaps_format_reset();
-  return lisp_make_string(seq ? seq : "");
+  return lisp_make_error("termcap: unknown capability");
 }
 
 /* Load a Lisp file from standard search paths */
@@ -454,35 +390,9 @@ int lisp_x_init(void) {
   env_define(lisp_env, "telnet-send",
              lisp_make_builtin(builtin_telnet_send, "telnet-send"));
 
-  /* Terminal capability builtins */
-  env_define(
-      lisp_env, "terminal-color-level",
-      lisp_make_builtin(builtin_terminal_color_level, "terminal-color-level"));
-  env_define(lisp_env, "terminal-supports-truecolor?",
-             lisp_make_builtin(builtin_terminal_supports_truecolor,
-                               "terminal-supports-truecolor?"));
-  env_define(lisp_env, "terminal-supports-256color?",
-             lisp_make_builtin(builtin_terminal_supports_256color,
-                               "terminal-supports-256color?"));
-  env_define(lisp_env, "terminal-supports-unicode?",
-             lisp_make_builtin(builtin_terminal_supports_unicode,
-                               "terminal-supports-unicode?"));
-  env_define(lisp_env, "terminal-type",
-             lisp_make_builtin(builtin_terminal_type, "terminal-type"));
-  env_define(lisp_env, "terminal-encoding",
-             lisp_make_builtin(builtin_terminal_encoding, "terminal-encoding"));
-  env_define(lisp_env, "terminal-caps-describe",
-             lisp_make_builtin(builtin_terminal_caps_describe,
-                               "terminal-caps-describe"));
-  env_define(lisp_env, "terminal-best-fg-color",
-             lisp_make_builtin(builtin_terminal_best_fg_color,
-                               "terminal-best-fg-color"));
-  env_define(lisp_env, "terminal-best-bg-color",
-             lisp_make_builtin(builtin_terminal_best_bg_color,
-                               "terminal-best-bg-color"));
-  env_define(
-      lisp_env, "terminal-reset-color",
-      lisp_make_builtin(builtin_terminal_reset_color, "terminal-reset-color"));
+  /* Terminal capability builtin */
+  env_define(lisp_env, "termcap",
+             lisp_make_builtin(builtin_termcap, "termcap"));
 
   /* Define default configuration variables */
   env_define(lisp_env, "*input-history-size*", lisp_make_integer(100));

@@ -156,63 +156,63 @@ Maps attribute names to their ANSI SGR codes.")
 (defun tintin-expand-rgb (rgb-str)
   (let ((len (length rgb-str)))
     (if (= len 3)
-      ;; 3-char: each char represents 0-255 in 16 steps (multiply by 17)
-      (list (* (tintin-hex-to-dec (substring rgb-str 0 1)) 17)
-       (* (tintin-hex-to-dec (substring rgb-str 1 2)) 17)
-       (* (tintin-hex-to-dec (substring rgb-str 2 3)) 17))
-      ;; 6-char: parse as two-digit hex pairs
-      (if (= len 6)
-        (list
-         (+ (* (tintin-hex-to-dec (substring rgb-str 0 1)) 16)
-          (tintin-hex-to-dec (substring rgb-str 1 2)))
-         (+ (* (tintin-hex-to-dec (substring rgb-str 2 3)) 16)
-          (tintin-hex-to-dec (substring rgb-str 3 4)))
-         (+ (* (tintin-hex-to-dec (substring rgb-str 4 5)) 16)
-          (tintin-hex-to-dec (substring rgb-str 5 6))))
-        ;; Invalid length - return black
-        (list 0 0 0)))))
+	;; 3-char: each char represents 0-255 in 16 steps (multiply by 17)
+	(list (* (tintin-hex-to-dec (substring rgb-str 0 1)) 17)
+	      (* (tintin-hex-to-dec (substring rgb-str 1 2)) 17)
+	      (* (tintin-hex-to-dec (substring rgb-str 2 3)) 17))
+	;; 6-char: parse as two-digit hex pairs
+	(if (= len 6)
+            (list
+             (+ (* (tintin-hex-to-dec (substring rgb-str 0 1)) 16)
+		(tintin-hex-to-dec (substring rgb-str 1 2)))
+             (+ (* (tintin-hex-to-dec (substring rgb-str 2 3)) 16)
+		(tintin-hex-to-dec (substring rgb-str 3 4)))
+             (+ (* (tintin-hex-to-dec (substring rgb-str 4 5)) 16)
+		(tintin-hex-to-dec (substring rgb-str 5 6))))
+            ;; Invalid length - return black
+            (list 0 0 0)))))
 
 ;; Helper: Convert RGB values to ANSI 24-bit color code
 ;; is-bg: #t for background (48;2), #f for foreground (38;2)
 (defun tintin-rgb-to-ansi (r g b is-bg)
   (concat (if is-bg "48;2;" "38;2;") (number->string r) ";" (number->string g)
-   ";" (number->string b)))
+	  ";" (number->string b)))
 
 ;; Parse RGB color code <rgb>, <Frgb>, or <Frrggbb>
 ;; Returns ANSI code string or nil
 (defun tintin-parse-rgb-color (rgb-string is-bg)
   (if
-    (and (> (length rgb-string) 2) (string=? (substring rgb-string 0 1) "<")
-         (string=?
-          (substring rgb-string (- (length rgb-string) 1) (length rgb-string))
-          ">"))
-    ;; Extract content between < and >
-    (let ((content (substring rgb-string 1 (- (length rgb-string) 1)))
-          (len (- (length rgb-string) 2)))
-      (cond
-        ;; <rgb> format (3 chars)
-        ((= len 3)
-         (let ((rgb (tintin-expand-rgb content)))
-           (tintin-rgb-to-ansi (list-ref rgb 0) (list-ref rgb 1)
-            (list-ref rgb 2) is-bg)))
-        ;; <Frgb> format (4 chars) - ignore F, use last 3
-        ((= len 4)
-         (let ((rgb (tintin-expand-rgb (substring content 1 4))))
-           (tintin-rgb-to-ansi (list-ref rgb 0) (list-ref rgb 1)
-            (list-ref rgb 2) is-bg)))
-        ;; <Frrggbb> format (7 chars) - ignore F, use last 6
-        ((= len 7)
-         (let ((rgb (tintin-expand-rgb (substring content 1 7))))
-           (tintin-rgb-to-ansi (list-ref rgb 0) (list-ref rgb 1)
-            (list-ref rgb 2) is-bg)))
-        (#t nil)))
-    nil))
+   (and (> (length rgb-string) 2) (string=? (substring rgb-string 0 1) "<")
+        (string=?
+         (substring rgb-string (- (length rgb-string) 1) (length rgb-string))
+         ">"))
+   ;; Extract content between < and >
+   (let ((content (substring rgb-string 1 (- (length rgb-string) 1)))
+         (len (- (length rgb-string) 2)))
+     (cond
+       ;; <rgb> format (3 chars)
+       ((= len 3)
+        (let ((rgb (tintin-expand-rgb content)))
+          (tintin-rgb-to-ansi (list-ref rgb 0) (list-ref rgb 1)
+			      (list-ref rgb 2) is-bg)))
+       ;; <Frgb> format (4 chars) - ignore F, use last 3
+       ((= len 4)
+        (let ((rgb (tintin-expand-rgb (substring content 1 4))))
+          (tintin-rgb-to-ansi (list-ref rgb 0) (list-ref rgb 1)
+			      (list-ref rgb 2) is-bg)))
+       ;; <Frrggbb> format (7 chars) - ignore F, use last 6
+       ((= len 7)
+        (let ((rgb (tintin-expand-rgb (substring content 1 7))))
+          (tintin-rgb-to-ansi (list-ref rgb 0) (list-ref rgb 1)
+			      (list-ref rgb 2) is-bg)))
+       (#t nil)))
+   nil))
 
 ;; Look up named color in association list
 (defun tintin-lookup-color (name alist)
   (if (or (null? alist) (not (list? alist)))
-    nil
-    (let ((pair (assoc name alist))) (if pair (cdr pair) nil))))
+      nil
+      (let ((pair (assoc name alist))) (if pair (cdr pair) nil))))
 
 ;; Strip attribute keywords from text (bold, dim, italic, etc.)
 ;; Returns text with attribute keywords removed
@@ -233,16 +233,16 @@ Maps attribute names to their ANSI SGR codes.")
     ;; Try tertiary colors first (convert to RGB)
     (let ((tertiary (tintin-lookup-color name-lower *tintin-tertiary-colors*)))
       (if tertiary
-        (tintin-parse-rgb-color (concat "<" tertiary ">") is-bg)
-        ;; Try light/bright colors
-        (let ((bright
-               (tintin-lookup-color name-lower
-                (if is-bg *tintin-colors-bright-bg* *tintin-colors-bright-fg*))))
-          (if bright
-            bright
-            ;; Try standard colors
-            (tintin-lookup-color name-lower
-             (if is-bg *tintin-colors-bg* *tintin-colors-fg*))))))))
+          (tintin-parse-rgb-color (concat "<" tertiary ">") is-bg)
+          ;; Try light/bright colors
+          (let ((bright
+		 (tintin-lookup-color name-lower
+				      (if is-bg *tintin-colors-bright-bg* *tintin-colors-bright-fg*))))
+            (if bright
+		bright
+		;; Try standard colors
+		(tintin-lookup-color name-lower
+				     (if is-bg *tintin-colors-bg* *tintin-colors-fg*))))))))
 
 ;; Parse attributes from text (bold, underscore, etc.)
 ;; Returns list of ANSI attribute codes
@@ -255,7 +255,7 @@ Maps attribute names to their ANSI SGR codes.")
              (keyword (car pair))
              (code (cdr pair)))
         (if (string-contains? text-lower keyword)
-          (set! attrs (cons code attrs)))))))
+            (set! attrs (cons code attrs)))))))
 
 ;; Helper: Find first occurrence of character in string
 ;; Returns position or nil if not found
@@ -266,66 +266,66 @@ Maps attribute names to their ANSI SGR codes.")
         (found nil))
     (do () ((or (>= pos len) found) found)
       (if (char=? (string-ref str pos) ch)
-        (set! found pos)
-        (set! pos (+ pos 1))))))
+          (set! found pos)
+          (set! pos (+ pos 1))))))
 
 ;; Split color spec on colon (FG:BG separator)
 ;; Returns (fg-part bg-part) or (fg-part nil)
 (defun tintin-split-fg-bg (spec)
   (let ((colon-pos (tintin-string-find-char spec #\:)))
     (if colon-pos
-      (list (substring spec 0 colon-pos)
-       (substring spec (+ colon-pos 1) (length spec)))
-      (list spec nil))))
+	(list (substring spec 0 colon-pos)
+	      (substring spec (+ colon-pos 1) (length spec)))
+	(list spec nil))))
 
 ;; Parse single color component (foreground or background)
 ;; Returns ANSI code string (may include attributes)
 (defun tintin-parse-color-component (text is-bg)
   (if (or (not text) (string=? text ""))
-    nil
-    (let ((text-trimmed (tintin-trim text))
-          (codes '()))
-      ;; Extract attributes first
-      (let ((attr-codes (tintin-parse-attributes text-trimmed)))
-        (set! codes attr-codes))
-      ;; Try RGB color format
-      (let ((start-bracket (string-index text-trimmed "<")))
-        (if start-bracket
-          (let ((end-bracket (string-index text-trimmed ">")))
-            (if end-bracket
-              (let ((rgb-str
-                     (substring text-trimmed start-bracket (+ end-bracket 1))))
-                (let ((rgb-code (tintin-parse-rgb-color rgb-str is-bg)))
-                  (if rgb-code (set! codes (cons rgb-code codes)))))))))
-      ;; If no RGB found, try named colors
-      (if
-        (and (not (string-contains? text-trimmed "<"))
-             (or (string-contains? text-trimmed "black")
-                 (string-contains? text-trimmed "red")
-                 (string-contains? text-trimmed "green")
-                 (string-contains? text-trimmed "yellow")
-                 (string-contains? text-trimmed "blue")
-                 (string-contains? text-trimmed "magenta")
-                 (string-contains? text-trimmed "cyan")
-                 (string-contains? text-trimmed "white")
-                 (string-contains? text-trimmed "azure")
-                 (string-contains? text-trimmed "jade")
-                 (string-contains? text-trimmed "violet")
-                 (string-contains? text-trimmed "lime")
-                 (string-contains? text-trimmed "pink")
-                 (string-contains? text-trimmed "orange")))
-        (let ((color-only (tintin-strip-attributes text-trimmed)))
-          (let ((named-code (tintin-parse-named-color color-only is-bg)))
-            (if named-code (set! codes (cons named-code codes))))))
-      ;; Combine codes with semicolons
-      (if (eq? codes '())
-        nil
-        (let ((result "")
-              (first #t))
-          (do ((remaining (reverse codes) (cdr remaining)))
-            ((null? remaining) result)
-            (if first (set! first #f) (set! result (concat result ";")))
-            (set! result (concat result (car remaining)))))))))
+      nil
+      (let ((text-trimmed (tintin-trim text))
+            (codes '()))
+	;; Extract attributes first
+	(let ((attr-codes (tintin-parse-attributes text-trimmed)))
+          (set! codes attr-codes))
+	;; Try RGB color format
+	(let ((start-bracket (string-index text-trimmed "<")))
+          (if start-bracket
+              (let ((end-bracket (string-index text-trimmed ">")))
+		(if end-bracket
+		    (let ((rgb-str
+			   (substring text-trimmed start-bracket (+ end-bracket 1))))
+                      (let ((rgb-code (tintin-parse-rgb-color rgb-str is-bg)))
+			(if rgb-code (set! codes (cons rgb-code codes)))))))))
+	;; If no RGB found, try named colors
+	(if
+         (and (not (string-contains? text-trimmed "<"))
+              (or (string-contains? text-trimmed "black")
+                  (string-contains? text-trimmed "red")
+                  (string-contains? text-trimmed "green")
+                  (string-contains? text-trimmed "yellow")
+                  (string-contains? text-trimmed "blue")
+                  (string-contains? text-trimmed "magenta")
+                  (string-contains? text-trimmed "cyan")
+                  (string-contains? text-trimmed "white")
+                  (string-contains? text-trimmed "azure")
+                  (string-contains? text-trimmed "jade")
+                  (string-contains? text-trimmed "violet")
+                  (string-contains? text-trimmed "lime")
+                  (string-contains? text-trimmed "pink")
+                  (string-contains? text-trimmed "orange")))
+         (let ((color-only (tintin-strip-attributes text-trimmed)))
+           (let ((named-code (tintin-parse-named-color color-only is-bg)))
+             (if named-code (set! codes (cons named-code codes))))))
+	;; Combine codes with semicolons
+	(if (eq? codes '())
+            nil
+            (let ((result "")
+		  (first #t))
+              (do ((remaining (reverse codes) (cdr remaining)))
+		  ((null? remaining) result)
+		(if first (set! first #f) (set! result (concat result ";")))
+		(set! result (concat result (car remaining)))))))))
 
 ;; Build ANSI escape sequence from fg and bg codes
 ;; Returns complete \033[...m sequence
@@ -395,13 +395,13 @@ Maps attribute names to their ANSI SGR codes.")
     (if fg-codes (set! codes (cons fg-codes codes)))
     (if bg-codes (set! codes (cons bg-codes codes)))
     (if (eq? codes '())
-      ""
-      (let ((combined "")
-            (first #t))
-        (do ((remaining (reverse codes) (cdr remaining))) ((null? remaining))
-          (if first (set! first #f) (set! combined (concat combined ";")))
-          (set! combined (concat combined (car remaining))))
-        (concat "\033[" combined "m")))))
+	""
+	(let ((combined "")
+              (first #t))
+          (do ((remaining (reverse codes) (cdr remaining))) ((null? remaining))
+            (if first (set! first #f) (set! combined (concat combined ";")))
+            (set! combined (concat combined (car remaining))))
+          (concat "\033[" combined "m")))))
 
 ;; Main color spec parser
 ;; Parses TinTin++ color specification and returns ANSI escape code
@@ -494,12 +494,12 @@ Maps attribute names to their ANSI SGR codes.")
   - `tintin-split-fg-bg` - Split foreground:background
   - `#highlight` command - Uses this for color parsing"
   (if (or (not spec) (string=? spec ""))
-    (list nil nil)
-    (let ((parts (tintin-split-fg-bg spec)))
-      (let ((fg-part (list-ref parts 0))
-            (bg-part (list-ref parts 1)))
-        (list (tintin-parse-color-component fg-part #f)
-         (if bg-part (tintin-parse-color-component bg-part #t) nil))))))
+      (list nil nil)
+      (let ((parts (tintin-split-fg-bg spec)))
+	(let ((fg-part (list-ref parts 0))
+              (bg-part (list-ref parts 1)))
+          (list (tintin-parse-color-component fg-part #f)
+		(if bg-part (tintin-parse-color-component bg-part #t) nil))))))
 
 ;; ============================================================================
 ;; HIGHLIGHT PATTERN MATCHING SYSTEM
@@ -599,51 +599,51 @@ Maps attribute names to their ANSI SGR codes.")
   - `#highlight` command - Uses patterns for highlighting
   - `#action` command - Uses patterns for triggers"
   (if (not (string? pattern))
-    ""
-    (let ((len (length pattern))
-          (pos 0)
-          (result ""))
-      (do () ((>= pos len) result)
-        (let ((ch (string-ref pattern pos)))
-          (cond
-            ;; Handle % placeholders
-            ((char=? ch #\%)
-             (if (< (+ pos 1) len)
-               (let ((next-ch (string-ref pattern (+ pos 1))))
-                 (if (char=? next-ch #\*)
-                   ;; %* at end → (.*), otherwise (.*?)
-                   (let ((at-end (>= (+ pos 2) len)))
-                     (set! result (concat result (if at-end "(.*)" "(.*?)")))
-                     (set! pos (+ pos 2)))
-                   ;; Check if it's %1-%99
-                   (if (and (char>=? next-ch #\0) (char<=? next-ch #\9))
-                     (let ((digit-end (+ pos 2)))
-                       ;; Consume second digit if present
-                       (if
-                         (and (< digit-end len)
-                              (char>=? (string-ref pattern digit-end) #\0)
-                              (char<=? (string-ref pattern digit-end) #\9))
-                         (set! digit-end (+ digit-end 1)))
-                       ;; %N or %NN at end → (.*), otherwise (.*?)
-                       (let ((at-end (>= digit-end len)))
-                         (set! result
-                          (concat result (if at-end "(.*)" "(.*?)")))
-                         (set! pos digit-end)))
-                     ;; Not %* or %N - literal %
-                     (progn (set! result (concat result "\\%"))
-                       (set! pos (+ pos 1))))))
-               ;; % at end of string - literal
-               (progn (set! result (concat result "\\%")) (set! pos (+ pos 1)))))
-            ;; Handle ^ at start (line anchor)
-            ((and (char=? ch #\^) (= pos 0)) (set! result (concat result "^"))
-             (set! pos (+ pos 1)))
-            ;; Escape regex special characters
-            ((tintin-regex-special-char? ch)
-             (set! result (concat result "\\" (char->string ch)))
-             (set! pos (+ pos 1)))
-            ;; Regular character - no escaping needed
-            (#t (set! result (concat result (char->string ch)))
-             (set! pos (+ pos 1)))))))))
+      ""
+      (let ((len (length pattern))
+            (pos 0)
+            (result ""))
+	(do () ((>= pos len) result)
+          (let ((ch (string-ref pattern pos)))
+            (cond
+              ;; Handle % placeholders
+              ((char=? ch #\%)
+               (if (< (+ pos 1) len)
+		   (let ((next-ch (string-ref pattern (+ pos 1))))
+                     (if (char=? next-ch #\*)
+			 ;; %* at end → (.*), otherwise (.*?)
+			 (let ((at-end (>= (+ pos 2) len)))
+			   (set! result (concat result (if at-end "(.*)" "(.*?)")))
+			   (set! pos (+ pos 2)))
+			 ;; Check if it's %1-%99
+			 (if (and (char>=? next-ch #\0) (char<=? next-ch #\9))
+			     (let ((digit-end (+ pos 2)))
+			       ;; Consume second digit if present
+			       (if
+				(and (< digit-end len)
+				     (char>=? (string-ref pattern digit-end) #\0)
+				     (char<=? (string-ref pattern digit-end) #\9))
+				(set! digit-end (+ digit-end 1)))
+			       ;; %N or %NN at end → (.*), otherwise (.*?)
+			       (let ((at-end (>= digit-end len)))
+				 (set! result
+				       (concat result (if at-end "(.*)" "(.*?)")))
+				 (set! pos digit-end)))
+			     ;; Not %* or %N - literal %
+			     (progn (set! result (concat result "\\%"))
+				    (set! pos (+ pos 1))))))
+		   ;; % at end of string - literal
+		   (progn (set! result (concat result "\\%")) (set! pos (+ pos 1)))))
+              ;; Handle ^ at start (line anchor)
+              ((and (char=? ch #\^) (= pos 0)) (set! result (concat result "^"))
+               (set! pos (+ pos 1)))
+              ;; Escape regex special characters
+              ((tintin-regex-special-char? ch)
+               (set! result (concat result "\\" (char->string ch)))
+               (set! pos (+ pos 1)))
+              ;; Regular character - no escaping needed
+              (#t (set! result (concat result (char->string ch)))
+		  (set! pos (+ pos 1)))))))))
 
 ;; Test if TinTin++ pattern matches text using regex
 ;; Returns #t if match found, #f otherwise
@@ -724,13 +724,13 @@ Maps attribute names to their ANSI SGR codes.")
   - `tintin-highlight-line` - Apply highlights using pattern matching
   - `tintin-trigger-actions-for-line` - Execute actions using pattern matching"
   (if (or (not (string? pattern)) (not (string? text)))
-    #f
-    (let ((regex-pattern (tintin-pattern-to-regex pattern)))
-      (if (string=? regex-pattern "")
-        #f
-        ;; Use regex-match? to test if pattern matches
-        (let ((match-result (regex-match? regex-pattern text)))
-          (if match-result #t #f))))))
+      #f
+      (let ((regex-pattern (tintin-pattern-to-regex pattern)))
+	(if (string=? regex-pattern "")
+            #f
+            ;; Use regex-match? to test if pattern matches
+            (let ((match-result (regex-match? regex-pattern text)))
+              (if match-result #t #f))))))
 
 ;; Sort highlight entries by priority (descending - higher priority first)
 ;; Input: list of (pattern . (fg bg priority)) pairs
@@ -789,36 +789,36 @@ Maps attribute names to their ANSI SGR codes.")
   - `tintin-apply-highlights` - Main highlight application entry point
   - `tintin-sort-actions-by-priority` - Opposite order (ascending) for actions"
   (if (or (null? highlight-list) (= (length highlight-list) 0))
-    '()
-    ;; Simple insertion sort by priority
-    (let ((sorted '()))
-      (do ((remaining highlight-list (cdr remaining)))
-        ((null? remaining) sorted)
-        (let* ((entry (car remaining))
-               (priority (cadddr entry)))
-          ;; Insert entry in sorted position
-          (set! sorted (tintin-insert-by-priority entry priority sorted)))))))
+      '()
+      ;; Simple insertion sort by priority
+      (let ((sorted '()))
+	(do ((remaining highlight-list (cdr remaining)))
+            ((null? remaining) sorted)
+          (let* ((entry (car remaining))
+		 (priority (cadddr entry)))
+            ;; Insert entry in sorted position
+            (set! sorted (tintin-insert-by-priority entry priority sorted)))))))
 
 ;; Helper: Insert entry into sorted list by priority, then by pattern length
 (defun tintin-insert-by-priority (entry priority sorted-list)
   (if (null? sorted-list)
-    (list entry)
-    (let ((first-entry (car sorted-list))
-          (first-priority (cadddr (car sorted-list))))
-      (if (> priority first-priority)
-        ;; Higher priority - insert at head
-        (cons entry sorted-list)
-        (if (= priority first-priority)
-          ;; Same priority - use pattern length as tiebreaker (longer first)
-          (let ((entry-pattern (car entry))
-                (first-pattern (car first-entry)))
-            (if (>= (length entry-pattern) (length first-pattern))
-              (cons entry sorted-list)
-              (cons first-entry
-               (tintin-insert-by-priority entry priority (cdr sorted-list)))))
-          ;; Lower priority - insert later
-          (cons first-entry
-           (tintin-insert-by-priority entry priority (cdr sorted-list))))))))
+      (list entry)
+      (let ((first-entry (car sorted-list))
+            (first-priority (cadddr (car sorted-list))))
+	(if (> priority first-priority)
+            ;; Higher priority - insert at head
+            (cons entry sorted-list)
+            (if (= priority first-priority)
+		;; Same priority - use pattern length as tiebreaker (longer first)
+		(let ((entry-pattern (car entry))
+                      (first-pattern (car first-entry)))
+		  (if (>= (length entry-pattern) (length first-pattern))
+		      (cons entry sorted-list)
+		      (cons first-entry
+			    (tintin-insert-by-priority entry priority (cdr sorted-list)))))
+		;; Lower priority - insert later
+		(cons first-entry
+		      (tintin-insert-by-priority entry priority (cdr sorted-list))))))))
 
 ;; ============================================================================
 ;; ACTION PRIORITY SORTING
@@ -881,37 +881,37 @@ Maps attribute names to their ANSI SGR codes.")
   - `tintin-sort-highlights-by-priority` - Opposite order (descending) for highlights
   - `tintin-handle-action` - Defines actions with optional priority"
   (if (or (null? action-list) (= (length action-list) 0))
-    '()
-    ;; Simple insertion sort by priority
-    (let ((sorted '()))
-      (do ((remaining action-list (cdr remaining)))
-        ((null? remaining) sorted)
-        (let* ((entry (car remaining))
-               (priority (caddr entry)))
-          ;; Insert entry in sorted position
-          (set! sorted (tintin-insert-action-by-priority entry priority sorted)))))))
+      '()
+      ;; Simple insertion sort by priority
+      (let ((sorted '()))
+	(do ((remaining action-list (cdr remaining)))
+            ((null? remaining) sorted)
+          (let* ((entry (car remaining))
+		 (priority (caddr entry)))
+            ;; Insert entry in sorted position
+            (set! sorted (tintin-insert-action-by-priority entry priority sorted)))))))
 
 ;; Helper: Insert action entry into sorted list by priority, then by pattern length
 (defun tintin-insert-action-by-priority (entry priority sorted-list)
   (if (null? sorted-list)
-    (list entry)
-    (let ((first-entry (car sorted-list))
-          (first-priority (caddr (car sorted-list))))
-      (if (< priority first-priority)
-        ;; Lower priority - insert at head (actions use ascending order)
-        (cons entry sorted-list)
-        (if (= priority first-priority)
-          ;; Same priority - use pattern length as tiebreaker (longer first)
-          (let ((entry-pattern (car entry))
-                (first-pattern (car first-entry)))
-            (if (>= (length entry-pattern) (length first-pattern))
-              (cons entry sorted-list)
-              (cons first-entry
-               (tintin-insert-action-by-priority entry priority
-                (cdr sorted-list)))))
-          ;; Higher priority - insert later
-          (cons first-entry
-           (tintin-insert-action-by-priority entry priority (cdr sorted-list))))))))
+      (list entry)
+      (let ((first-entry (car sorted-list))
+            (first-priority (caddr (car sorted-list))))
+	(if (< priority first-priority)
+            ;; Lower priority - insert at head (actions use ascending order)
+            (cons entry sorted-list)
+            (if (= priority first-priority)
+		;; Same priority - use pattern length as tiebreaker (longer first)
+		(let ((entry-pattern (car entry))
+                      (first-pattern (car first-entry)))
+		  (if (>= (length entry-pattern) (length first-pattern))
+		      (cons entry sorted-list)
+		      (cons first-entry
+			    (tintin-insert-action-by-priority entry priority
+							      (cdr sorted-list)))))
+		;; Higher priority - insert later
+		(cons first-entry
+		      (tintin-insert-action-by-priority entry priority (cdr sorted-list))))))))
 
 ;; ============================================================================
 ;; HIGHLIGHT APPLICATION
@@ -920,26 +920,26 @@ Maps attribute names to their ANSI SGR codes.")
 ;; Returns list of lines with their line endings intact
 (defun tintin-split-lines (text)
   (if (not (string? text))
-    '()
-    (let ((len (length text))
-          (pos 0)
-          (line-start 0)
-          (lines '()))
-      (do ()
-        ((>= pos len)
-         ;; Add final line if any
-         (if (< line-start len)
-           (reverse (cons (substring text line-start len) lines))
-           (reverse lines)))
-        (let ((ch (string-ref text pos)))
-          (if (char=? ch #\newline)
-            ;; Found line ending - add line including \n
-            (progn
-              (set! lines (cons (substring text line-start (+ pos 1)) lines))
-              (set! pos (+ pos 1))
-              (set! line-start pos))
-            ;; Regular character - continue
-            (set! pos (+ pos 1))))))))
+      '()
+      (let ((len (length text))
+            (pos 0)
+            (line-start 0)
+            (lines '()))
+	(do ()
+            ((>= pos len)
+             ;; Add final line if any
+             (if (< line-start len)
+		 (reverse (cons (substring text line-start len) lines))
+		 (reverse lines)))
+          (let ((ch (string-ref text pos)))
+            (if (char=? ch #\newline)
+		;; Found line ending - add line including \n
+		(progn
+		  (set! lines (cons (substring text line-start (+ pos 1)) lines))
+		  (set! pos (+ pos 1))
+		  (set! line-start pos))
+		;; Regular character - continue
+		(set! pos (+ pos 1))))))))
 
 ;; ============================================================================
 ;; ANSI STATE TRACKING (for nested/overlapping highlights)
@@ -1021,83 +1021,83 @@ Maps attribute names to their ANSI SGR codes.")
   - `tintin-check-after-match` - Checks what follows matched text
   - `tintin-build-ansi-code` - Builds ANSI sequences from color specs"
   (if (or (not (string? text)) (<= pos 0))
-    ""
-    (let ((scan-pos (- pos 1))
-          (found-ansi ""))
-      ;; Scan backwards looking for the FIRST (most recent) ANSI sequence
-      (do () ((or (< scan-pos 0) (not (string=? found-ansi ""))) found-ansi)
-        (if
-          (and (>= scan-pos 0)
-               (string=? (substring text scan-pos (+ scan-pos 1)) "\033")
-               (< (+ scan-pos 1) (length text))
-               (string=? (substring text (+ scan-pos 1) (+ scan-pos 2)) "["))
-          ;; Found ESC[ - extract the complete sequence
-          (let ((seq-end (+ scan-pos 2)))
-            ;; Find the 'm' terminator
-            (do ()
-              ((or (>= seq-end (length text))
-                   (string=? (substring text seq-end (+ seq-end 1)) "m")))
-              (set! seq-end (+ seq-end 1)))
-            ;; Check if we found a complete sequence
-            (if
+      ""
+      (let ((scan-pos (- pos 1))
+            (found-ansi ""))
+	;; Scan backwards looking for the FIRST (most recent) ANSI sequence
+	(do () ((or (< scan-pos 0) (not (string=? found-ansi ""))) found-ansi)
+          (if
+           (and (>= scan-pos 0)
+		(string=? (substring text scan-pos (+ scan-pos 1)) "\033")
+		(< (+ scan-pos 1) (length text))
+		(string=? (substring text (+ scan-pos 1) (+ scan-pos 2)) "["))
+           ;; Found ESC[ - extract the complete sequence
+           (let ((seq-end (+ scan-pos 2)))
+             ;; Find the 'm' terminator
+             (do ()
+		 ((or (>= seq-end (length text))
+                      (string=? (substring text seq-end (+ seq-end 1)) "m")))
+               (set! seq-end (+ seq-end 1)))
+             ;; Check if we found a complete sequence
+             (if
               (and (< seq-end (length text))
                    (string=? (substring text seq-end (+ seq-end 1)) "m"))
               (let ((sequence (substring text scan-pos (+ seq-end 1))))
                 ;; Check if this is a reset code (ESC[0m or ESC[m)
                 (if
-                  (or (string=? sequence "\033[0m")
-                      (string=? sequence "\033[m"))
-                  ;; Reset code - return empty (no active formatting)
-                  (set! found-ansi "reset") ; Special marker to exit and return ""
-                  ;; Non-reset code - this is the active state
-                  (set! found-ansi sequence))
+                 (or (string=? sequence "\033[0m")
+                     (string=? sequence "\033[m"))
+                 ;; Reset code - return empty (no active formatting)
+                 (set! found-ansi "reset") ; Special marker to exit and return ""
+                 ;; Non-reset code - this is the active state
+                 (set! found-ansi sequence))
                 ;; Don't continue scanning - we found what we need
                 (set! scan-pos -1))
               (set! scan-pos (- scan-pos 1))))
-          ;; Not an ANSI sequence, continue backwards
-          (set! scan-pos (- scan-pos 1))))
-      ;; Return empty string if we found a reset, otherwise return the sequence
-      (if (string=? found-ansi "reset") "" found-ansi))))
+           ;; Not an ANSI sequence, continue backwards
+           (set! scan-pos (- scan-pos 1))))
+	;; Return empty string if we found a reset, otherwise return the sequence
+	(if (string=? found-ansi "reset") "" found-ansi))))
 
 ;; Find the position where matched text starts in the line
 ;; Returns position or -1 if not found
 (defun tintin-find-match-position (line matched-text)
   (if (or (not (string? line)) (not (string? matched-text)))
-    -1
-    (let ((pos (string-index line matched-text))) (if pos pos -1))))
+      -1
+      (let ((pos (string-index line matched-text))) (if pos pos -1))))
 
 ;; Check what comes immediately after a position:
 ;; Returns: 'reset if reset code found, 'ansi if non-reset ANSI found, 'text if regular text
 (defun tintin-check-after-match (text pos)
   (if (or (not (string? text)) (>= pos (length text)))
-    'text
-    (let ((len (length text))
-          (scan-pos pos))
-      ;; Check if there's an ANSI code immediately after
-      (if
-        (and (< (+ scan-pos 1) len)
-             (string=? (substring text scan-pos (+ scan-pos 1)) "\033")
-             (< (+ scan-pos 1) len)
-             (string=? (substring text (+ scan-pos 1) (+ scan-pos 2)) "["))
-        ;; Found ESC[ - check what kind
-        (let ((seq-end (+ scan-pos 2)))
-          ;; Find the 'm' terminator
-          (do ()
-            ((or (>= seq-end len)
-                 (string=? (substring text seq-end (+ seq-end 1)) "m")))
-            (set! seq-end (+ seq-end 1)))
-          ;; Check if complete sequence
-          (if
+      'text
+      (let ((len (length text))
+            (scan-pos pos))
+	;; Check if there's an ANSI code immediately after
+	(if
+         (and (< (+ scan-pos 1) len)
+              (string=? (substring text scan-pos (+ scan-pos 1)) "\033")
+              (< (+ scan-pos 1) len)
+              (string=? (substring text (+ scan-pos 1) (+ scan-pos 2)) "["))
+         ;; Found ESC[ - check what kind
+         (let ((seq-end (+ scan-pos 2)))
+           ;; Find the 'm' terminator
+           (do ()
+               ((or (>= seq-end len)
+                    (string=? (substring text seq-end (+ seq-end 1)) "m")))
+             (set! seq-end (+ seq-end 1)))
+           ;; Check if complete sequence
+           (if
             (and (< seq-end len)
                  (string=? (substring text seq-end (+ seq-end 1)) "m"))
             (let ((sequence (substring text scan-pos (+ seq-end 1))))
               (if
-                (or (string=? sequence "\033[0m") (string=? sequence "\033[m"))
-                'reset ; Reset code follows
-                'ansi)) ; Non-reset ANSI code follows
+               (or (string=? sequence "\033[0m") (string=? sequence "\033[m"))
+               'reset ; Reset code follows
+               'ansi)) ; Non-reset ANSI code follows
             'text)) ; Incomplete sequence, treat as text
-        ;; No ANSI code immediately after
-        'text))))
+         ;; No ANSI code immediately after
+         'text))))
 
 ;; Wrap matched pattern in line with ANSI color codes
 ;; Returns line with highlight applied or original line if no match
@@ -1175,33 +1175,33 @@ Maps attribute names to their ANSI SGR codes.")
   - `tintin-check-after-match` - Determines what follows matched text
   - `tintin-parse-color-component` - Parses color specifications"
   (if (not (string? line))
-    line
-    (let ((regex-pattern (tintin-pattern-to-regex pattern)))
-      (if (string=? regex-pattern "")
-        line
-        ;; Parse color spec to get ANSI codes
-        (let ((fg-ansi
-               (if fg-color (tintin-parse-color-component fg-color #f) nil))
-              (bg-ansi
-               (if bg-color (tintin-parse-color-component bg-color #t) nil)))
-          ;; Build opening ANSI sequence
-          (let ((ansi-open (tintin-build-ansi-code fg-ansi bg-ansi)))
-            (if (string=? ansi-open "")
-              line
-              ;; Find the matched text
-              (let ((matched-text (regex-find regex-pattern line)))
-                (if matched-text
-                  ;; Find where the match occurs in the line
-                  (let ((match-pos
-                         (tintin-find-match-position line matched-text)))
-                    (if (< match-pos 0)
-                      line
-                      (let ((match-end-pos (+ match-pos (length matched-text))))
-                        ;; Always use just reset - let post-processor handle restoration
-                        (let ((ansi-close "\033[0m"))
-                          (string-replace line matched-text
-                           (concat ansi-open matched-text ansi-close))))))
-                  line)))))))))
+      line
+      (let ((regex-pattern (tintin-pattern-to-regex pattern)))
+	(if (string=? regex-pattern "")
+            line
+            ;; Parse color spec to get ANSI codes
+            (let ((fg-ansi
+		   (if fg-color (tintin-parse-color-component fg-color #f) nil))
+		  (bg-ansi
+		   (if bg-color (tintin-parse-color-component bg-color #t) nil)))
+              ;; Build opening ANSI sequence
+              (let ((ansi-open (tintin-build-ansi-code fg-ansi bg-ansi)))
+		(if (string=? ansi-open "")
+		    line
+		    ;; Find the matched text
+		    (let ((matched-text (regex-find regex-pattern line)))
+                      (if matched-text
+			  ;; Find where the match occurs in the line
+			  (let ((match-pos
+				 (tintin-find-match-position line matched-text)))
+			    (if (< match-pos 0)
+				line
+				(let ((match-end-pos (+ match-pos (length matched-text))))
+				  ;; Always use just reset - let post-processor handle restoration
+				  (let ((ansi-close "\033[0m"))
+				    (string-replace line matched-text
+						    (concat ansi-open matched-text ansi-close))))))
+			  line)))))))))
 
 ;; Apply highlights to a single line
 ;; Returns highlighted line or original line if no highlights match
@@ -1270,23 +1270,23 @@ Maps attribute names to their ANSI SGR codes.")
   - `tintin-sort-highlights-by-priority` - Priority-based pattern ordering
   - `#highlight` command - Define highlight patterns"
   (if (or (not (string? line)) (= (hash-count *tintin-highlights*) 0))
-    line
-    ;; Get all highlights sorted by priority (highest first)
-    (let ((highlight-entries (hash-entries *tintin-highlights*)))
-      (let ((sorted (tintin-sort-highlights-by-priority highlight-entries)))
-        ;; Try all patterns and apply all that match
-        (let ((result line))
-          (do ((i 0 (+ i 1))) ((>= i (length sorted)) result)
-            (let* ((entry (list-ref sorted i))
-                   (pattern (car entry))
-                   (data (cdr entry))
-                   (fg-color (car data))
-                   (bg-color (cadr data)))
-              ;; Check if pattern matches the current result
-              (if (tintin-match-highlight-pattern pattern result)
-                ;; Apply highlight to current result (allows multiple highlights)
-                (set! result
-                 (tintin-wrap-match result pattern fg-color bg-color))))))))))
+      line
+      ;; Get all highlights sorted by priority (highest first)
+      (let ((highlight-entries (hash-entries *tintin-highlights*)))
+	(let ((sorted (tintin-sort-highlights-by-priority highlight-entries)))
+          ;; Try all patterns and apply all that match
+          (let ((result line))
+            (do ((i 0 (+ i 1))) ((>= i (length sorted)) result)
+              (let* ((entry (list-ref sorted i))
+                     (pattern (car entry))
+                     (data (cdr entry))
+                     (fg-color (car data))
+                     (bg-color (cadr data)))
+		;; Check if pattern matches the current result
+		(if (tintin-match-highlight-pattern pattern result)
+                    ;; Apply highlight to current result (allows multiple highlights)
+                    (set! result
+			  (tintin-wrap-match result pattern fg-color bg-color))))))))))
 
 ;; Main entry point: Apply highlights to incoming text
 ;; Splits text into lines, highlights each line, returns transformed text
@@ -1339,27 +1339,27 @@ Maps attribute names to their ANSI SGR codes.")
   - `tintin-highlight-line` - Highlight a single line (internal)
   - Used automatically by `telnet-input-filter-hook` when TinTin++ is enabled"
   (if (or (not (string? text)) (= (hash-count *tintin-highlights*) 0))
-    text
-    ;; Split into lines
-    (let ((lines (tintin-split-lines text)))
-      (if (null? lines)
-        text
-        ;; Highlight each line
-        (let ((highlighted '()))
-          (do ((i 0 (+ i 1)))
-            ((>= i (length lines))
-             ;; Join highlighted lines back together
-             (let ((result ""))
-               (do ((j 0 (+ j 1))) ((>= j (length highlighted)) result)
-                 (set! result (concat result (list-ref highlighted j))))))
-            (let ((line (list-ref lines i)))
-              (set! highlighted (cons (tintin-highlight-line line) highlighted))))
-          ;; Need to reverse since we cons'd in reverse order
-          (set! highlighted (reverse highlighted))
-          ;; Join lines
-          (let ((result ""))
-            (do ((k 0 (+ k 1))) ((>= k (length highlighted)) result)
-              (set! result (concat result (list-ref highlighted k))))))))))
+      text
+      ;; Split into lines
+      (let ((lines (tintin-split-lines text)))
+	(if (null? lines)
+            text
+            ;; Highlight each line
+            (let ((highlighted '()))
+              (do ((i 0 (+ i 1)))
+		  ((>= i (length lines))
+		   ;; Join highlighted lines back together
+		   (let ((result ""))
+		     (do ((j 0 (+ j 1))) ((>= j (length highlighted)) result)
+                       (set! result (concat result (list-ref highlighted j))))))
+		(let ((line (list-ref lines i)))
+		  (set! highlighted (cons (tintin-highlight-line line) highlighted))))
+              ;; Need to reverse since we cons'd in reverse order
+              (set! highlighted (reverse highlighted))
+              ;; Join lines
+              (let ((result ""))
+		(do ((k 0 (+ k 1))) ((>= k (length highlighted)) result)
+		  (set! result (concat result (list-ref highlighted k))))))))))
 
 ;; ============================================================================
 ;; TEST 1: COMMAND SEPARATOR
@@ -1428,61 +1428,61 @@ Maps attribute names to their ANSI SGR codes.")
   - `tintin-find-first-non-ws` - Helper for forward scan
   - `tintin-find-last-non-ws` - Helper for backward scan"
   (if (not (string? str))
-    ""
-    (let ((len (length str)))
-      (if (= len 0)
-        ""
-        ;; Find first non-whitespace character
-        (let ((start (tintin-find-first-non-ws str 0 len)))
-          (if (>= start len)
-            "" ; All whitespace
-            ;; Find last non-whitespace character
-            (let ((end (tintin-find-last-non-ws str (- len 1))))
-              (substring str start (+ end 1)))))))))
+      ""
+      (let ((len (length str)))
+	(if (= len 0)
+            ""
+            ;; Find first non-whitespace character
+            (let ((start (tintin-find-first-non-ws str 0 len)))
+              (if (>= start len)
+		  "" ; All whitespace
+		  ;; Find last non-whitespace character
+		  (let ((end (tintin-find-last-non-ws str (- len 1))))
+		    (substring str start (+ end 1)))))))))
 
 ;; Helper: Find first non-whitespace character index
 (defun tintin-find-first-non-ws (str pos len)
   (if (>= pos len)
-    pos
-    (let ((ch (string-ref str pos)))
-      (if
-        (or (char=? ch #\space) (char=? ch #\tab) (char=? ch #\return)
-            (char=? ch #\newline))
-        (tintin-find-first-non-ws str (+ pos 1) len)
-        pos))))
+      pos
+      (let ((ch (string-ref str pos)))
+	(if
+         (or (char=? ch #\space) (char=? ch #\tab) (char=? ch #\return)
+             (char=? ch #\newline))
+         (tintin-find-first-non-ws str (+ pos 1) len)
+         pos))))
 
 ;; Helper: Find last non-whitespace character index
 (defun tintin-find-last-non-ws (str pos)
   (if (< pos 0)
-    -1
-    (let ((ch (string-ref str pos)))
-      (if
-        (or (char=? ch #\space) (char=? ch #\tab) (char=? ch #\return)
-            (char=? ch #\newline))
-        (tintin-find-last-non-ws str (- pos 1))
-        pos))))
+      -1
+      (let ((ch (string-ref str pos)))
+	(if
+         (or (char=? ch #\space) (char=? ch #\tab) (char=? ch #\return)
+             (char=? ch #\newline))
+         (tintin-find-last-non-ws str (- pos 1))
+         pos))))
 
 ;; Recursive helper for splitting commands
 (defun tintin-split-loop (str pos len depth current results)
   (if (>= pos len)
-    ;; Done - add final command if any and return reversed list
-    (if (not (string=? current ""))
-      (reverse (cons current results))
-      (reverse results))
-    ;; Process current character
-    (let ((ch (string-ref str pos)))
-      (cond
-        ((char=? ch #\{)
-         (tintin-split-loop str (+ pos 1) len (+ depth 1)
-          (concat current (char->string ch)) results))
-        ((char=? ch #\})
-         (tintin-split-loop str (+ pos 1) len (- depth 1)
-          (concat current (char->string ch)) results))
-        ((and (char=? ch #\;) (= depth 0))
-         (tintin-split-loop str (+ pos 1) len depth "" (cons current results)))
-        (#t
-         (tintin-split-loop str (+ pos 1) len depth
-          (concat current (char->string ch)) results))))))
+      ;; Done - add final command if any and return reversed list
+      (if (not (string=? current ""))
+	  (reverse (cons current results))
+	  (reverse results))
+      ;; Process current character
+      (let ((ch (string-ref str pos)))
+	(cond
+          ((char=? ch #\{)
+           (tintin-split-loop str (+ pos 1) len (+ depth 1)
+			      (concat current (char->string ch)) results))
+          ((char=? ch #\})
+           (tintin-split-loop str (+ pos 1) len (- depth 1)
+			      (concat current (char->string ch)) results))
+          ((and (char=? ch #\;) (= depth 0))
+           (tintin-split-loop str (+ pos 1) len depth "" (cons current results)))
+          (#t
+           (tintin-split-loop str (+ pos 1) len depth
+			      (concat current (char->string ch)) results))))))
 
 (defun tintin-split-commands (str)
   "Split command string by semicolons, respecting brace nesting.
@@ -1553,9 +1553,9 @@ Maps attribute names to their ANSI SGR codes.")
   - `tintin-trim` - Whitespace trimming for each command
   - `tintin-process-input` - Uses this for input separation"
   (if (not (string? str))
-    '()
-    ;; Split commands and trim whitespace from each
-    (map tintin-trim (tintin-split-loop str 0 (length str) 0 "" '()))))
+      '()
+      ;; Split commands and trim whitespace from each
+      (map tintin-trim (tintin-split-loop str 0 (length str) 0 "" '()))))
 
 ;; ============================================================================
 ;; TEST 2: SPEEDWALK
@@ -1641,53 +1641,53 @@ Maps attribute names to their ANSI SGR codes.")
   - `tintin-process-command` - Process commands (includes speedwalk expansion)
   - `tintin-process-input` - Full input processing with command separation"
   (if (or (not (string? input)) (not *tintin-speedwalk-enabled*))
-    input
-    (let ((len (length input))
-          (pos 0)
-          (result '())
-          (valid #t))
-      (do () ((>= pos len))
-        (let ((count-str "")
-              (direction ""))
-          ;; Collect digits for count
-          (do ()
-            ((or (>= pos len)
-                 (not (tintin-is-digit? (substring input pos (+ pos 1)))))
-             nil)
-            (set! count-str (concat count-str (substring input pos (+ pos 1))))
-            (set! pos (+ pos 1)))
-          ;; Get direction (1 or 2 characters)
-          (if (< pos len)
-            (let ((ch1 (substring input pos (+ pos 1))))
-              ;; Try 2-char direction first (only if diagonals enabled)
-              (if
-                (and *tintin-speedwalk-diagonals* (< (+ pos 1) len)
-                     (tintin-is-direction?
-                      (concat ch1 (substring input (+ pos 1) (+ pos 2)))))
-                (progn
-                  (set! direction
-                   (concat ch1 (substring input (+ pos 1) (+ pos 2))))
-                  (set! pos (+ pos 2)))
-                ;; Try 1-char direction
-                (if (tintin-is-direction? ch1)
-                  (progn (set! direction ch1) (set! pos (+ pos 1)))
-                  ;; Not a valid direction - mark as invalid
-                  (progn (set! valid #f) (set! pos (+ pos 1)))))))
-          ;; Expand direction N times (only if we found a valid direction)
-          (if (not (string=? direction ""))
-            (let ((count
-                   (if (string=? count-str "") 1 (string->number count-str))))
-              (do ((i 0 (+ i 1))) ((>= i count))
-                (set! result (cons direction result)))))))
-      ;; Return original input if any part was invalid, otherwise return expanded
-      (if (not valid)
-        input
-        ;; Join results with semicolons
-        (let ((reversed (reverse result))
-              (output ""))
-          (do ((i 0 (+ i 1))) ((>= i (length reversed)) output)
-            (set! output
-             (concat output (if (> i 0) ";" "") (list-ref reversed i)))))))))
+      input
+      (let ((len (length input))
+            (pos 0)
+            (result '())
+            (valid #t))
+	(do () ((>= pos len))
+          (let ((count-str "")
+		(direction ""))
+            ;; Collect digits for count
+            (do ()
+		((or (>= pos len)
+                     (not (tintin-is-digit? (substring input pos (+ pos 1)))))
+		 nil)
+              (set! count-str (concat count-str (substring input pos (+ pos 1))))
+              (set! pos (+ pos 1)))
+            ;; Get direction (1 or 2 characters)
+            (if (< pos len)
+		(let ((ch1 (substring input pos (+ pos 1))))
+		  ;; Try 2-char direction first (only if diagonals enabled)
+		  (if
+                   (and *tintin-speedwalk-diagonals* (< (+ pos 1) len)
+			(tintin-is-direction?
+			 (concat ch1 (substring input (+ pos 1) (+ pos 2)))))
+                   (progn
+                     (set! direction
+			   (concat ch1 (substring input (+ pos 1) (+ pos 2))))
+                     (set! pos (+ pos 2)))
+                   ;; Try 1-char direction
+                   (if (tintin-is-direction? ch1)
+                       (progn (set! direction ch1) (set! pos (+ pos 1)))
+                       ;; Not a valid direction - mark as invalid
+                       (progn (set! valid #f) (set! pos (+ pos 1)))))))
+            ;; Expand direction N times (only if we found a valid direction)
+            (if (not (string=? direction ""))
+		(let ((count
+                       (if (string=? count-str "") 1 (string->number count-str))))
+		  (do ((i 0 (+ i 1))) ((>= i count))
+                    (set! result (cons direction result)))))))
+	;; Return original input if any part was invalid, otherwise return expanded
+	(if (not valid)
+            input
+            ;; Join results with semicolons
+            (let ((reversed (reverse result))
+		  (output ""))
+              (do ((i 0 (+ i 1))) ((>= i (length reversed)) output)
+		(set! output
+		      (concat output (if (> i 0) ";" "") (list-ref reversed i)))))))))
 
 ;; ============================================================================
 ;; TEST 3: ALIAS CREATION
@@ -1783,68 +1783,68 @@ Maps attribute names to their ANSI SGR codes.")
   - `tintin-extract-token` - Extracts unbraced space-delimited tokens
   - `tintin-split-commands` - Why braces matter (protect semicolons)"
   (if (>= start-pos (length str))
-    nil
-    (let ((pos start-pos)
-          (len (length str)))
-      ;; Find opening brace
-      (do ()
-        ((or (>= pos len) (char=? (string-ref str pos) #\{))
-         (if (>= pos len)
-           nil
-           ;; Extract including braces - track depth for nested braces
-           (let ((depth 1)
-                 (brace-start pos) ; Start at opening brace
-                 (end-pos (+ pos 1)))
-             (do ()
-               ((or (>= end-pos len) (= depth 0))
-                (if (= depth 0)
-                  ;; Return text INCLUDING braces (from brace-start to end-pos)
-                  (cons (substring str brace-start end-pos) end-pos)
-                  nil))
-               (let ((ch (string-ref str end-pos)))
-                 (if (char=? ch #\{)
-                   (set! depth (+ depth 1))
-                   (if (char=? ch #\}) (set! depth (- depth 1))))
-                 (set! end-pos (+ end-pos 1)))))))
-        (set! pos (+ pos 1))))))
+      nil
+      (let ((pos start-pos)
+            (len (length str)))
+	;; Find opening brace
+	(do ()
+            ((or (>= pos len) (char=? (string-ref str pos) #\{))
+             (if (>= pos len)
+		 nil
+		 ;; Extract including braces - track depth for nested braces
+		 (let ((depth 1)
+                       (brace-start pos) ; Start at opening brace
+                       (end-pos (+ pos 1)))
+		   (do ()
+		       ((or (>= end-pos len) (= depth 0))
+			(if (= depth 0)
+			    ;; Return text INCLUDING braces (from brace-start to end-pos)
+			    (cons (substring str brace-start end-pos) end-pos)
+			    nil))
+		     (let ((ch (string-ref str end-pos)))
+                       (if (char=? ch #\{)
+			   (set! depth (+ depth 1))
+			   (if (char=? ch #\}) (set! depth (- depth 1))))
+                       (set! end-pos (+ end-pos 1)))))))
+          (set! pos (+ pos 1))))))
 
 ;; Extract space-delimited token starting at pos
 ;; Returns (token . next-pos) or nil if no token found
 ;; Example: (tintin-extract-token "#load Det" 6) => ("Det" . 9)
 (defun tintin-extract-token (str start-pos)
   (if (>= start-pos (length str))
-    nil
-    (let ((len (length str))
-          (pos start-pos))
-      ;; Skip leading whitespace
-      (do () ((or (>= pos len) (not (char=? (string-ref str pos) #\space))))
-        (set! pos (+ pos 1)))
-      ;; Check if we have any characters left
-      (if (>= pos len)
-        nil
-        ;; Find end of token (space or end of string)
-        (let ((start pos)
-              (end pos))
-          (do () ((or (>= end len) (char=? (string-ref str end) #\space)))
-            (set! end (+ end 1)))
-          ;; Return token and position
-          (if (= start end) nil (cons (substring str start end) end)))))))
+      nil
+      (let ((len (length str))
+            (pos start-pos))
+	;; Skip leading whitespace
+	(do () ((or (>= pos len) (not (char=? (string-ref str pos) #\space))))
+          (set! pos (+ pos 1)))
+	;; Check if we have any characters left
+	(if (>= pos len)
+            nil
+            ;; Find end of token (space or end of string)
+            (let ((start pos)
+		  (end pos))
+              (do () ((or (>= end len) (char=? (string-ref str end) #\space)))
+		(set! end (+ end 1)))
+              ;; Return token and position
+              (if (= start end) nil (cons (substring str start end) end)))))))
 
 ;; Extract from start-pos to end of string (for last argument in unbraced format)
 ;; Returns: (string . end-pos) or nil
 (defun tintin-extract-to-end (str start-pos)
   (if (>= start-pos (length str))
-    nil
-    (let ((len (length str))
-          (pos start-pos))
-      ;; Skip leading whitespace
-      (do () ((or (>= pos len) (not (char=? (string-ref str pos) #\space))))
-        (set! pos (+ pos 1)))
-      ;; Check if we have any characters left
-      (if (>= pos len)
-        nil
-        ;; Return from pos to end of string
-        (cons (substring str pos len) len)))))
+      nil
+      (let ((len (length str))
+            (pos start-pos))
+	;; Skip leading whitespace
+	(do () ((or (>= pos len) (not (char=? (string-ref str pos) #\space))))
+          (set! pos (+ pos 1)))
+	;; Check if we have any characters left
+	(if (>= pos len)
+            nil
+            ;; Return from pos to end of string
+            (cons (substring str pos len) len)))))
 
 ;; Parse N arguments from command string (mixed format: braced or unbraced)
 ;; Returns: list of N strings or nil if parsing fails
@@ -1963,47 +1963,47 @@ Maps attribute names to their ANSI SGR codes.")
         (success #t))
     ;; Step 1: Skip whitespace after #
     (do ()
-      ((or (>= start-pos (length input))
-           (not (char=? (string-ref input start-pos) #\space))))
+	((or (>= start-pos (length input))
+             (not (char=? (string-ref input start-pos) #\space))))
       (set! start-pos (+ start-pos 1)))
     ;; Step 2: Skip past command name (until space, {, or end)
     (do ()
-      ((or (>= start-pos (length input))
-           (char=? (string-ref input start-pos) #\space)
-           (char=? (string-ref input start-pos) #\{)))
+	((or (>= start-pos (length input))
+             (char=? (string-ref input start-pos) #\space)
+             (char=? (string-ref input start-pos) #\{)))
       (set! start-pos (+ start-pos 1)))
     ;; Step 3: Parse N arguments using mixed format
     ;; Each argument can be braced or unbraced independently
     (do ((i 0 (+ i 1)))
-      ((or (>= i n) (not success)) (if success (reverse args) nil))
+	((or (>= i n) (not success)) (if success (reverse args) nil))
       ;; Skip whitespace before this argument
       (do ()
-        ((or (>= start-pos (length input))
-             (not (char=? (string-ref input start-pos) #\space))))
+          ((or (>= start-pos (length input))
+               (not (char=? (string-ref input start-pos) #\space))))
         (set! start-pos (+ start-pos 1)))
       ;; Check if we have more input
       (if (>= start-pos (length input))
-        (set! success #f) ; Ran out of input before getting N arguments
-        ;; Check if this argument is braced or unbraced
-        (let ((is-braced (char=? (string-ref input start-pos) #\{)))
-          (if is-braced
-            ;; Extract braced argument (preserves braces)
-            (let ((arg-data (tintin-extract-braced input start-pos)))
-              (if arg-data
-                (progn (set! args (cons (car arg-data) args))
-                  (set! start-pos (cdr arg-data)))
-                (set! success #f)))
-            ;; Extract unbraced token
-            ;; For the last argument, read to end of string instead of stopping at space
-            (let ((is-last-arg (= i (- n 1))))
-              (let ((token-data
-                     (if is-last-arg
-                       (tintin-extract-to-end input start-pos)
-                       (tintin-extract-token input start-pos))))
-                (if token-data
-                  (progn (set! args (cons (car token-data) args))
-                    (set! start-pos (cdr token-data)))
-                  (set! success #f))))))))))
+          (set! success #f) ; Ran out of input before getting N arguments
+          ;; Check if this argument is braced or unbraced
+          (let ((is-braced (char=? (string-ref input start-pos) #\{)))
+            (if is-braced
+		;; Extract braced argument (preserves braces)
+		(let ((arg-data (tintin-extract-braced input start-pos)))
+		  (if arg-data
+                      (progn (set! args (cons (car arg-data) args))
+			     (set! start-pos (cdr arg-data)))
+                      (set! success #f)))
+		;; Extract unbraced token
+		;; For the last argument, read to end of string instead of stopping at space
+		(let ((is-last-arg (= i (- n 1))))
+		  (let ((token-data
+			 (if is-last-arg
+			     (tintin-extract-to-end input start-pos)
+			     (tintin-extract-token input start-pos))))
+                    (if token-data
+			(progn (set! args (cons (car token-data) args))
+			       (set! start-pos (cdr token-data)))
+			(set! success #f))))))))))
 
 ;; Match a pattern against input and extract placeholder values
 ;; Returns list of extracted values or nil if no match
@@ -2012,22 +2012,22 @@ Maps attribute names to their ANSI SGR codes.")
   (let ((pattern-parts (split pattern " "))
         (input-parts (split input " ")))
     (if (not (= (length pattern-parts) (length input-parts)))
-      nil
-      (let ((matches '())
-            (success #t))
-        (do ((i 0 (+ i 1)))
-          ((or (>= i (length pattern-parts)) (not success))
-           (if success (reverse matches) nil))
-          (let ((p-part (list-ref pattern-parts i))
-                (i-part (list-ref input-parts i)))
-            (if (string-prefix? "%" p-part)
-              ;; Placeholder - capture the value
-              (set! matches (cons i-part matches))
-              ;; Literal - must match exactly
-              (if
-                (and (string? p-part) (string? i-part)
-                     (not (string=? p-part i-part)))
-                (set! success #f)))))))))
+	nil
+	(let ((matches '())
+              (success #t))
+          (do ((i 0 (+ i 1)))
+              ((or (>= i (length pattern-parts)) (not success))
+               (if success (reverse matches) nil))
+            (let ((p-part (list-ref pattern-parts i))
+                  (i-part (list-ref input-parts i)))
+              (if (string-prefix? "%" p-part)
+		  ;; Placeholder - capture the value
+		  (set! matches (cons i-part matches))
+		  ;; Literal - must match exactly
+		  (if
+                   (and (string? p-part) (string? i-part)
+			(not (string=? p-part i-part)))
+                   (set! success #f)))))))))
 
 ;; Check if character is valid in variable name: [a-zA-Z0-9_-]
 (defun tintin-is-varname-char? (ch)
@@ -2110,34 +2110,34 @@ Maps attribute names to their ANSI SGR codes.")
   - `tintin-is-varname-char?` - Valid variable name characters
   - `tintin-substitute-captures` - Replace %1-%99 in templates"
   (if (not (string? str))
-    str
-    (let ((len (length str))
-          (pos 0)
-          (result ""))
-      (do () ((>= pos len) result)
-        (let ((ch (string-ref str pos)))
-          (if (char=? ch #\$)
-            ;; Extract variable name
-            (let ((var-start (+ pos 1))
-                  (var-end (+ pos 1)))
-              ;; Find end of variable name
-              (do ()
-                ((or (>= var-end len)
-                     (not (tintin-is-varname-char? (string-ref str var-end)))))
-                (set! var-end (+ var-end 1)))
-              (if (= var-start var-end)
-                ;; No variable name after $, keep literal $
-                (progn (set! result (concat result "$")) (set! pos (+ pos 1)))
-                ;; Variable name found, try to expand
-                (let* ((var-name (substring str var-start var-end))
-                       (var-value (hash-ref *tintin-variables* var-name)))
-                  (if var-value
-                    (set! result (concat result var-value))
-                    (set! result (concat result "$" var-name)))
-                  (set! pos var-end))))
-            ;; Regular character
-            (progn (set! result (concat result (char->string ch)))
-              (set! pos (+ pos 1)))))))))
+      str
+      (let ((len (length str))
+            (pos 0)
+            (result ""))
+	(do () ((>= pos len) result)
+          (let ((ch (string-ref str pos)))
+            (if (char=? ch #\$)
+		;; Extract variable name
+		(let ((var-start (+ pos 1))
+                      (var-end (+ pos 1)))
+		  ;; Find end of variable name
+		  (do ()
+                      ((or (>= var-end len)
+			   (not (tintin-is-varname-char? (string-ref str var-end)))))
+                    (set! var-end (+ var-end 1)))
+		  (if (= var-start var-end)
+                      ;; No variable name after $, keep literal $
+                      (progn (set! result (concat result "$")) (set! pos (+ pos 1)))
+                      ;; Variable name found, try to expand
+                      (let* ((var-name (substring str var-start var-end))
+			     (var-value (hash-ref *tintin-variables* var-name)))
+			(if var-value
+			    (set! result (concat result var-value))
+			    (set! result (concat result "$" var-name)))
+			(set! pos var-end))))
+		;; Regular character
+		(progn (set! result (concat result (char->string ch)))
+		       (set! pos (+ pos 1)))))))))
 
 ;; ============================================================================
 ;; ACTION CAPTURE EXTRACTION
@@ -2218,13 +2218,13 @@ Maps attribute names to their ANSI SGR codes.")
   - `#action` command - Uses captures for trigger commands
   - `regex-extract` builtin - PCRE2 capture extraction"
   (if (or (not (string? pattern)) (not (string? text)))
-    '()
-    (let ((regex-pattern (tintin-pattern-to-regex pattern)))
-      (if (string=? regex-pattern "")
-        '()
-        ;; Use regex-extract to get all capture groups
-        (let ((captures (regex-extract regex-pattern text)))
-          (if captures captures '()))))))
+      '()
+      (let ((regex-pattern (tintin-pattern-to-regex pattern)))
+	(if (string=? regex-pattern "")
+            '()
+            ;; Use regex-extract to get all capture groups
+            (let ((captures (regex-extract regex-pattern text)))
+              (if captures captures '()))))))
 
 ;; Replace %1-%99 in template with capture values
 ;; Iterates through captures list, replacing each placeholder
@@ -2304,14 +2304,14 @@ Maps attribute names to their ANSI SGR codes.")
   - `#action` command - Uses templates with captures
   - `tintin-expand-variables-fast` - Substitute $variables (different syntax)"
   (if (or (not (string? template)) (not (list? captures)))
-    template
-    (let ((result template))
-      ;; Replace each capture group placeholder (%1, %2, ..., %99)
-      (do ((i 0 (+ i 1))) ((>= i (length captures)) result)
-        (let ((placeholder (concat "%" (number->string (+ i 1))))
-              (value (list-ref captures i)))
-          (if (string? value)
-            (set! result (string-replace result placeholder value))))))))
+      template
+      (let ((result template))
+	;; Replace each capture group placeholder (%1, %2, ..., %99)
+	(do ((i 0 (+ i 1))) ((>= i (length captures)) result)
+          (let ((placeholder (concat "%" (number->string (+ i 1))))
+		(value (list-ref captures i)))
+            (if (string? value)
+		(set! result (string-replace result placeholder value))))))))
 
 ;; ============================================================================
 ;; SAVE/LOAD UTILITY FUNCTIONS
@@ -2340,10 +2340,10 @@ Maps attribute names to their ANSI SGR codes.")
                (commands (car value))
                (priority (cadr value)))
           (write-line file
-           (concat "(hash-set! *tintin-aliases* " "\""
-            (tintin-escape-string name) "\" " "(list \""
-            (tintin-escape-string commands) "\" " (number->string priority)
-            "))")))))
+		      (concat "(hash-set! *tintin-aliases* " "\""
+			      (tintin-escape-string name) "\" " "(list \""
+			      (tintin-escape-string commands) "\" " (number->string priority)
+			      "))")))))
     (write-line file "")
     ;; Write variables
     (write-line file ";; Variables")
@@ -2353,9 +2353,9 @@ Maps attribute names to their ANSI SGR codes.")
                (name (car entry))
                (value (cdr entry)))
           (write-line file
-           (concat "(hash-set! *tintin-variables* " "\""
-            (tintin-escape-string name) "\" " "\"" (tintin-escape-string value)
-            "\")")))))
+		      (concat "(hash-set! *tintin-variables* " "\""
+			      (tintin-escape-string name) "\" " "\"" (tintin-escape-string value)
+			      "\")")))))
     (write-line file "")
     ;; Write highlights
     (write-line file ";; Highlights")
@@ -2368,14 +2368,14 @@ Maps attribute names to their ANSI SGR codes.")
                (bg-color (cadr data))
                (priority (caddr data)))
           (write-line file
-           (concat "(hash-set! *tintin-highlights* " "\""
-            (tintin-escape-string pattern) "\" " "(list "
-            (if fg-color
-              (concat "\"" (tintin-escape-string fg-color) "\"")
-              "nil") " "
-            (if bg-color
-              (concat "\"" (tintin-escape-string bg-color) "\"")
-              "nil") " " (number->string priority) "))")))))
+		      (concat "(hash-set! *tintin-highlights* " "\""
+			      (tintin-escape-string pattern) "\" " "(list "
+			      (if fg-color
+				  (concat "\"" (tintin-escape-string fg-color) "\"")
+				  "nil") " "
+			      (if bg-color
+				  (concat "\"" (tintin-escape-string bg-color) "\"")
+				  "nil") " " (number->string priority) "))")))))
     (write-line file "")
     ;; Write actions
     (write-line file ";; Actions")
@@ -2387,21 +2387,21 @@ Maps attribute names to their ANSI SGR codes.")
                (commands (car data))
                (priority (cadr data)))
           (write-line file
-           (concat "(hash-set! *tintin-actions* " "\""
-            (tintin-escape-string pattern) "\" " "(list \""
-            (tintin-escape-string commands) "\" " (number->string priority)
-            "))")))))
+		      (concat "(hash-set! *tintin-actions* " "\""
+			      (tintin-escape-string pattern) "\" " "(list \""
+			      (tintin-escape-string commands) "\" " (number->string priority)
+			      "))")))))
     (write-line file "")
     ;; Write settings
     (write-line file ";; Settings")
     (write-line file
-     (concat "(set! *tintin-speedwalk-enabled* "
-      (if *tintin-speedwalk-enabled* "#t" "#f") ")"))
+		(concat "(set! *tintin-speedwalk-enabled* "
+			(if *tintin-speedwalk-enabled* "#t" "#f") ")"))
     (write-line file
-     (concat "(set! *tintin-speedwalk-diagonals* "
-      (if *tintin-speedwalk-diagonals* "#t" "#f") ")"))
+		(concat "(set! *tintin-speedwalk-diagonals* "
+			(if *tintin-speedwalk-diagonals* "#t" "#f") ")"))
     (write-line file
-     (concat "(set! *tintin-enabled* " (if *tintin-enabled* "#t" "#f") ")"))
+		(concat "(set! *tintin-enabled* " (if *tintin-enabled* "#t" "#f") ")"))
     ;; Close file
     (close file)
     filename))
@@ -2419,24 +2419,24 @@ Maps attribute names to their ANSI SGR codes.")
 ;;          "# " → nil
 (defun tintin-extract-command-name (str)
   (if (not (tintin-is-command? str))
-    nil
-    (let ((len (length str))
-          (pos 1))
-      ;; Skip any whitespace after #
-      (do () ((or (>= pos len) (not (char=? (string-ref str pos) #\space))))
-        (set! pos (+ pos 1)))
-      ;; Check if we have any characters left
-      (if (>= pos len)
-        nil
-        ;; Find end of command word (space, {, or end of string)
-        (let ((start pos)
-              (end pos))
-          (do ()
-            ((or (>= end len) (char=? (string-ref str end) #\space)
-                 (char=? (string-ref str end) #\{)))
-            (set! end (+ end 1)))
-          ;; Extract and lowercase the command name
-          (if (= start end) nil (string-downcase (substring str start end))))))))
+      nil
+      (let ((len (length str))
+            (pos 1))
+	;; Skip any whitespace after #
+	(do () ((or (>= pos len) (not (char=? (string-ref str pos) #\space))))
+          (set! pos (+ pos 1)))
+	;; Check if we have any characters left
+	(if (>= pos len)
+            nil
+            ;; Find end of command word (space, {, or end of string)
+            (let ((start pos)
+		  (end pos))
+              (do ()
+		  ((or (>= end len) (char=? (string-ref str end) #\space)
+                       (char=? (string-ref str end) #\{)))
+		(set! end (+ end 1)))
+              ;; Extract and lowercase the command name
+              (if (= start end) nil (string-downcase (substring str start end))))))))
 
 ;; Find a TinTin++ command by partial prefix match
 ;; Returns the full command name or nil if no match
@@ -2498,13 +2498,13 @@ Maps attribute names to their ANSI SGR codes.")
   - `tintin-dispatch-command` - Uses this for command lookup
   - `*tintin-commands*` - Hash of registered commands"
   (if (not (string? prefix))
-    nil
-    (let ((prefix-lower (string-downcase prefix))
-          (commands (hash-keys *tintin-commands*))
-          (result nil))
-      (do ((i 0 (+ i 1))) ((or (>= i (length commands)) result) result)
-        (let ((cmd (list-ref commands i)))
-          (if (string-prefix? prefix-lower cmd) (set! result cmd)))))))
+      nil
+      (let ((prefix-lower (string-downcase prefix))
+            (commands (hash-keys *tintin-commands*))
+            (result nil))
+	(do ((i 0 (+ i 1))) ((or (>= i (length commands)) result) result)
+          (let ((cmd (list-ref commands i)))
+            (if (string-prefix? prefix-lower cmd) (set! result cmd)))))))
 
 ;; Match first word against alias hash table
 ;; Returns: (alias-entry . args) or nil
@@ -2568,11 +2568,11 @@ Maps attribute names to their ANSI SGR codes.")
   - `#alias` command - Create aliases"
   (let ((words (split cmd " ")))
     (if (or (null? words) (= (length words) 0))
-      nil
-      (let ((first-word (car words))
-            (args (cdr words)))
-        (let ((alias-entry (hash-ref *tintin-aliases* first-word)))
-          (if alias-entry (cons alias-entry args) nil))))))
+	nil
+	(let ((first-word (car words))
+              (args (cdr words)))
+          (let ((alias-entry (hash-ref *tintin-aliases* first-word)))
+            (if alias-entry (cons alias-entry args) nil))))))
 
 ;; Linear search for pattern aliases
 ;; Returns: (pattern . match-values) or nil
@@ -2638,11 +2638,11 @@ Maps attribute names to their ANSI SGR codes.")
   (let ((alias-names (hash-keys *tintin-aliases*))
         (matched nil))
     (if (or (null? alias-names) (= (length alias-names) 0))
-      nil
-      (do ((i 0 (+ i 1))) ((or (>= i (length alias-names)) matched) matched)
-        (let* ((pattern (list-ref alias-names i))
-               (match-values (tintin-match-pattern pattern cmd)))
-          (if match-values (set! matched (cons pattern match-values))))))))
+	nil
+	(do ((i 0 (+ i 1))) ((or (>= i (length alias-names)) matched) matched)
+          (let* ((pattern (list-ref alias-names i))
+		 (match-values (tintin-match-pattern pattern cmd)))
+            (if match-values (set! matched (cons pattern match-values))))))))
 
 ;; Replace %0, %1, %2... in template with args or match-values
 ;; Returns: template with placeholders replaced + unused args appended
@@ -2652,16 +2652,16 @@ Maps attribute names to their ANSI SGR codes.")
          (used-args (make-vector (length arg-vals) #f)))
     ;; Replace %0 with all arguments
     (if (> (length arg-vals) 0)
-      (let ((all-args "")
-            (old-result result))
-        (do ((i 0 (+ i 1))) ((>= i (length arg-vals)))
-          (set! all-args
-           (concat all-args (if (> i 0) " " "") (list-ref arg-vals i))))
-        (set! result (string-replace result "%0" all-args))
-        ;; Mark all args as used if %0 was replaced
-        (if (not (string=? result old-result))
+	(let ((all-args "")
+              (old-result result))
           (do ((i 0 (+ i 1))) ((>= i (length arg-vals)))
-            (vector-set! used-args i #t)))))
+            (set! all-args
+		  (concat all-args (if (> i 0) " " "") (list-ref arg-vals i))))
+          (set! result (string-replace result "%0" all-args))
+          ;; Mark all args as used if %0 was replaced
+          (if (not (string=? result old-result))
+              (do ((i 0 (+ i 1))) ((>= i (length arg-vals)))
+		(vector-set! used-args i #t)))))
     ;; Replace %1, %2, etc.
     (do ((i 0 (+ i 1))) ((>= i (length arg-vals)))
       (let ((placeholder (concat "%" (number->string (+ i 1))))
@@ -2670,17 +2670,17 @@ Maps attribute names to their ANSI SGR codes.")
         (if (not (string=? result old-result)) (vector-set! used-args i #t))))
     ;; Append unused arguments (only for simple aliases with args)
     (if args
-      (let ((unused-list '()))
-        (do ((j 0 (+ j 1))) ((>= j (length arg-vals)))
-          (if (not (vector-ref used-args j))
-            (set! unused-list (cons (list-ref arg-vals j) unused-list))))
-        (if (not (eq? unused-list '()))
-          (let ((unused-args "")
-                (reversed (reverse unused-list)))
-            (do ((k 0 (+ k 1))) ((>= k (length reversed)))
-              (set! unused-args
-               (concat unused-args (if (> k 0) " " "") (list-ref reversed k))))
-            (set! result (concat result " " unused-args))))))
+	(let ((unused-list '()))
+          (do ((j 0 (+ j 1))) ((>= j (length arg-vals)))
+            (if (not (vector-ref used-args j))
+		(set! unused-list (cons (list-ref arg-vals j) unused-list))))
+          (if (not (eq? unused-list '()))
+              (let ((unused-args "")
+                    (reversed (reverse unused-list)))
+		(do ((k 0 (+ k 1))) ((>= k (length reversed)))
+		  (set! unused-args
+			(concat unused-args (if (> k 0) " " "") (list-ref reversed k))))
+		(set! result (concat result " " unused-args))))))
     result))
 
 ;; Expand speedwalk, split by semicolons, recursively process
@@ -2689,42 +2689,42 @@ Maps attribute names to their ANSI SGR codes.")
 (defun tintin-expand-and-recurse (result depth)
   ;; Check depth limit (circular alias detection)
   (if (>= depth *tintin-max-alias-depth*)
-    (progn
-      (tintin-echo
-       (concat "Error: Circular alias detected or depth limit ("
-        (number->string *tintin-max-alias-depth*) ") exceeded\r\n"))
-      result) ; Return unexpanded to stop recursion
-    ;; Expand speedwalk only (variables expand per-command for just-in-time evaluation)
-    (let ((expanded (tintin-expand-speedwalk result)))
-      ;; Split by semicolon
-      (let ((split-commands (tintin-split-commands expanded)))
-        (if (> (length split-commands) 1)
-          ;; Multiple commands - recursively process each
-          (let ((sub-results '()))
-            (do ((j 0 (+ j 1))) ((>= j (length split-commands)))
-              (let ((subcmd (list-ref split-commands j)))
-                (if (and (string? subcmd) (not (string=? subcmd "")))
-                  ;; Expand variables for THIS command only (just-in-time)
-                  (let* ((cmd-with-vars (tintin-expand-variables-fast subcmd))
-                         (result
-                          (tintin-process-command-internal cmd-with-vars
-                           (+ depth 1))))
-                    (if (and (string? result) (not (string=? result "")))
-                      (set! sub-results (cons result sub-results)))))))
-            ;; Join with semicolons
-            (if (eq? sub-results '())
-              ""
-              (let ((reversed (reverse sub-results))
-                    (output ""))
-                (do ((k 0 (+ k 1))) ((>= k (length reversed)) output)
-                  (set! output
-                   (concat output (if (> k 0) ";" "") (list-ref reversed k)))))))
-          ;; Single command - recursively process
-          (if (> (length split-commands) 0)
-            (let ((cmd-with-vars
-                   (tintin-expand-variables-fast (list-ref split-commands 0))))
-              (tintin-process-command-internal cmd-with-vars (+ depth 1)))
-            ""))))))
+      (progn
+	(tintin-echo
+	 (concat "Error: Circular alias detected or depth limit ("
+		 (number->string *tintin-max-alias-depth*) ") exceeded\r\n"))
+	result) ; Return unexpanded to stop recursion
+      ;; Expand speedwalk only (variables expand per-command for just-in-time evaluation)
+      (let ((expanded (tintin-expand-speedwalk result)))
+	;; Split by semicolon
+	(let ((split-commands (tintin-split-commands expanded)))
+          (if (> (length split-commands) 1)
+              ;; Multiple commands - recursively process each
+              (let ((sub-results '()))
+		(do ((j 0 (+ j 1))) ((>= j (length split-commands)))
+		  (let ((subcmd (list-ref split-commands j)))
+                    (if (and (string? subcmd) (not (string=? subcmd "")))
+			;; Expand variables for THIS command only (just-in-time)
+			(let* ((cmd-with-vars (tintin-expand-variables-fast subcmd))
+                               (result
+				(tintin-process-command-internal cmd-with-vars
+								 (+ depth 1))))
+			  (if (and (string? result) (not (string=? result "")))
+			      (set! sub-results (cons result sub-results)))))))
+		;; Join with semicolons
+		(if (eq? sub-results '())
+		    ""
+		    (let ((reversed (reverse sub-results))
+			  (output ""))
+                      (do ((k 0 (+ k 1))) ((>= k (length reversed)) output)
+			(set! output
+			      (concat output (if (> k 0) ";" "") (list-ref reversed k)))))))
+              ;; Single command - recursively process
+              (if (> (length split-commands) 0)
+		  (let ((cmd-with-vars
+			 (tintin-expand-variables-fast (list-ref split-commands 0))))
+		    (tintin-process-command-internal cmd-with-vars (+ depth 1)))
+		  ""))))))
 
 ;; ============================================================================
 ;; ACTION EXECUTION
@@ -2735,36 +2735,36 @@ Maps attribute names to their ANSI SGR codes.")
 ;; Returns: nil (side effect only)
 (defun tintin-execute-action (commands)
   (if (not (string? commands))
-    nil
-    ;; Check circular execution flag
-    (if *tintin-action-executing*
-      (progn
-        (tintin-echo
-         "Warning: Action triggered during action execution (skipped)\r\n")
-        nil)
-      (progn (set! *tintin-action-executing* #t)
-        ;; Process and send commands
-        (condition-case err
-          (progn
-            (let ((processed (tintin-process-input commands)))
-              (if (and (string? processed) (not (string=? processed "")))
-                (let ((cmd-list (tintin-split-commands processed)))
-                  (do ((i 0 (+ i 1))) ((>= i (length cmd-list)))
-                    (let ((cmd (list-ref cmd-list i)))
-                      (if (and (string? cmd) (not (string=? cmd "")))
-                        (condition-case send-err
-                          (telnet-send (concat cmd "\r\n"))
-                          (error
-                           (tintin-echo
-                            (concat "Action send failed: "
-                             (error-message send-err) "\r\n"))))))))))
-            ;; Clear flag after execution
-            (set! *tintin-action-executing* #f))
-          (error
-           ;; Clear flag on error
-           (set! *tintin-action-executing* #f)
-           (tintin-echo
-            (concat "Action execution error: " (error-message err) "\r\n"))))))))
+      nil
+      ;; Check circular execution flag
+      (if *tintin-action-executing*
+	  (progn
+            (tintin-echo
+             "Warning: Action triggered during action execution (skipped)\r\n")
+            nil)
+	  (progn (set! *tintin-action-executing* #t)
+		 ;; Process and send commands
+		 (condition-case err
+		     (progn
+		       (let ((processed (tintin-process-input commands)))
+			 (if (and (string? processed) (not (string=? processed "")))
+			     (let ((cmd-list (tintin-split-commands processed)))
+			       (do ((i 0 (+ i 1))) ((>= i (length cmd-list)))
+				 (let ((cmd (list-ref cmd-list i)))
+				   (if (and (string? cmd) (not (string=? cmd "")))
+				       (condition-case send-err
+					   (telnet-send (concat cmd "\r\n"))
+					 (error
+					  (tintin-echo
+					   (concat "Action send failed: "
+						   (error-message send-err) "\r\n"))))))))))
+		       ;; Clear flag after execution
+		       (set! *tintin-action-executing* #f))
+		   (error
+		    ;; Clear flag on error
+		    (set! *tintin-action-executing* #f)
+		    (tintin-echo
+		     (concat "Action execution error: " (error-message err) "\r\n"))))))))
 
 ;; Test all action patterns against line and execute matches
 ;; Processes ALL matching actions in priority order (low to high)
@@ -2852,28 +2852,28 @@ Maps attribute names to their ANSI SGR codes.")
   - `tintin-substitute-captures` - Substitute captures into commands
   - `tintin-sort-actions-by-priority` - Priority ordering (ascending)"
   (if (or (not (string? line)) (= (hash-count *tintin-actions*) 0))
-    nil
-    ;; Get all actions sorted by priority (low to high)
-    (let ((action-entries (hash-entries *tintin-actions*)))
-      (let ((sorted (tintin-sort-actions-by-priority action-entries)))
-        ;; Try all patterns and execute all that match
-        (do ((i 0 (+ i 1))) ((>= i (length sorted)))
-          (let* ((entry (list-ref sorted i))
-                 (pattern (car entry))
-                 (data (cdr entry))
-                 (commands (car data))
-                 (priority (cadr data)))
-            ;; Check if pattern matches the line
-            (if (tintin-match-highlight-pattern pattern line)
-              ;; Pattern matches - extract captures and execute
-              (let ((captures (tintin-extract-captures pattern line)))
-                ;; Substitute captures in commands
-                (let ((substituted
-                       (tintin-substitute-captures commands captures)))
-                  ;; Expand variables
-                  (let ((expanded (tintin-expand-variables-fast substituted)))
-                    ;; Execute the action
-                    (tintin-execute-action expanded)))))))))))
+      nil
+      ;; Get all actions sorted by priority (low to high)
+      (let ((action-entries (hash-entries *tintin-actions*)))
+	(let ((sorted (tintin-sort-actions-by-priority action-entries)))
+          ;; Try all patterns and execute all that match
+          (do ((i 0 (+ i 1))) ((>= i (length sorted)))
+            (let* ((entry (list-ref sorted i))
+                   (pattern (car entry))
+                   (data (cdr entry))
+                   (commands (car data))
+                   (priority (cadr data)))
+              ;; Check if pattern matches the line
+              (if (tintin-match-highlight-pattern pattern line)
+		  ;; Pattern matches - extract captures and execute
+		  (let ((captures (tintin-extract-captures pattern line)))
+                    ;; Substitute captures in commands
+                    (let ((substituted
+			   (tintin-substitute-captures commands captures)))
+                      ;; Expand variables
+                      (let ((expanded (tintin-expand-variables-fast substituted)))
+			;; Execute the action
+			(tintin-execute-action expanded)))))))))))
 
 ;; Orchestrate alias matching and expansion
 ;; Returns: expanded command (may contain semicolons)
@@ -2882,48 +2882,48 @@ Maps attribute names to their ANSI SGR codes.")
     ;; Try simple alias match
     (let ((simple-match (tintin-match-simple-alias expanded-cmd)))
       (if simple-match
-        ;; Simple alias found
-        (let* ((alias-entry (car simple-match))
-               (args (cdr simple-match))
-               (template (car alias-entry))
-               (result (tintin-substitute-template template args nil)))
-          (tintin-expand-and-recurse result depth))
-        ;; Try pattern alias match
-        (let ((pattern-match (tintin-match-pattern-alias expanded-cmd)))
-          (if pattern-match
-            ;; Pattern alias found
-            (let* ((pattern (car pattern-match))
-                   (match-values (cdr pattern-match))
-                   (alias-data (hash-ref *tintin-aliases* pattern))
-                   (template (car alias-data))
-                   (result
-                    (tintin-substitute-template template nil match-values)))
-              (tintin-expand-and-recurse result depth))
-            ;; No alias match - just expand speedwalk
-            (tintin-expand-speedwalk expanded-cmd)))))))
+          ;; Simple alias found
+          (let* ((alias-entry (car simple-match))
+		 (args (cdr simple-match))
+		 (template (car alias-entry))
+		 (result (tintin-substitute-template template args nil)))
+            (tintin-expand-and-recurse result depth))
+          ;; Try pattern alias match
+          (let ((pattern-match (tintin-match-pattern-alias expanded-cmd)))
+            (if pattern-match
+		;; Pattern alias found
+		(let* ((pattern (car pattern-match))
+                       (match-values (cdr pattern-match))
+                       (alias-data (hash-ref *tintin-aliases* pattern))
+                       (template (car alias-data))
+                       (result
+			(tintin-substitute-template template nil match-values)))
+		  (tintin-expand-and-recurse result depth))
+		;; No alias match - just expand speedwalk
+		(tintin-expand-speedwalk expanded-cmd)))))))
 
 ;; Main command router with depth tracking (internal)
 (defun tintin-process-command-internal (cmd depth)
   (if (or (not (string? cmd)) (string=? cmd ""))
-    ""
-    ;; Check if it's a # command
-    (if (tintin-is-command? cmd)
-      ;; TinTin++ command - dispatch (main.c handles echoing)
-      (let ((cmd-name (tintin-extract-command-name cmd)))
-        (if (not cmd-name)
-          (progn
-            (tintin-echo
-             (concat "Invalid TinTin++ command format: " cmd "\r\n"))
-            "")
-          (let ((matched (tintin-find-command cmd-name)))
-            (if (not matched)
-              (progn
-                (tintin-echo
-                 (concat "Unknown TinTin++ command: #" cmd-name "\r\n"))
-                "")
-              (tintin-dispatch-command matched cmd)))))
-      ;; Regular command - expand aliases
-      (tintin-expand-alias cmd depth))))
+      ""
+      ;; Check if it's a # command
+      (if (tintin-is-command? cmd)
+	  ;; TinTin++ command - dispatch (main.c handles echoing)
+	  (let ((cmd-name (tintin-extract-command-name cmd)))
+            (if (not cmd-name)
+		(progn
+		  (tintin-echo
+		   (concat "Invalid TinTin++ command format: " cmd "\r\n"))
+		  "")
+		(let ((matched (tintin-find-command cmd-name)))
+		  (if (not matched)
+		      (progn
+			(tintin-echo
+			 (concat "Unknown TinTin++ command: #" cmd-name "\r\n"))
+			"")
+		      (tintin-dispatch-command matched cmd)))))
+	  ;; Regular command - expand aliases
+	  (tintin-expand-alias cmd depth))))
 
 (defun tintin-process-command (cmd)
   "Process a single TinTin++ command or server command.
@@ -3049,20 +3049,20 @@ Maps attribute names to their ANSI SGR codes.")
   - `tintin-user-input-hook` - Hook that calls this function
   - `tintin-expand-speedwalk` - Speedwalk expansion (3n2e → n;n;n;e;e)"
   (if (not (string? input))
-    ""
-    (let ((commands (tintin-split-commands input))
-          (results '()))
-      ;; Process each command and collect results
-      (do ((i 0 (+ i 1))) ((>= i (length commands)))
-        (let ((processed (tintin-process-command (list-ref commands i))))
-          (if (and (string? processed) (not (string=? processed "")))
-            (set! results (cons processed results)))))
-      ;; Reverse and join results with semicolons
-      (let ((reversed-results (reverse results))
-            (output ""))
-        (do ((i 0 (+ i 1))) ((>= i (length reversed-results)) output)
-          (set! output
-           (concat output (if (> i 0) ";" "") (list-ref reversed-results i))))))))
+      ""
+      (let ((commands (tintin-split-commands input))
+            (results '()))
+	;; Process each command and collect results
+	(do ((i 0 (+ i 1))) ((>= i (length commands)))
+          (let ((processed (tintin-process-command (list-ref commands i))))
+            (if (and (string? processed) (not (string=? processed "")))
+		(set! results (cons processed results)))))
+	;; Reverse and join results with semicolons
+	(let ((reversed-results (reverse results))
+              (output ""))
+          (do ((i 0 (+ i 1))) ((>= i (length reversed-results)) output)
+            (set! output
+		  (concat output (if (> i 0) ";" "") (list-ref reversed-results i))))))))
 
 ;; ============================================================================
 ;; USER-INPUT-HOOK INTEGRATION
@@ -3080,47 +3080,47 @@ Maps attribute names to their ANSI SGR codes.")
   ;; Process with TinTin++ if enabled
   ;; Note: Slash commands are handled by higher-priority hooks (e.g., practice.lisp)
   (if (not *tintin-enabled*)
-    () ;; TinTin++ disabled, don't handle
-    (progn
-      ;; Note: main.c already echoes the original input, so we don't echo it here
-      (let ((processed (tintin-process-input text))
-            (commands nil))
-        ;; Split processed output by semicolons
-        (set! commands (tintin-split-commands processed))
-        ;; Send each command separately
-        (do ((i 0 (+ i 1))) ((>= i (length commands)))
-          (let ((cmd (list-ref commands i)))
-            (if (and (string? cmd) (not (string=? cmd "")))
-              (progn
-                ;; Echo expanded command to terminal (if different from original)
-                (if
-                  (and (string? cmd) (string? text) (not (string=? cmd text)))
-                  (tintin-echo (concat cmd "\r\n")))
-                ;; Send to telnet server with error handling
-                (condition-case err
-                  (progn
-                    ;; Check if we can send (connected or test mode)
-                    (let ((can-send
-                           (condition-case err2
-                             ;; Try to check connection mode
-                             (or (eq? *connection-mode* 'conn)
-                                 ;; If *connection-mode* undefined (test mode), check if telnet-send exists
-                                 (and (symbol? 'telnet-send) #t))
-                             ;; If *connection-mode* not defined, we're in test mode
-                             (error #t))))
-                      (if can-send
-                        ;; Send the command
-                        (telnet-send (concat cmd "\r\n"))
-                        ;; Not connected
-                        (tintin-echo "\r\n*** Not connected ***\r\n"))))
-                  ;; Catch any send errors
-                  (error
-                   (tintin-echo
-                    (concat "\r\n*** Send failed: " (error-message err)
-                     " ***\r\n")))))))))
-      ;; Mark as handled via hook system
-      (set! *user-input-handled* #t)
-      (set! *user-input-result* nil))))
+      () ;; TinTin++ disabled, don't handle
+      (progn
+	;; Note: main.c already echoes the original input, so we don't echo it here
+	(let ((processed (tintin-process-input text))
+              (commands nil))
+          ;; Split processed output by semicolons
+          (set! commands (tintin-split-commands processed))
+          ;; Send each command separately
+          (do ((i 0 (+ i 1))) ((>= i (length commands)))
+            (let ((cmd (list-ref commands i)))
+              (if (and (string? cmd) (not (string=? cmd "")))
+		  (progn
+                    ;; Echo expanded command to terminal (if different from original)
+                    (if
+                     (and (string? cmd) (string? text) (not (string=? cmd text)))
+                     (tintin-echo (concat cmd "\r\n")))
+                    ;; Send to telnet server with error handling
+                    (condition-case err
+			(progn
+			  ;; Check if we can send (connected or test mode)
+			  (let ((can-send
+				 (condition-case err2
+				     ;; Try to check connection mode
+				     (or (eq? *connection-mode* 'conn)
+					 ;; If *connection-mode* undefined (test mode), check if telnet-send exists
+					 (and (symbol? 'telnet-send) #t))
+				   ;; If *connection-mode* not defined, we're in test mode
+				   (error #t))))
+			    (if can-send
+				;; Send the command
+				(telnet-send (concat cmd "\r\n"))
+				;; Not connected
+				(tintin-echo "\r\n*** Not connected ***\r\n"))))
+                      ;; Catch any send errors
+                      (error
+                       (tintin-echo
+			(concat "\r\n*** Send failed: " (error-message err)
+				" ***\r\n")))))))))
+	;; Mark as handled via hook system
+	(set! *user-input-handled* #t)
+	(set! *user-input-result* nil))))
 
 ;; Toggle TinTin++ processing on/off
 (defun tintin-toggle! ()
@@ -3225,13 +3225,13 @@ Maps attribute names to their ANSI SGR codes.")
 ;; Example: "{text}" → "text", "text" → "text", "{a{b}c}" → "a{b}c"
 (defun tintin-strip-braces (str)
   (if (not (string? str))
-    str
-    (let ((len (length str)))
-      (if
-        (and (> len 1) (char=? (string-ref str 0) #\{)
-             (char=? (string-ref str (- len 1)) #\}))
-        (substring str 1 (- len 1))
-        str))))
+      str
+      (let ((len (length str)))
+	(if
+         (and (> len 1) (char=? (string-ref str 0) #\{)
+              (char=? (string-ref str (- len 1)) #\}))
+         (substring str 1 (- len 1))
+         str))))
 
 ;; Sort alias entries alphabetically by name
 ;; Input: list of (name . (commands priority)) pairs
@@ -3283,27 +3283,27 @@ Maps attribute names to their ANSI SGR codes.")
   - `tintin-sort-highlights-alphabetically` - Similar for highlights
   - `tintin-sort-actions-alphabetically` - Similar for actions"
   (if (or (null? alias-list) (= (length alias-list) 0))
-    '()
-    ;; Simple insertion sort by name
-    (let ((sorted '()))
-      (do ((remaining alias-list (cdr remaining))) ((null? remaining) sorted)
-        (let ((entry (car remaining))
-              (name (caar remaining)))
-          ;; Insert entry in alphabetically sorted position
-          (set! sorted (tintin-insert-alias-alphabetically entry name sorted)))))))
+      '()
+      ;; Simple insertion sort by name
+      (let ((sorted '()))
+	(do ((remaining alias-list (cdr remaining))) ((null? remaining) sorted)
+          (let ((entry (car remaining))
+		(name (caar remaining)))
+            ;; Insert entry in alphabetically sorted position
+            (set! sorted (tintin-insert-alias-alphabetically entry name sorted)))))))
 
 ;; Helper: Insert alias entry into sorted list alphabetically by name
 (defun tintin-insert-alias-alphabetically (entry name sorted-list)
   (if (null? sorted-list)
-    (list entry)
-    (let ((first-entry (car sorted-list))
-          (first-name (caar sorted-list)))
-      (if (string<? name first-name)
-        ;; Insert before first entry
-        (cons entry sorted-list)
-        ;; Insert later in list
-        (cons first-entry
-         (tintin-insert-alias-alphabetically entry name (cdr sorted-list)))))))
+      (list entry)
+      (let ((first-entry (car sorted-list))
+            (first-name (caar sorted-list)))
+	(if (string<? name first-name)
+            ;; Insert before first entry
+            (cons entry sorted-list)
+            ;; Insert later in list
+            (cons first-entry
+		  (tintin-insert-alias-alphabetically entry name (cdr sorted-list)))))))
 
 ;; Sort highlight entries alphabetically by pattern
 ;; Input: list of (pattern . (fg-color bg-color priority)) pairs
@@ -3356,30 +3356,30 @@ Maps attribute names to their ANSI SGR codes.")
   - `tintin-sort-highlights-by-priority` - Sorts for pattern matching order
   - `tintin-sort-aliases-alphabetically` - Similar for aliases"
   (if (or (null? highlight-list) (= (length highlight-list) 0))
-    '()
-    ;; Simple insertion sort by pattern
-    (let ((sorted '()))
-      (do ((remaining highlight-list (cdr remaining)))
-        ((null? remaining) sorted)
-        (let ((entry (car remaining))
-              (pattern (caar remaining)))
-          ;; Insert entry in alphabetically sorted position
-          (set! sorted
-           (tintin-insert-highlight-alphabetically entry pattern sorted)))))))
+      '()
+      ;; Simple insertion sort by pattern
+      (let ((sorted '()))
+	(do ((remaining highlight-list (cdr remaining)))
+            ((null? remaining) sorted)
+          (let ((entry (car remaining))
+		(pattern (caar remaining)))
+            ;; Insert entry in alphabetically sorted position
+            (set! sorted
+		  (tintin-insert-highlight-alphabetically entry pattern sorted)))))))
 
 ;; Helper: Insert highlight entry into sorted list alphabetically by pattern
 (defun tintin-insert-highlight-alphabetically (entry pattern sorted-list)
   (if (null? sorted-list)
-    (list entry)
-    (let ((first-entry (car sorted-list))
-          (first-pattern (caar sorted-list)))
-      (if (string<? pattern first-pattern)
-        ;; Insert before first entry
-        (cons entry sorted-list)
-        ;; Insert later in list
-        (cons first-entry
-         (tintin-insert-highlight-alphabetically entry pattern
-          (cdr sorted-list)))))))
+      (list entry)
+      (let ((first-entry (car sorted-list))
+            (first-pattern (caar sorted-list)))
+	(if (string<? pattern first-pattern)
+            ;; Insert before first entry
+            (cons entry sorted-list)
+            ;; Insert later in list
+            (cons first-entry
+		  (tintin-insert-highlight-alphabetically entry pattern
+							  (cdr sorted-list)))))))
 
 ;; Sort action entries alphabetically by pattern
 ;; Input: list of (pattern . (commands-string priority)) pairs
@@ -3431,29 +3431,29 @@ Maps attribute names to their ANSI SGR codes.")
   - `tintin-sort-actions-by-priority` - Sorts for execution order
   - `tintin-sort-highlights-alphabetically` - Similar for highlights"
   (if (or (null? action-list) (= (length action-list) 0))
-    '()
-    ;; Simple insertion sort by pattern
-    (let ((sorted '()))
-      (do ((remaining action-list (cdr remaining)))
-        ((null? remaining) sorted)
-        (let ((entry (car remaining))
-              (pattern (caar remaining)))
-          ;; Insert entry in alphabetically sorted position
-          (set! sorted
-           (tintin-insert-action-alphabetically entry pattern sorted)))))))
+      '()
+      ;; Simple insertion sort by pattern
+      (let ((sorted '()))
+	(do ((remaining action-list (cdr remaining)))
+            ((null? remaining) sorted)
+          (let ((entry (car remaining))
+		(pattern (caar remaining)))
+            ;; Insert entry in alphabetically sorted position
+            (set! sorted
+		  (tintin-insert-action-alphabetically entry pattern sorted)))))))
 
 ;; Helper: Insert action entry into sorted list alphabetically by pattern
 (defun tintin-insert-action-alphabetically (entry pattern sorted-list)
   (if (null? sorted-list)
-    (list entry)
-    (let ((first-entry (car sorted-list))
-          (first-pattern (caar sorted-list)))
-      (if (string<? pattern first-pattern)
-        ;; Insert before first entry
-        (cons entry sorted-list)
-        ;; Insert later in list
-        (cons first-entry
-         (tintin-insert-action-alphabetically entry pattern (cdr sorted-list)))))))
+      (list entry)
+      (let ((first-entry (car sorted-list))
+            (first-pattern (caar sorted-list)))
+	(if (string<? pattern first-pattern)
+            ;; Insert before first entry
+            (cons entry sorted-list)
+            ;; Insert later in list
+            (cons first-entry
+		  (tintin-insert-action-alphabetically entry pattern (cdr sorted-list)))))))
 
 ;; ============================================================================
 ;; TABLE FORMATTING UTILITIES
@@ -3514,14 +3514,14 @@ Maps attribute names to their ANSI SGR codes.")
   - `tintin-draw-row` - Uses this for cell formatting
   - `tintin-wrap-text` - For text that exceeds column width"
   (if (not (string? str))
-    ""
-    (let ((visual-len (tintin-visual-length str)))
-      (let ((padding-needed (- width visual-len)))
-        (if (<= padding-needed 0)
-          str
-          (let ((result str))
-            (do ((i 0 (+ i 1))) ((>= i padding-needed) result)
-              (set! result (concat result " ")))))))))
+      ""
+      (let ((visual-len (tintin-visual-length str)))
+	(let ((padding-needed (- width visual-len)))
+          (if (<= padding-needed 0)
+              str
+              (let ((result str))
+		(do ((i 0 (+ i 1))) ((>= i padding-needed) result)
+		  (set! result (concat result " ")))))))))
 
 ;; Repeat a string N times
 (defun tintin-repeat-string (str count)
@@ -3631,27 +3631,27 @@ Maps attribute names to their ANSI SGR codes.")
   - `tintin-wrap-text` - Uses visual-length for line breaking
   - `tintin-draw-border` - Column widths based on visual-length"
   (if (not (string? str))
-    0
-    (let ((ansi-pattern "\\033\\[[0-9;]*m"))
-      (length (regex-replace-all ansi-pattern str "")))))
+      0
+      (let ((ansi-pattern "\\033\\[[0-9;]*m"))
+	(length (regex-replace-all ansi-pattern str "")))))
 
 ;; Find best position to break text near width boundary
 ;; Returns position to break at (searches backwards for space/hyphen)
 (defun tintin-find-break-point (text width)
   (if (<= (tintin-visual-length text) width)
-    (length text)
-    (let* ((text-len (length text))
-           (start-pos (if (< width text-len) width (- text-len 1))))
-      ;; Search backwards from width (or text end) for space or hyphen
-      (do ((i start-pos (- i 1)))
-        ((or (< i 0)
-             (and (< i text-len) ; Bounds check
-                  (let ((ch (string-ref text i)))
-                    (or (char=? ch #\space) (char=? ch #\-)
-                        (char=? ch #\newline)))))
-         (if (< i 0)
-           (if (< width text-len) width text-len) ; Hard break at width or text end
-           (+ i 1))))))) ; Break after space/hyphen
+      (length text)
+      (let* ((text-len (length text))
+             (start-pos (if (< width text-len) width (- text-len 1))))
+	;; Search backwards from width (or text end) for space or hyphen
+	(do ((i start-pos (- i 1)))
+            ((or (< i 0)
+		 (and (< i text-len) ; Bounds check
+                      (let ((ch (string-ref text i)))
+			(or (char=? ch #\space) (char=? ch #\-)
+                            (char=? ch #\newline)))))
+             (if (< i 0)
+		 (if (< width text-len) width text-len) ; Hard break at width or text end
+		 (+ i 1))))))) ; Break after space/hyphen
 
 ;; Wrap text to fit within width, returning list of lines
 (defun tintin-wrap-text (text width)
@@ -3727,44 +3727,44 @@ Maps attribute names to their ANSI SGR codes.")
   - `tintin-visual-length` - Measures display width
   - `tintin-draw-row` - Uses this for cell wrapping"
   (if (or (not (string? text)) (= (tintin-visual-length text) 0))
-    '("")
-    ;; Guard against invalid width
-    (if (<= width 0)
-      (list text) ; Return as-is if width is too small
-      (if (<= (tintin-visual-length text) width)
-        (list text)
-        ;; Find break point and split
-        (let* ((break-pos (tintin-find-break-point text width))
-               ;; Ensure we always make progress (at least 1 char)
-               (safe-break-pos (if (<= break-pos 0) 1 break-pos))
-               (line1-raw (substring text 0 safe-break-pos))
-               ;; Strip trailing spaces from line1 (they get added as padding later)
-               (line1-len (length line1-raw))
-               (line1-end line1-len)
-               (line1
-                (progn
-                  ;; Find last non-space character
-                  (do ()
-                    ((or (<= line1-end 0)
-                         (not
-                          (char=? (string-ref line1-raw (- line1-end 1))
-                           #\space))))
-                    (set! line1-end (- line1-end 1)))
-                  (if (= line1-end line1-len)
-                    line1-raw ; No trailing spaces
-                    (substring line1-raw 0 line1-end)))) ; Strip trailing spaces
-               (rest-start safe-break-pos)
-               ;; Skip leading space in rest
-               (rest-start-adj
-                (if
-                  (and (< rest-start (length text))
-                       (char=? (string-ref text rest-start) #\space))
-                  (+ rest-start 1)
-                  rest-start)))
-          (if (>= rest-start-adj (length text))
-            (list line1)
-            (let ((rest (substring text rest-start-adj (length text))))
-              (cons line1 (tintin-wrap-text rest width)))))))))
+      '("")
+      ;; Guard against invalid width
+      (if (<= width 0)
+	  (list text) ; Return as-is if width is too small
+	  (if (<= (tintin-visual-length text) width)
+              (list text)
+              ;; Find break point and split
+              (let* ((break-pos (tintin-find-break-point text width))
+		     ;; Ensure we always make progress (at least 1 char)
+		     (safe-break-pos (if (<= break-pos 0) 1 break-pos))
+		     (line1-raw (substring text 0 safe-break-pos))
+		     ;; Strip trailing spaces from line1 (they get added as padding later)
+		     (line1-len (length line1-raw))
+		     (line1-end line1-len)
+		     (line1
+                      (progn
+			;; Find last non-space character
+			(do ()
+			    ((or (<= line1-end 0)
+				 (not
+				  (char=? (string-ref line1-raw (- line1-end 1))
+					  #\space))))
+			  (set! line1-end (- line1-end 1)))
+			(if (= line1-end line1-len)
+			    line1-raw ; No trailing spaces
+			    (substring line1-raw 0 line1-end)))) ; Strip trailing spaces
+		     (rest-start safe-break-pos)
+		     ;; Skip leading space in rest
+		     (rest-start-adj
+                      (if
+                       (and (< rest-start (length text))
+			    (char=? (string-ref text rest-start) #\space))
+                       (+ rest-start 1)
+                       rest-start)))
+		(if (>= rest-start-adj (length text))
+		    (list line1)
+		    (let ((rest (substring text rest-start-adj (length text))))
+		      (cons line1 (tintin-wrap-text rest width)))))))))
 
 ;; Draw generic table border for any number of columns
 ;; widths: list of column widths
@@ -3833,27 +3833,27 @@ Maps attribute names to their ANSI SGR codes.")
   - `tintin-draw-row` - Draws data rows between borders
   - `tintin-repeat-string` - Used internally for horizontal lines"
   (if (or (null? widths) (= (length widths) 0))
-    ""
-    (let* ((chars
-            (cond
-              ((eq? position 'top) '("┌" "┬" "┐"))
-              ((eq? position 'middle) '("├" "┼" "┤"))
-              ((eq? position 'bottom) '("└" "┴" "┘"))
-              (#t '("├" "┼" "┤")))) ; default to middle
-           (left (car chars))
-           (middle (list-ref chars 1))
-           (right (list-ref chars 2))
-           (line left))
-      ;; Build border: left + (─*width1) + middle + (─*width2) + ... + right
-      (do ((i 0 (+ i 1))) ((>= i (length widths)))
-        (let ((width (list-ref widths i)))
-          ;; Add horizontal line segment
-          (set! line (concat line "─" (tintin-repeat-string "─" width) "─"))
-          ;; Add junction or right cap
-          (if (< (+ i 1) (length widths))
-            (set! line (concat line middle))
-            (set! line (concat line right)))))
-      (concat line "\r\n"))))
+      ""
+      (let* ((chars
+              (cond
+		((eq? position 'top) '("┌" "┬" "┐"))
+		((eq? position 'middle) '("├" "┼" "┤"))
+		((eq? position 'bottom) '("└" "┴" "┘"))
+		(#t '("├" "┼" "┤")))) ; default to middle
+             (left (car chars))
+             (middle (list-ref chars 1))
+             (right (list-ref chars 2))
+             (line left))
+	;; Build border: left + (─*width1) + middle + (─*width2) + ... + right
+	(do ((i 0 (+ i 1))) ((>= i (length widths)))
+          (let ((width (list-ref widths i)))
+            ;; Add horizontal line segment
+            (set! line (concat line "─" (tintin-repeat-string "─" width) "─"))
+            ;; Add junction or right cap
+            (if (< (+ i 1) (length widths))
+		(set! line (concat line middle))
+		(set! line (concat line right)))))
+	(concat line "\r\n"))))
 
 ;; Draw table row with wrapping support
 ;; cells: list of cell values (strings)
@@ -3927,41 +3927,41 @@ Maps attribute names to their ANSI SGR codes.")
   - `tintin-print-table` - Main table printer using this
   - `tintin-draw-border` - Draws horizontal borders between rows"
   (if (or (null? cells) (null? widths))
-    '("")
-    (let ((wrapped-cells '())
-          (max-lines 0))
-      ;; Step 1: Wrap each cell to its column width
-      (do ((i 0 (+ i 1))) ((>= i (length cells)))
-        (let ((cell (list-ref cells i))
-              (width (list-ref widths i)))
-          (let ((wrapped (tintin-wrap-text cell width)))
-            (set! wrapped-cells (cons wrapped wrapped-cells))
-            ;; Track max lines needed
-            (if (> (length wrapped) max-lines)
-              (set! max-lines (length wrapped))))))
-      ;; Reverse to restore original order
-      (set! wrapped-cells (reverse wrapped-cells))
-      ;; Step 2: Build each display line
-      (let ((result '()))
-        (do ((line-idx 0 (+ line-idx 1)))
-          ((>= line-idx max-lines) (reverse result))
-          (let ((line "│ "))
-            ;; Build this display line from all columns
-            (do ((col-idx 0 (+ col-idx 1))) ((>= col-idx (length cells)))
-              (let* ((wrapped-cell (list-ref wrapped-cells col-idx))
-                     (width (list-ref widths col-idx))
-                     ;; Get text for this line (or empty if this cell has fewer lines)
-                     (text
-                      (if (< line-idx (length wrapped-cell))
-                        (list-ref wrapped-cell line-idx)
-                        ""))
-                     (padded (tintin-pad-string text width)))
-                (set! line (concat line padded))
-                ;; Add separator or end cap
-                (if (< (+ col-idx 1) (length cells))
-                  (set! line (concat line " │ "))
-                  (set! line (concat line " │\r\n")))))
-            (set! result (cons line result))))))))
+      '("")
+      (let ((wrapped-cells '())
+            (max-lines 0))
+	;; Step 1: Wrap each cell to its column width
+	(do ((i 0 (+ i 1))) ((>= i (length cells)))
+          (let ((cell (list-ref cells i))
+		(width (list-ref widths i)))
+            (let ((wrapped (tintin-wrap-text cell width)))
+              (set! wrapped-cells (cons wrapped wrapped-cells))
+              ;; Track max lines needed
+              (if (> (length wrapped) max-lines)
+		  (set! max-lines (length wrapped))))))
+	;; Reverse to restore original order
+	(set! wrapped-cells (reverse wrapped-cells))
+	;; Step 2: Build each display line
+	(let ((result '()))
+          (do ((line-idx 0 (+ line-idx 1)))
+              ((>= line-idx max-lines) (reverse result))
+            (let ((line "│ "))
+              ;; Build this display line from all columns
+              (do ((col-idx 0 (+ col-idx 1))) ((>= col-idx (length cells)))
+		(let* ((wrapped-cell (list-ref wrapped-cells col-idx))
+                       (width (list-ref widths col-idx))
+                       ;; Get text for this line (or empty if this cell has fewer lines)
+                       (text
+			(if (< line-idx (length wrapped-cell))
+                            (list-ref wrapped-cell line-idx)
+                            ""))
+                       (padded (tintin-pad-string text width)))
+                  (set! line (concat line padded))
+                  ;; Add separator or end cap
+                  (if (< (+ col-idx 1) (length cells))
+                      (set! line (concat line " │ "))
+                      (set! line (concat line " │\r\n")))))
+              (set! result (cons line result))))))))
 
 ;; Calculate optimal column widths that fit within max-width
 ;; data: list of lists (rows x columns)
@@ -4051,84 +4051,84 @@ Maps attribute names to their ANSI SGR codes.")
   - `tintin-visual-length` - ANSI-aware width measurement
   - `terminal-info` - Provides terminal dimensions"
   (if (or (null? data) (= (length data) 0))
-    '()
-    (let ((num-cols (length (car data)))
-          (col-maxes (make-vector (length (car data)) 0)))
-      ;; Step 1: Find max visual width for each column
-      (do ((i 0 (+ i 1))) ((>= i (length data)))
-        (let ((row (list-ref data i)))
-          (do ((j 0 (+ j 1))) ((>= j (length row)))
-            (let ((cell (list-ref row j)))
-              (let ((cell-width (tintin-visual-length cell))
-                    (current-max (vector-ref col-maxes j)))
-                (if (> cell-width current-max)
-                  (vector-set! col-maxes j cell-width)))))))
-      ;; Step 2: Calculate total needed width
-      ;; formula: sum(widths) + (num-cols + 1) + (num-cols - 1) * 3
-      (let ((content-width 0))
-        ;; Sum up column widths
-        (do ((k 0 (+ k 1))) ((>= k num-cols))
-          (set! content-width (+ content-width (vector-ref col-maxes k))))
-        (let* ((border-width 4) ; Left "│ " (2) + right " │" (2)
-               (separator-width (* (- num-cols 1) 3))
-               (total-width (+ content-width border-width separator-width)))
-          ;; Step 3: Scale based on whether table fits
-          (if (<= total-width max-width)
-            ;; Case A: Fits naturally - scale UP to fill terminal
-            (let ((available (- max-width border-width separator-width))
-                  (result '()))
-              (do ((k 0 (+ k 1))) ((>= k num-cols) (reverse result))
-                (let* ((natural (vector-ref col-maxes k))
-                       ;; Scale up proportionally
-                       (scaled (quotient (* natural available) content-width)))
-                  (set! result (cons scaled result)))))
-            ;; Case B: Doesn't fit - scale DOWN with constraints
-            (let ((available (- max-width border-width separator-width)))
-              ;; New algorithm: separate small (< 8) and large (>= 8) columns
-              (let ((widths (make-vector num-cols 0))
-                    (small-cols '())
-                    (large-cols '())
-                    (small-total 0)
-                    (large-natural-total 0))
-                ;; Step 1: Categorize columns
-                (do ((k 0 (+ k 1))) ((>= k num-cols))
-                  (let ((natural (vector-ref col-maxes k)))
-                    (if (< natural min-col-width)
-                      (set! small-cols (cons k small-cols))
-                      (progn (set! large-cols (cons k large-cols))
-                        (set! large-natural-total
-                         (+ large-natural-total natural))))))
-                ;; Step 2: Small columns keep natural width (no scaling)
-                (let ((iter-small small-cols))
-                  (do () ((null? iter-small))
-                    (let* ((k (car iter-small))
-                           (natural (vector-ref col-maxes k)))
-                      (vector-set! widths k natural)
-                      (set! small-total (+ small-total natural))
-                      (set! iter-small (cdr iter-small)))))
-                ;; Step 3: Allocate remaining to large columns (min=8)
-                (let ((large-available (- available small-total)))
-                  (if (not (null? large-cols))
-                    ;; Distribute to large columns
-                    (let ((iter-large large-cols))
-                      (do () ((null? iter-large))
-                        (let* ((k (car iter-large))
-                               (natural (vector-ref col-maxes k))
-                               (scaled
-                                (if (= large-natural-total 0)
-                                  min-col-width ; Avoid division by zero
-                                  (quotient (* natural large-available)
-                                   large-natural-total)))
-                               (final
-                                (if (> scaled min-col-width)
-                                  scaled
-                                  min-col-width)))
-                          (vector-set! widths k final)
-                          (set! iter-large (cdr iter-large)))))))
-                ;; Convert vector to list
-                (let ((result '()))
-                  (do ((k 0 (+ k 1))) ((>= k num-cols) (reverse result))
-                    (set! result (cons (vector-ref widths k) result))))))))))))
+      '()
+      (let ((num-cols (length (car data)))
+            (col-maxes (make-vector (length (car data)) 0)))
+	;; Step 1: Find max visual width for each column
+	(do ((i 0 (+ i 1))) ((>= i (length data)))
+          (let ((row (list-ref data i)))
+            (do ((j 0 (+ j 1))) ((>= j (length row)))
+              (let ((cell (list-ref row j)))
+		(let ((cell-width (tintin-visual-length cell))
+                      (current-max (vector-ref col-maxes j)))
+                  (if (> cell-width current-max)
+                      (vector-set! col-maxes j cell-width)))))))
+	;; Step 2: Calculate total needed width
+	;; formula: sum(widths) + (num-cols + 1) + (num-cols - 1) * 3
+	(let ((content-width 0))
+          ;; Sum up column widths
+          (do ((k 0 (+ k 1))) ((>= k num-cols))
+            (set! content-width (+ content-width (vector-ref col-maxes k))))
+          (let* ((border-width 4) ; Left "│ " (2) + right " │" (2)
+		 (separator-width (* (- num-cols 1) 3))
+		 (total-width (+ content-width border-width separator-width)))
+            ;; Step 3: Scale based on whether table fits
+            (if (<= total-width max-width)
+		;; Case A: Fits naturally - scale UP to fill terminal
+		(let ((available (- max-width border-width separator-width))
+                      (result '()))
+		  (do ((k 0 (+ k 1))) ((>= k num-cols) (reverse result))
+                    (let* ((natural (vector-ref col-maxes k))
+			   ;; Scale up proportionally
+			   (scaled (quotient (* natural available) content-width)))
+                      (set! result (cons scaled result)))))
+		;; Case B: Doesn't fit - scale DOWN with constraints
+		(let ((available (- max-width border-width separator-width)))
+		  ;; New algorithm: separate small (< 8) and large (>= 8) columns
+		  (let ((widths (make-vector num-cols 0))
+			(small-cols '())
+			(large-cols '())
+			(small-total 0)
+			(large-natural-total 0))
+                    ;; Step 1: Categorize columns
+                    (do ((k 0 (+ k 1))) ((>= k num-cols))
+                      (let ((natural (vector-ref col-maxes k)))
+			(if (< natural min-col-width)
+			    (set! small-cols (cons k small-cols))
+			    (progn (set! large-cols (cons k large-cols))
+				   (set! large-natural-total
+					 (+ large-natural-total natural))))))
+                    ;; Step 2: Small columns keep natural width (no scaling)
+                    (let ((iter-small small-cols))
+                      (do () ((null? iter-small))
+			(let* ((k (car iter-small))
+                               (natural (vector-ref col-maxes k)))
+			  (vector-set! widths k natural)
+			  (set! small-total (+ small-total natural))
+			  (set! iter-small (cdr iter-small)))))
+                    ;; Step 3: Allocate remaining to large columns (min=8)
+                    (let ((large-available (- available small-total)))
+                      (if (not (null? large-cols))
+			  ;; Distribute to large columns
+			  (let ((iter-large large-cols))
+			    (do () ((null? iter-large))
+                              (let* ((k (car iter-large))
+				     (natural (vector-ref col-maxes k))
+				     (scaled
+                                      (if (= large-natural-total 0)
+					  min-col-width ; Avoid division by zero
+					  (quotient (* natural large-available)
+						    large-natural-total)))
+				     (final
+                                      (if (> scaled min-col-width)
+					  scaled
+					  min-col-width)))
+				(vector-set! widths k final)
+				(set! iter-large (cdr iter-large)))))))
+                    ;; Convert vector to list
+                    (let ((result '()))
+                      (do ((k 0 (+ k 1))) ((>= k num-cols) (reverse result))
+			(set! result (cons (vector-ref widths k) result))))))))))))
 
 ;; ============================================================================
 ;; GENERIC TABLE PRINTER
@@ -4198,54 +4198,53 @@ Maps attribute names to their ANSI SGR codes.")
   ;; Default row-separators to #t if not provided
   (let ((row-sep (or row-separators #t)))
     (if (or (null? data) (= (length data) 0))
-      (tintin-echo "Error: Table data cannot be empty")
-      (let* ((term-info (terminal-info))
-             (term-cols (cdr (assoc 'cols term-info)))
-             (min-col-width 8)
-             (headers (car data))
-             (rows (cdr data))
-             (all-rows data))
-        ;; Validate that we have at least headers
-        (if (or (null? headers) (= (length headers) 0))
-          (tintin-echo "Error: Table must have at least header row")
-          (let ((widths
-                 (tintin-calculate-optimal-widths all-rows term-cols
-                  min-col-width)))
-            ;; Draw top border
-            (tintin-echo (tintin-draw-border widths 'top))
-            ;; Draw header row (with bold formatting)
-            (let ((bold-headers '()))
-              ;; Add bold formatting to each header (truncate if too long for column)
-              (do ((i 0 (+ i 1))) ((>= i (length headers)))
-                (let* ((header (list-ref headers i))
-                       (col-width (list-ref widths i))
-                       (header-len (tintin-visual-length header))
-                       ;; Truncate header if longer than column width
-                       (truncated
-                        (if (> header-len col-width)
-                          (substring header 0 col-width)
-                          header)))
-                  (set! bold-headers
-                   (cons (concat "\033[1m" truncated "\033[0m") bold-headers))))
-              (set! bold-headers (reverse bold-headers))
-              ;; Draw header lines
-              (let ((header-lines (tintin-draw-row bold-headers widths)))
-                (do ((i 0 (+ i 1))) ((>= i (length header-lines)))
-                  (tintin-echo (list-ref header-lines i)))))
-            ;; Draw middle border
-            (tintin-echo (tintin-draw-border widths 'middle))
-            ;; Draw data rows (with wrapping if needed)
-            (do ((row-idx 0 (+ row-idx 1))) ((>= row-idx (length rows)))
-              (let* ((row (list-ref rows row-idx))
-                     (row-lines (tintin-draw-row row widths)))
-                (do ((line-idx 0 (+ line-idx 1)))
-                  ((>= line-idx (length row-lines)))
-                  (tintin-echo (list-ref row-lines line-idx))))
-              ;; Draw separator after each row (except the last row)
-              (if (and row-sep (< (+ row-idx 1) (length rows)))
-                (tintin-echo (tintin-draw-border widths 'middle))))
-            ;; Draw bottom border
-            (tintin-echo (tintin-draw-border widths 'bottom))))))))
+	(tintin-echo "Error: Table data cannot be empty")
+	(let* ((term-cols (termcap 'cols))
+               (min-col-width 8)
+               (headers (car data))
+               (rows (cdr data))
+               (all-rows data))
+          ;; Validate that we have at least headers
+          (if (or (null? headers) (= (length headers) 0))
+              (tintin-echo "Error: Table must have at least header row")
+              (let ((widths
+                     (tintin-calculate-optimal-widths all-rows term-cols
+						      min-col-width)))
+		;; Draw top border
+		(tintin-echo (tintin-draw-border widths 'top))
+		;; Draw header row (with bold formatting)
+		(let ((bold-headers '()))
+		  ;; Add bold formatting to each header (truncate if too long for column)
+		  (do ((i 0 (+ i 1))) ((>= i (length headers)))
+                    (let* ((header (list-ref headers i))
+			   (col-width (list-ref widths i))
+			   (header-len (tintin-visual-length header))
+			   ;; Truncate header if longer than column width
+			   (truncated
+                            (if (> header-len col-width)
+				(substring header 0 col-width)
+				header)))
+                      (set! bold-headers
+			    (cons (concat "\033[1m" truncated "\033[0m") bold-headers))))
+		  (set! bold-headers (reverse bold-headers))
+		  ;; Draw header lines
+		  (let ((header-lines (tintin-draw-row bold-headers widths)))
+                    (do ((i 0 (+ i 1))) ((>= i (length header-lines)))
+                      (tintin-echo (list-ref header-lines i)))))
+		;; Draw middle border
+		(tintin-echo (tintin-draw-border widths 'middle))
+		;; Draw data rows (with wrapping if needed)
+		(do ((row-idx 0 (+ row-idx 1))) ((>= row-idx (length rows)))
+		  (let* ((row (list-ref rows row-idx))
+			 (row-lines (tintin-draw-row row widths)))
+                    (do ((line-idx 0 (+ line-idx 1)))
+			((>= line-idx (length row-lines)))
+                      (tintin-echo (list-ref row-lines line-idx))))
+		  ;; Draw separator after each row (except the last row)
+		  (if (and row-sep (< (+ row-idx 1) (length rows)))
+                      (tintin-echo (tintin-draw-border widths 'middle))))
+		;; Draw bottom border
+		(tintin-echo (tintin-draw-border widths 'bottom))))))))
 
 ;; ============================================================================
 ;; LIST COMMANDS (using generic table printer)
@@ -4306,26 +4305,26 @@ Maps attribute names to their ANSI SGR codes.")
   (let ((alias-entries (hash-entries *tintin-aliases*))
         (count (hash-count *tintin-aliases*)))
     (if (= count 0)
-      (progn (tintin-echo "No aliases defined.\r\n") "")
-      (progn
-        (tintin-echo (concat "Aliases (" (number->string count) "):\r\n"))
-        ;; Sort aliases alphabetically
-        (let ((sorted (tintin-sort-aliases-alphabetically alias-entries)))
-          ;; Build data structure: headers + data rows
-          (let ((data (list (list "Name" "Commands" "P"))))
-            ;; Add data rows
-            (do ((i 0 (+ i 1))) ((>= i (length sorted)))
-              (let* ((entry (list-ref sorted i))
-                     (name (car entry))
-                     (value (cdr entry))
-                     (commands (car value))
-                     (priority (cadr value))
-                     (priority-str (number->string priority)))
-                (set! data
-                 (append data (list (list name commands priority-str))))))
-            ;; Print table using generic printer
-            (tintin-print-table data)))
-        ""))))
+	(progn (tintin-echo "No aliases defined.\r\n") "")
+	(progn
+          (tintin-echo (concat "Aliases (" (number->string count) "):\r\n"))
+          ;; Sort aliases alphabetically
+          (let ((sorted (tintin-sort-aliases-alphabetically alias-entries)))
+            ;; Build data structure: headers + data rows
+            (let ((data (list (list "Name" "Commands" "P"))))
+              ;; Add data rows
+              (do ((i 0 (+ i 1))) ((>= i (length sorted)))
+		(let* ((entry (list-ref sorted i))
+                       (name (car entry))
+                       (value (cdr entry))
+                       (commands (car value))
+                       (priority (cadr value))
+                       (priority-str (number->string priority)))
+                  (set! data
+			(append data (list (list name commands priority-str))))))
+              ;; Print table using generic printer
+              (tintin-print-table data)))
+          ""))))
 
 ;; List all defined variables
 (defun tintin-list-variables ()
@@ -4381,20 +4380,20 @@ Maps attribute names to their ANSI SGR codes.")
   (let ((var-entries (hash-entries *tintin-variables*))
         (count (hash-count *tintin-variables*)))
     (if (= count 0)
-      (progn (tintin-echo "No variables defined.\r\n") "")
-      (progn
-        (tintin-echo (concat "Variables (" (number->string count) "):\r\n"))
-        ;; Build data structure: headers + data rows
-        (let ((data (list (list "Variable" "Value"))))
-          ;; Add data rows
-          (do ((i 0 (+ i 1))) ((>= i (length var-entries)))
-            (let* ((entry (list-ref var-entries i))
-                   (name (car entry))
-                   (value (cdr entry)))
-              (set! data (append data (list (list name value))))))
-          ;; Print table using generic printer
-          (tintin-print-table data))
-        ""))))
+	(progn (tintin-echo "No variables defined.\r\n") "")
+	(progn
+          (tintin-echo (concat "Variables (" (number->string count) "):\r\n"))
+          ;; Build data structure: headers + data rows
+          (let ((data (list (list "Variable" "Value"))))
+            ;; Add data rows
+            (do ((i 0 (+ i 1))) ((>= i (length var-entries)))
+              (let* ((entry (list-ref var-entries i))
+                     (name (car entry))
+                     (value (cdr entry)))
+		(set! data (append data (list (list name value))))))
+            ;; Print table using generic printer
+            (tintin-print-table data))
+          ""))))
 
 ;; List all defined highlights (sorted alphabetically)
 (defun tintin-list-highlights ()
@@ -4455,31 +4454,31 @@ Maps attribute names to their ANSI SGR codes.")
   (let ((highlight-entries (hash-entries *tintin-highlights*))
         (count (hash-count *tintin-highlights*)))
     (if (= count 0)
-      (progn (tintin-echo "No highlights defined.\r\n") "")
-      (progn
-        (tintin-echo (concat "Highlights (" (number->string count) "):\r\n"))
-        ;; Sort alphabetically before displaying
-        (let ((sorted (tintin-sort-highlights-alphabetically highlight-entries)))
-          ;; Build data structure: headers + data rows
-          (let ((data (list (list "Pattern" "Color" "P"))))
-            ;; Add data rows
-            (do ((i 0 (+ i 1))) ((>= i (length sorted)))
-              (let* ((entry (list-ref sorted i))
-                     (pattern (car entry))
-                     (entry-data (cdr entry))
-                     (fg-color (car entry-data))
-                     (bg-color (cadr entry-data))
-                     (priority (caddr entry-data))
-                     (color-str
-                      (concat (if fg-color fg-color "")
-                       (if (and fg-color bg-color) ":" "")
-                       (if bg-color bg-color "")))
-                     (priority-str (number->string priority)))
-                (set! data
-                 (append data (list (list pattern color-str priority-str))))))
-            ;; Print table using generic printer
-            (tintin-print-table data)))
-        ""))))
+	(progn (tintin-echo "No highlights defined.\r\n") "")
+	(progn
+          (tintin-echo (concat "Highlights (" (number->string count) "):\r\n"))
+          ;; Sort alphabetically before displaying
+          (let ((sorted (tintin-sort-highlights-alphabetically highlight-entries)))
+            ;; Build data structure: headers + data rows
+            (let ((data (list (list "Pattern" "Color" "P"))))
+              ;; Add data rows
+              (do ((i 0 (+ i 1))) ((>= i (length sorted)))
+		(let* ((entry (list-ref sorted i))
+                       (pattern (car entry))
+                       (entry-data (cdr entry))
+                       (fg-color (car entry-data))
+                       (bg-color (cadr entry-data))
+                       (priority (caddr entry-data))
+                       (color-str
+			(concat (if fg-color fg-color "")
+				(if (and fg-color bg-color) ":" "")
+				(if bg-color bg-color "")))
+                       (priority-str (number->string priority)))
+                  (set! data
+			(append data (list (list pattern color-str priority-str))))))
+              ;; Print table using generic printer
+              (tintin-print-table data)))
+          ""))))
 
 ;; List all defined actions (sorted alphabetically)
 (defun tintin-list-actions ()
@@ -4540,26 +4539,26 @@ Maps attribute names to their ANSI SGR codes.")
   (let ((action-entries (hash-entries *tintin-actions*))
         (count (hash-count *tintin-actions*)))
     (if (= count 0)
-      (progn (tintin-echo "No actions defined.\r\n") "")
-      (progn
-        (tintin-echo (concat "Actions (" (number->string count) "):\r\n"))
-        ;; Sort alphabetically before displaying
-        (let ((sorted (tintin-sort-actions-alphabetically action-entries)))
-          ;; Build data structure: headers + data rows
-          (let ((data (list (list "Pattern" "Commands" "P"))))
-            ;; Add data rows
-            (do ((i 0 (+ i 1))) ((>= i (length sorted)))
-              (let* ((entry (list-ref sorted i))
-                     (pattern (car entry))
-                     (entry-data (cdr entry))
-                     (commands (car entry-data))
-                     (priority (cadr entry-data))
-                     (priority-str (number->string priority)))
-                (set! data
-                 (append data (list (list pattern commands priority-str))))))
-            ;; Print table using generic printer
-            (tintin-print-table data)))
-        ""))))
+	(progn (tintin-echo "No actions defined.\r\n") "")
+	(progn
+          (tintin-echo (concat "Actions (" (number->string count) "):\r\n"))
+          ;; Sort alphabetically before displaying
+          (let ((sorted (tintin-sort-actions-alphabetically action-entries)))
+            ;; Build data structure: headers + data rows
+            (let ((data (list (list "Pattern" "Commands" "P"))))
+              ;; Add data rows
+              (do ((i 0 (+ i 1))) ((>= i (length sorted)))
+		(let* ((entry (list-ref sorted i))
+                       (pattern (car entry))
+                       (entry-data (cdr entry))
+                       (commands (car entry-data))
+                       (priority (cadr entry-data))
+                       (priority-str (number->string priority)))
+                  (set! data
+			(append data (list (list pattern commands priority-str))))))
+              ;; Print table using generic printer
+              (tintin-print-table data)))
+          ""))))
 
 ;; ============================================================================
 ;; COMMAND HANDLERS (REFACTORED)
@@ -4631,15 +4630,15 @@ Maps attribute names to their ANSI SGR codes.")
      (let ((name (tintin-strip-braces (list-ref args 0))))
        (let ((alias-data (hash-ref *tintin-aliases* name)))
          (if alias-data
-           (let ((commands (car alias-data))
-                 (priority (cadr alias-data)))
-             (tintin-echo
-              (concat "Alias '" name "': " name " → " commands
-               (if (= priority 5)
-                 ""
-                 (concat " (priority: " (number->string priority) ")")) "\r\n"))
-             "")
-           (progn (tintin-echo (concat "Alias '" name "' not found\r\n")) "")))))
+             (let ((commands (car alias-data))
+                   (priority (cadr alias-data)))
+               (tintin-echo
+		(concat "Alias '" name "': " name " → " commands
+			(if (= priority 5)
+			    ""
+			    (concat " (priority: " (number->string priority) ")")) "\r\n"))
+               "")
+             (progn (tintin-echo (concat "Alias '" name "' not found\r\n")) "")))))
     ;; Two arguments - create alias
     (#t
      (let ((name (tintin-strip-braces (list-ref args 0)))
@@ -4648,9 +4647,9 @@ Maps attribute names to their ANSI SGR codes.")
        (hash-set! *tintin-aliases* name (list commands priority))
        (tintin-echo
         (concat "Alias '" name "' created: " name " → " commands
-         (if (= priority 5)
-           ""
-           (concat " (priority: " (number->string priority) ")")) "\r\n"))
+		(if (= priority 5)
+		    ""
+		    (concat " (priority: " (number->string priority) ")")) "\r\n"))
        ""))))
 
 ;; Handle #variable command
@@ -4720,12 +4719,12 @@ Maps attribute names to their ANSI SGR codes.")
      (let ((name (tintin-strip-braces (list-ref args 0))))
        (let ((value (hash-ref *tintin-variables* name)))
          (if value
-           (progn
-             (tintin-echo
-              (concat "Variable '" name "': " name " = " value "\r\n"))
-             "")
-           (progn (tintin-echo (concat "Variable '" name "' not found\r\n"))
-             "")))))
+             (progn
+               (tintin-echo
+		(concat "Variable '" name "': " name " = " value "\r\n"))
+               "")
+             (progn (tintin-echo (concat "Variable '" name "' not found\r\n"))
+		    "")))))
     ;; Two arguments - create variable
     (#t
      (let ((name (tintin-strip-braces (list-ref args 0)))
@@ -4770,10 +4769,10 @@ Maps attribute names to their ANSI SGR codes.")
   - `tintin-dispatch-command` - Command dispatcher"
   (let ((name (tintin-strip-braces (list-ref args 0))))
     (if (hash-ref *tintin-aliases* name)
-      (progn (hash-remove! *tintin-aliases* name)
-        (tintin-echo (concat "Alias '" name "' removed\r\n"))
-        "")
-      (progn (tintin-echo (concat "Alias '" name "' not found\r\n")) ""))))
+	(progn (hash-remove! *tintin-aliases* name)
+               (tintin-echo (concat "Alias '" name "' removed\r\n"))
+               "")
+	(progn (tintin-echo (concat "Alias '" name "' not found\r\n")) ""))))
 
 ;; Handle #highlight command
 ;; args: (), (pattern), (pattern color), or (pattern color priority)
@@ -4843,40 +4842,40 @@ Maps attribute names to their ANSI SGR codes.")
      (let ((pattern (tintin-strip-braces (list-ref args 0))))
        (let ((highlight-data (hash-ref *tintin-highlights* pattern)))
          (if highlight-data
-           (let ((fg-color (car highlight-data))
-                 (bg-color (cadr highlight-data))
-                 (priority (caddr highlight-data)))
-             (tintin-echo
-              (concat "Highlight '" pattern "': " pattern " → "
-               (if fg-color fg-color "") (if (and fg-color bg-color) ":" "")
-               (if bg-color bg-color "")
-               (if (= priority 5)
-                 ""
-                 (concat " (priority: " (number->string priority) ")")) "\r\n"))
-             "")
-           (progn
-             (tintin-echo (concat "Highlight '" pattern "' not found\r\n")) "")))))
+             (let ((fg-color (car highlight-data))
+                   (bg-color (cadr highlight-data))
+                   (priority (caddr highlight-data)))
+               (tintin-echo
+		(concat "Highlight '" pattern "': " pattern " → "
+			(if fg-color fg-color "") (if (and fg-color bg-color) ":" "")
+			(if bg-color bg-color "")
+			(if (= priority 5)
+			    ""
+			    (concat " (priority: " (number->string priority) ")")) "\r\n"))
+               "")
+             (progn
+               (tintin-echo (concat "Highlight '" pattern "' not found\r\n")) "")))))
     ;; Two or three arguments - create highlight
     (#t
      (let* ((pattern (tintin-strip-braces (list-ref args 0)))
             (color-spec (tintin-strip-braces (list-ref args 1)))
             (priority
              (if (>= (length args) 3)
-               (string->number (tintin-strip-braces (list-ref args 2)))
-               5)))
+		 (string->number (tintin-strip-braces (list-ref args 2)))
+		 5)))
        ;; Parse color spec into FG and BG components
        (let ((parts (tintin-split-fg-bg color-spec)))
          (let ((fg-part (list-ref parts 0))
                (bg-part (list-ref parts 1)))
            ;; Store as (fg-color bg-color priority)
            (hash-set! *tintin-highlights* pattern
-            (list (if (string=? fg-part "") nil fg-part) bg-part priority))
+		      (list (if (string=? fg-part "") nil fg-part) bg-part priority))
            (tintin-echo
             (concat "Highlight '" pattern "' created: " pattern " → "
-             color-spec
-             (if (= priority 5)
-               ""
-               (concat " (priority: " (number->string priority) ")")) "\r\n"))
+		    color-spec
+		    (if (= priority 5)
+			""
+			(concat " (priority: " (number->string priority) ")")) "\r\n"))
            ""))))))
 
 ;; Handle #unhighlight command
@@ -4884,10 +4883,10 @@ Maps attribute names to their ANSI SGR codes.")
 (defun tintin-handle-unhighlight (args)
   (let ((pattern (tintin-strip-braces (list-ref args 0))))
     (if (hash-ref *tintin-highlights* pattern)
-      (progn (hash-remove! *tintin-highlights* pattern)
-        (tintin-echo (concat "Highlight '" pattern "' removed\r\n"))
-        "")
-      (progn (tintin-echo (concat "Highlight '" pattern "' not found\r\n")) ""))))
+	(progn (hash-remove! *tintin-highlights* pattern)
+               (tintin-echo (concat "Highlight '" pattern "' removed\r\n"))
+               "")
+	(progn (tintin-echo (concat "Highlight '" pattern "' not found\r\n")) ""))))
 
 ;; Handle #action command
 ;; args: (), (pattern), (pattern commands), or (pattern commands priority)
@@ -4959,31 +4958,31 @@ Maps attribute names to their ANSI SGR codes.")
      (let ((pattern (tintin-strip-braces (list-ref args 0))))
        (let ((action-data (hash-ref *tintin-actions* pattern)))
          (if action-data
-           (let ((commands (car action-data))
-                 (priority (cadr action-data)))
-             (tintin-echo
-              (concat "Action '" pattern "': " pattern " → " commands
-               (if (= priority 5)
-                 ""
-                 (concat " (priority: " (number->string priority) ")")) "\r\n"))
-             "")
-           (progn (tintin-echo (concat "Action '" pattern "' not found\r\n"))
-             "")))))
+             (let ((commands (car action-data))
+                   (priority (cadr action-data)))
+               (tintin-echo
+		(concat "Action '" pattern "': " pattern " → " commands
+			(if (= priority 5)
+			    ""
+			    (concat " (priority: " (number->string priority) ")")) "\r\n"))
+               "")
+             (progn (tintin-echo (concat "Action '" pattern "' not found\r\n"))
+		    "")))))
     ;; Two or three arguments - create action
     (#t
      (let* ((pattern (tintin-strip-braces (list-ref args 0)))
             (commands (tintin-strip-braces (list-ref args 1)))
             (priority
              (if (>= (length args) 3)
-               (string->number (tintin-strip-braces (list-ref args 2)))
-               5)))
+		 (string->number (tintin-strip-braces (list-ref args 2)))
+		 5)))
        ;; Store as (commands-string priority)
        (hash-set! *tintin-actions* pattern (list commands priority))
        (tintin-echo
         (concat "Action '" pattern "' created: " pattern " → " commands
-         (if (= priority 5)
-           ""
-           (concat " (priority: " (number->string priority) ")")) "\r\n"))
+		(if (= priority 5)
+		    ""
+		    (concat " (priority: " (number->string priority) ")")) "\r\n"))
        ""))))
 
 ;; Handle #unaction command
@@ -4991,10 +4990,10 @@ Maps attribute names to their ANSI SGR codes.")
 (defun tintin-handle-unaction (args)
   (let ((pattern (tintin-strip-braces (list-ref args 0))))
     (if (hash-ref *tintin-actions* pattern)
-      (progn (hash-remove! *tintin-actions* pattern)
-        (tintin-echo (concat "Action '" pattern "' removed\r\n"))
-        "")
-      (progn (tintin-echo (concat "Action '" pattern "' not found\r\n")) ""))))
+	(progn (hash-remove! *tintin-actions* pattern)
+               (tintin-echo (concat "Action '" pattern "' removed\r\n"))
+               "")
+	(progn (tintin-echo (concat "Action '" pattern "' not found\r\n")) ""))))
 
 ;; Handle #save command
 ;; args: (filename)
@@ -5110,37 +5109,37 @@ Maps attribute names to their ANSI SGR codes.")
     (set! filename (expand-path filename))
     ;; Try to load the file, catching errors
     (if (condition-case err (progn (load filename) #t) (error #f))
-      ;; Success case
-      (progn (tintin-echo (concat "State loaded from '" filename "'\r\n")) "")
-      ;; Error case
-      (progn
-        (tintin-echo
-         (concat "Failed to load '" filename "': file not found or invalid\r\n"))
-        ""))))
+	;; Success case
+	(progn (tintin-echo (concat "State loaded from '" filename "'\r\n")) "")
+	;; Error case
+	(progn
+          (tintin-echo
+           (concat "Failed to load '" filename "': file not found or invalid\r\n"))
+          ""))))
 
 ;; Register commands with metadata (now that handlers are defined)
 (hash-set! *tintin-commands* "alias"
- (list tintin-handle-alias 2
-  "#alias or #alias {name} or #alias {name} {commands}"))
+	   (list tintin-handle-alias 2
+		 "#alias or #alias {name} or #alias {name} {commands}"))
 (hash-set! *tintin-commands* "unalias"
- (list tintin-handle-unalias 1 "#unalias {name}"))
+	   (list tintin-handle-unalias 1 "#unalias {name}"))
 (hash-set! *tintin-commands* "variable"
- (list tintin-handle-variable 2
-  "#variable or #variable {name} or #variable {name} {value}"))
+	   (list tintin-handle-variable 2
+		 "#variable or #variable {name} or #variable {name} {value}"))
 (hash-set! *tintin-commands* "highlight"
- (list tintin-handle-highlight 2
-  "#highlight or #highlight {pattern} or #highlight {pattern} {color}"))
+	   (list tintin-handle-highlight 2
+		 "#highlight or #highlight {pattern} or #highlight {pattern} {color}"))
 (hash-set! *tintin-commands* "unhighlight"
- (list tintin-handle-unhighlight 1 "#unhighlight {pattern}"))
+	   (list tintin-handle-unhighlight 1 "#unhighlight {pattern}"))
 (hash-set! *tintin-commands* "save"
- (list tintin-handle-save 1 "#save {filename}"))
+	   (list tintin-handle-save 1 "#save {filename}"))
 (hash-set! *tintin-commands* "load"
- (list tintin-handle-load 1 "#load {filename}"))
+	   (list tintin-handle-load 1 "#load {filename}"))
 (hash-set! *tintin-commands* "action"
- (list tintin-handle-action 3
-  "#action or #action {pattern} or #action {pattern} {commands} [priority]"))
+	   (list tintin-handle-action 3
+		 "#action or #action {pattern} or #action {pattern} {commands} [priority]"))
 (hash-set! *tintin-commands* "unaction"
- (list tintin-handle-unaction 1 "#unaction {pattern}"))
+	   (list tintin-handle-unaction 1 "#unaction {pattern}"))
 
 ;; ============================================================================
 ;; GENERIC COMMAND DISPATCHER (REFACTORED)
@@ -5155,8 +5154,8 @@ Maps attribute names to their ANSI SGR codes.")
       (set! pos (+ pos 1)))
     ;; Skip command name
     (do ()
-      ((or (>= pos len) (char=? (string-ref input pos) #\space)
-           (char=? (string-ref input pos) #\{)))
+	((or (>= pos len) (char=? (string-ref input pos) #\space)
+             (char=? (string-ref input pos) #\{)))
       (set! pos (+ pos 1)))
     ;; Skip whitespace after command name
     (do () ((or (>= pos len) (not (char=? (string-ref input pos) #\space))))
@@ -5168,12 +5167,12 @@ Maps attribute names to their ANSI SGR codes.")
 ;; Returns parsed args list or nil if all attempts fail
 (defun tintin-try-parse-arguments (input max-count)
   (if (<= max-count 0)
-    nil
-    (let ((args (tintin-parse-arguments input max-count)))
-      (if args
-        args
-        ;; Try with one fewer argument
-        (tintin-try-parse-arguments input (- max-count 1))))))
+      nil
+      (let ((args (tintin-parse-arguments input max-count)))
+	(if args
+            args
+            ;; Try with one fewer argument
+            (tintin-try-parse-arguments input (- max-count 1))))))
 
 ;; Dispatch a TinTin++ command using metadata-driven approach
 ;; cmd-name: matched command name (e.g., "alias")
@@ -5181,19 +5180,19 @@ Maps attribute names to their ANSI SGR codes.")
 (defun tintin-dispatch-command (cmd-name input)
   (let ((cmd-data (hash-ref *tintin-commands* cmd-name)))
     (if (not cmd-data)
-      ;; Should never happen (tintin-find-command validated it)
-      ""
-      (let ((handler (list-ref cmd-data 0))
-            (arg-count (list-ref cmd-data 1))
-            (syntax-help (list-ref cmd-data 2)))
-        ;; Check if input has any arguments after command name
-        (let ((has-args (tintin-has-arguments? input)))
-          (if (not has-args)
-            ;; No arguments - call handler with empty list
-            (handler '())
-            ;; Has arguments - try parsing with max count down to 1
-            (let ((args (tintin-try-parse-arguments input arg-count)))
-              (if args (handler args) (tintin-syntax-error syntax-help)))))))))
+	;; Should never happen (tintin-find-command validated it)
+	""
+	(let ((handler (list-ref cmd-data 0))
+              (arg-count (list-ref cmd-data 1))
+              (syntax-help (list-ref cmd-data 2)))
+          ;; Check if input has any arguments after command name
+          (let ((has-args (tintin-has-arguments? input)))
+            (if (not has-args)
+		;; No arguments - call handler with empty list
+		(handler '())
+		;; Has arguments - try parsing with max count down to 1
+		(let ((args (tintin-try-parse-arguments input arg-count)))
+		  (if args (handler args) (tintin-syntax-error syntax-help)))))))))
 
 ;; ============================================================================
 ;; AUTO-ACTIVATION
@@ -5219,65 +5218,65 @@ Maps attribute names to their ANSI SGR codes.")
 ;; Recursive helper for ANSI stack processing
 (defun tintin-ansi-stack-loop (text pos len result stack)
   (if (>= pos len)
-    result
-    (let ((char (string-ref text pos)))
-      (if (char=? char #\escape) ;; ESC character
-        ;; Try to parse ANSI sequence
-        (let ((seq-end (tintin-find-ansi-end text pos len)))
-          (if seq-end
-            (let ((seq (substring text pos seq-end)))
-              (if (tintin-is-reset-code seq)
-                ;; Reset code - pop from stack and potentially restore
-                (if (null? stack)
-                  ;; Empty stack - just pass through the reset
-                  (tintin-ansi-stack-loop text seq-end len (concat result seq)
-                   stack)
-                  ;; Pop the top state
-                  (let ((new-stack (cdr stack)))
-                    (if (null? new-stack)
-                      ;; Stack now empty - just output reset
-                      (tintin-ansi-stack-loop text seq-end len
-                       (concat result seq) new-stack)
-                      ;; Stack has remaining state - output reset then restore top
-                      (tintin-ansi-stack-loop text seq-end len
-                       (concat result seq (car new-stack)) new-stack))))
-                ;; Not a reset - check if SGR (should be pushed)
-                (if (tintin-is-sgr-code seq)
-                  (tintin-ansi-stack-loop text seq-end len (concat result seq)
-                   (cons seq stack))
-                  ;; Non-SGR ANSI code - just pass through (don't push)
-                  (tintin-ansi-stack-loop text seq-end len (concat result seq)
-                   stack))))
-            ;; Not a valid ANSI sequence - just add the char
+      result
+      (let ((char (string-ref text pos)))
+	(if (char=? char #\escape) ;; ESC character
+            ;; Try to parse ANSI sequence
+            (let ((seq-end (tintin-find-ansi-end text pos len)))
+              (if seq-end
+		  (let ((seq (substring text pos seq-end)))
+		    (if (tintin-is-reset-code seq)
+			;; Reset code - pop from stack and potentially restore
+			(if (null? stack)
+			    ;; Empty stack - just pass through the reset
+			    (tintin-ansi-stack-loop text seq-end len (concat result seq)
+						    stack)
+			    ;; Pop the top state
+			    (let ((new-stack (cdr stack)))
+			      (if (null? new-stack)
+				  ;; Stack now empty - just output reset
+				  (tintin-ansi-stack-loop text seq-end len
+							  (concat result seq) new-stack)
+				  ;; Stack has remaining state - output reset then restore top
+				  (tintin-ansi-stack-loop text seq-end len
+							  (concat result seq (car new-stack)) new-stack))))
+			;; Not a reset - check if SGR (should be pushed)
+			(if (tintin-is-sgr-code seq)
+			    (tintin-ansi-stack-loop text seq-end len (concat result seq)
+						    (cons seq stack))
+			    ;; Non-SGR ANSI code - just pass through (don't push)
+			    (tintin-ansi-stack-loop text seq-end len (concat result seq)
+						    stack))))
+		  ;; Not a valid ANSI sequence - just add the char
+		  (tintin-ansi-stack-loop text (+ pos 1) len
+					  (concat result (char->string char)) stack)))
+            ;; Regular character - just add it
             (tintin-ansi-stack-loop text (+ pos 1) len
-             (concat result (char->string char)) stack)))
-        ;; Regular character - just add it
-        (tintin-ansi-stack-loop text (+ pos 1) len
-         (concat result (char->string char)) stack)))))
+				    (concat result (char->string char)) stack)))))
 
 ;; Find the end position of an ANSI sequence starting at pos
 ;; Returns nil if not a valid ANSI sequence, or the end position (exclusive)
 (defun tintin-find-ansi-end (text pos len)
   (if
-    (and (< (+ pos 1) len) (char=? (string-ref text (+ pos 1)) #\[)) ;; '[' character
-    ;; CSI sequence - find the terminator
-    (tintin-find-ansi-terminator text (+ pos 2) len)
-    nil))
+   (and (< (+ pos 1) len) (char=? (string-ref text (+ pos 1)) #\[)) ;; '[' character
+   ;; CSI sequence - find the terminator
+   (tintin-find-ansi-terminator text (+ pos 2) len)
+   nil))
 
 ;; Recursive helper to find ANSI terminator (scans digits and semicolons)
 (defun tintin-find-ansi-terminator (text i len)
   (if (>= i len)
-    nil ;; No terminator found
-    (let ((c (string-ref text i)))
-      (if (or (and (char>=? c #\0) (char<=? c #\9)) (char=? c #\;))
-        ;; Still in parameter section, keep scanning
-        (tintin-find-ansi-terminator text (+ i 1) len)
-        ;; Check if this is a valid terminator (letter)
-        (if
-          (or (and (char>=? c #\A) (char<=? c #\Z))
-              (and (char>=? c #\a) (char<=? c #\z)))
-          (+ i 1) ;; Return position after terminator
-          nil)))))
+      nil ;; No terminator found
+      (let ((c (string-ref text i)))
+	(if (or (and (char>=? c #\0) (char<=? c #\9)) (char=? c #\;))
+            ;; Still in parameter section, keep scanning
+            (tintin-find-ansi-terminator text (+ i 1) len)
+            ;; Check if this is a valid terminator (letter)
+            (if
+             (or (and (char>=? c #\A) (char<=? c #\Z))
+		 (and (char>=? c #\a) (char<=? c #\z)))
+             (+ i 1) ;; Return position after terminator
+             nil)))))
 
 ;; ============================================================================
 ;; Automatically activate TinTin++ when this file is loaded
@@ -5295,8 +5294,8 @@ Maps attribute names to their ANSI SGR codes.")
 ;; so that server reset codes don't kill highlight colors.
 (defun tintin-telnet-input-filter (text)
   (if (and *tintin-enabled* (> (hash-count *tintin-highlights*) 0))
-    (tintin-post-process-ansi-stack (tintin-apply-highlights text))
-    text))
+      (tintin-post-process-ansi-stack (tintin-apply-highlights text))
+      text))
 
 ;; Install telnet-input-filter-hook (use add-hook to chain with other filters)
 (add-hook 'telnet-input-filter-hook 'tintin-telnet-input-filter)
@@ -5308,11 +5307,11 @@ Maps attribute names to their ANSI SGR codes.")
   "Process telnet input for TinTin++ action triggering.
    Called via telnet-input-hook for each chunk of server output."
   (if
-    (and *tintin-enabled* (not *tintin-action-executing*)
-         (> (hash-count *tintin-actions*) 0))
-    (let ((lines (tintin-split-lines text)))
-      (do ((i 0 (+ i 1))) ((>= i (length lines)))
-        (tintin-trigger-actions-for-line (list-ref lines i))))))
+   (and *tintin-enabled* (not *tintin-action-executing*)
+        (> (hash-count *tintin-actions*) 0))
+   (let ((lines (tintin-split-lines text)))
+     (do ((i 0 (+ i 1))) ((>= i (length lines)))
+       (tintin-trigger-actions-for-line (list-ref lines i))))))
 
 ;; Install telnet-input-hook (use add-hook to chain with other hooks)
 (add-hook 'telnet-input-hook 'tintin-telnet-input-hook)
