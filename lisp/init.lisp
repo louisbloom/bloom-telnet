@@ -57,12 +57,11 @@
 ;; ============================================================================
 ;; WORD STORE HELPER FUNCTIONS
 ;; ============================================================================
-(define *trim-punctuation-chars*
-  '(#\. #\, #\! #\? #\; #\: #\( #\) #\[ #\] #\{ #\} #\' #\" #\-))
+(define *trim-punctuation-string* ".,!?;:()[]{}'\"-")
 
 (defun punctuation-char? (c)
   "Check if character is punctuation to trim."
-  (member c *trim-punctuation-chars*))
+  (string-index *trim-punctuation-string* (char->string c)))
 
 (defun trim-punctuation (word)
   "Remove leading and trailing punctuation from word."
