@@ -192,6 +192,10 @@ void tui_viewport_append(TuiViewport *vp, const char *text, size_t len) {
       }
 
       start = nl + 1;
+      /* Skip \r after \n (handle \n\r line endings) */
+      if (start < end && *start == '\r') {
+        start++;
+      }
     } else {
       /* No newline - add to pending buffer */
       size_t seg_len = end - start;
@@ -356,36 +360,37 @@ void tui_viewport_view(const TuiViewport *vp, DynamicBuffer *out) {
     return;
 
   char buf[64];
+  int show_pending = (vp->pending_len > 0 && tui_viewport_at_bottom(vp));
+  /* Reserve last row for pending when viewport is full */
+  int lines_to_show = vp->height;
+  size_t start_offset = vp->y_offset;
+  if (show_pending && vp->line_count >= (size_t)vp->height) {
+    lines_to_show = vp->height - 1;
+    /* Skip one older line so newest lines + pending fit */
+    start_offset = vp->y_offset + 1;
+  }
 
-  /* Render each row of the viewport */
   for (int row = 0; row < vp->height; row++) {
-    size_t line_idx = vp->y_offset + row;
     int screen_row = vp->render_row + row;
-
-    /* Position cursor */
     snprintf(buf, sizeof(buf), CSI "%d;%dH", screen_row, vp->render_col);
     dynamic_buffer_append_str(out, buf);
-
-    /* Clear line */
     dynamic_buffer_append_str(out, CSI "K");
 
-    /* Render line content if it exists */
-    if (line_idx < vp->line_count) {
-      TuiViewportLine *line = &vp->lines[line_idx];
-      /* TODO: truncate to width if needed */
-      dynamic_buffer_append(out, line->text, line->len);
+    if (row < lines_to_show) {
+      size_t line_idx = start_offset + row;
+      if (line_idx < vp->line_count) {
+        TuiViewportLine *line = &vp->lines[line_idx];
+        dynamic_buffer_append(out, line->text, line->len);
+      }
     }
   }
 
-  /* If we have pending content and are at bottom, show it on last row */
-  if (vp->pending_len > 0 && tui_viewport_at_bottom(vp)) {
+  /* Show pending on last row (or after last line if viewport not full) */
+  if (show_pending) {
     int last_row = vp->render_row + vp->height - 1;
-
-    /* If we have fewer lines than height, pending goes after last line */
     if (vp->line_count < (size_t)vp->height) {
       last_row = vp->render_row + vp->line_count;
     }
-
     snprintf(buf, sizeof(buf), CSI "%d;%dH", last_row, vp->render_col);
     dynamic_buffer_append_str(out, buf);
     dynamic_buffer_append_str(out, CSI "K");
