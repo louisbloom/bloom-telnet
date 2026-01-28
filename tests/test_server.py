@@ -163,15 +163,16 @@ class TestServer:
         self.connections = {}  # socket -> TelnetConnection
         self.server_socket = None
 
-    def add_command(self, command, handler):
+    def add_command(self, command, handler, description=""):
         """Add a command handler.
 
         Args:
             command: The command string to match
             handler: A callable that takes (args, connection) and returns
                     a response string, or just returns a string.
+            description: Help text describing the command
         """
-        self.commands[command] = handler
+        self.commands[command] = (handler, description)
 
     def handle_input(self, data, connection):
         """Handle input from a client.
@@ -186,9 +187,40 @@ class TestServer:
         Returns:
             Response bytes to send back, or None.
         """
-        # Future: parse commands and check self.commands
-        # For now: echo everything
+        # Parse command from input
+        text = data.decode("utf-8", errors="replace").strip()
+
+        # Check for registered commands
+        if text:
+            parts = text.split(None, 1)
+            cmd = parts[0].lower()
+            args = parts[1] if len(parts) > 1 else ""
+
+            if cmd in self.commands:
+                handler, _ = self.commands[cmd]
+                result = handler(args, connection)
+                if result is None:
+                    return None
+                if isinstance(result, str):
+                    result = result.encode("utf-8")
+                return result
+
+        # Echo everything else
         return data
+
+    def get_help_text(self):
+        """Return formatted help text for all commands."""
+        if not self.commands:
+            return "No commands available.\r\n"
+
+        lines = ["Available commands:"]
+        for cmd, (_, desc) in sorted(self.commands.items()):
+            if desc:
+                lines.append(f"  {cmd:12} - {desc}")
+            else:
+                lines.append(f"  {cmd}")
+        lines.append("")
+        return "\r\n".join(lines)
 
     def run(self):
         """Run the server."""
@@ -267,10 +299,11 @@ class TestServer:
 
 {GREEN}  Welcome to the Bloom Test Server!{RESET}
 {YELLOW}  --------------------------------{RESET}
-{WHITE}  This is an echo server for testing bloom-telnet.
-  Everything you type will be echoed back to you.{RESET}
+{WHITE}  A test server for bloom-telnet development.
+  Unrecognized input is echoed back to you.{RESET}
 
-{BLUE}  Type anything and press Enter to test.{RESET}
+{BLUE}  Commands:{RESET}
+{self.get_help_text()}
 
 """
         # Convert newlines to CRLF for telnet
@@ -331,9 +364,16 @@ class TestServer:
 def main():
     server = TestServer()
 
-    # Example of how to add custom commands (commented out):
-    # server.add_command("look", lambda args, conn: "You see a room.\r\n")
-    # server.add_command("quit", lambda args, conn: conn.sock.close() or "Goodbye!\r\n")
+    # Add quit command
+    def handle_quit(args, conn):
+        conn.send(b"Goodbye!\r\n")
+        server.close_connection(conn.sock)
+        return None
+
+    server.add_command(
+        "help", lambda args, conn: server.get_help_text(), "Show available commands"
+    )
+    server.add_command("quit", handle_quit, "Disconnect from server")
 
     server.run()
 
