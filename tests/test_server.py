@@ -240,8 +240,41 @@ class TestServer:
             connection.send_iac(WILL, OPT_ECHO)
             connection.send_iac(WILL, OPT_SGA)
 
+            # Send colorful welcome banner
+            connection.send(self.get_welcome_banner())
+
         except Exception as e:
             print(f"Error accepting connection: {e}")
+
+    def get_welcome_banner(self):
+        """Return a colorful ASCII art welcome banner."""
+        # ANSI color codes
+        CYAN = "\033[36m"
+        MAGENTA = "\033[35m"
+        YELLOW = "\033[33m"
+        GREEN = "\033[32m"
+        BLUE = "\033[34m"
+        WHITE = "\033[37m"
+        BOLD = "\033[1m"
+        RESET = "\033[0m"
+
+        banner = f"""
+{CYAN}{BOLD}  ____  _                       {MAGENTA} _____         _
+{CYAN} | __ )| | ___   ___  _ __ ___  {MAGENTA}|_   _|__  ___| |_
+{CYAN} |  _ \\| |/ _ \\ / _ \\| '_ ` _ \\ {MAGENTA}  | |/ _ \\/ __| __|
+{CYAN} | |_) | | (_) | (_) | | | | | |{MAGENTA}  | |  __/\\__ \\ |_
+{CYAN} |____/|_|\\___/ \\___/|_| |_| |_|{MAGENTA}  |_|\\___||___/\\__|{RESET}
+
+{GREEN}  Welcome to the Bloom Test Server!{RESET}
+{YELLOW}  --------------------------------{RESET}
+{WHITE}  This is an echo server for testing bloom-telnet.
+  Everything you type will be echoed back to you.{RESET}
+
+{BLUE}  Type anything and press Enter to test.{RESET}
+
+"""
+        # Convert newlines to CRLF for telnet
+        return banner.replace("\n", "\r\n")
 
     def handle_client_data(self, sock):
         """Handle data from a client socket."""

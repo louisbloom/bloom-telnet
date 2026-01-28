@@ -284,20 +284,20 @@ static int handle_user_input(const char **prompt) {
 
   if (line[0] != '\0') {
     lineedit_history_add(g_lineedit, line);
+  }
 
-    /* Check for command */
-    if (line[0] == ':') {
-      process_command(line, g_telnet, &g_connected, &g_quit_requested,
-                      g_term_cols, g_term_rows);
-    } else if (g_connected) {
-      /* Process through user input hook */
-      const char *processed = lisp_x_call_user_input_hook(line, strlen(line));
-      if (processed && processed[0] != '\0') {
-        telnet_send_with_crlf(g_telnet, processed, strlen(processed));
-      }
-    } else {
-      printf("Not connected. Use :connect <host> <port>\r\n");
+  /* Check for command */
+  if (line[0] == ':') {
+    process_command(line, g_telnet, &g_connected, &g_quit_requested,
+                    g_term_cols, g_term_rows);
+  } else if (g_connected) {
+    /* Process through user input hook (sends empty lines too) */
+    const char *processed = lisp_x_call_user_input_hook(line, strlen(line));
+    if (processed) {
+      telnet_send_with_crlf(g_telnet, processed, strlen(processed));
     }
+  } else if (line[0] != '\0') {
+    printf("Not connected. Use :connect <host> <port>\r\n");
   }
 
   free(line);
