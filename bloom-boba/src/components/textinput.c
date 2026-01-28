@@ -35,6 +35,19 @@ static size_t utf8_prev_char(const char *text, size_t pos) {
   return pos;
 }
 
+/* UTF-8 helper: Count display width (codepoints) of a UTF-8 string */
+static int utf8_display_width(const char *str) {
+  if (!str)
+    return 0;
+  int width = 0;
+  while (*str) {
+    int char_len = utf8_char_len(str);
+    width++;
+    str += char_len;
+  }
+  return width;
+}
+
 /* Count lines and find cursor position */
 static void recalculate_cursor_position(TuiTextInput *input) {
   input->cursor_row = 0;
@@ -377,7 +390,7 @@ TuiTextInput *tui_textinput_create(const TuiTextInputConfig *config) {
   if (config) {
     input->prompt = config->prompt;
     if (input->prompt) {
-      input->prompt_len = (int)strlen(input->prompt);
+      input->prompt_len = utf8_display_width(input->prompt);
     }
     input->width = config->width;
     input->height = config->height;
@@ -868,7 +881,7 @@ void tui_textinput_set_prompt(TuiTextInput *input, const char *prompt) {
   if (!input)
     return;
   input->prompt = prompt;
-  input->prompt_len = prompt ? (int)strlen(prompt) : 0;
+  input->prompt_len = prompt ? utf8_display_width(prompt) : 0;
 }
 
 /* Set whether to show dividers above/below the input */

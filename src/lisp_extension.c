@@ -300,6 +300,33 @@ static LispObject *builtin_termcap(LispObject *args, Environment *env) {
   return lisp_make_error("termcap: unknown capability");
 }
 
+/* Forward declaration for load_lisp_system_file */
+static int load_lisp_system_file(const char *filename);
+
+/* Builtin: load-system-file - Load a Lisp file using standard search paths */
+static LispObject *builtin_load_system_file(LispObject *args,
+                                            Environment *env) {
+  (void)env;
+
+  if (args == NIL) {
+    return lisp_make_error("load-system-file requires 1 argument");
+  }
+
+  LispObject *filename_obj = lisp_car(args);
+  if (filename_obj->type != LISP_STRING) {
+    return lisp_make_error("load-system-file: argument must be a string");
+  }
+
+  const char *filename = filename_obj->value.string;
+  int result = load_lisp_system_file(filename);
+
+  if (result) {
+    return lisp_make_symbol("t");
+  } else {
+    return NIL;
+  }
+}
+
 /* Load a Lisp file from standard search paths */
 static int load_lisp_system_file(const char *filename) {
   if (!lisp_env || !filename) {
@@ -404,9 +431,13 @@ int lisp_x_init(void) {
   env_define(lisp_env, "termcap",
              lisp_make_builtin(builtin_termcap, "termcap"));
 
+  /* System file loader (uses standard search paths) */
+  env_define(lisp_env, "load-system-file",
+             lisp_make_builtin(builtin_load_system_file, "load-system-file"));
+
   /* Define default configuration variables */
   env_define(lisp_env, "*input-history-size*", lisp_make_integer(100));
-  env_define(lisp_env, "*prompt*", lisp_make_string("> "));
+  /* Note: *prompt* is defined in init.lisp to allow user customization */
 
   /* Define default hooks as identity functions */
   LispObject *identity_hook = lisp_eval_string("(lambda (x) x)", lisp_env);
