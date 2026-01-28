@@ -2,8 +2,8 @@
 
 #include "commands.h"
 #include "../include/telnet.h"
-#include "dynamic_buffer.h"
 #include "lisp_extension.h"
+#include <bloom-boba/dynamic_buffer.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

@@ -1,7 +1,7 @@
 /* Dynamic buffer - auto-growing buffer for building strings/data */
 
-#ifndef DYNAMIC_BUFFER_H
-#define DYNAMIC_BUFFER_H
+#ifndef BLOOM_BOBA_DYNAMIC_BUFFER_H
+#define BLOOM_BOBA_DYNAMIC_BUFFER_H
 
 #include <stddef.h>
 
@@ -49,4 +49,4 @@ void dynamic_buffer_clear(DynamicBuffer *buf);
 /* Reset buffer to initial state and free excess memory */
 void dynamic_buffer_reset(DynamicBuffer *buf, size_t initial_size);
 
-#endif /* DYNAMIC_BUFFER_H */
+#endif /* BLOOM_BOBA_DYNAMIC_BUFFER_H */

@@ -15,8 +15,8 @@
  * etc.)
  */
 
-#ifndef ANSI_SEQUENCES_H
-#define ANSI_SEQUENCES_H
+#ifndef BLOOM_BOBA_ANSI_SEQUENCES_H
+#define BLOOM_BOBA_ANSI_SEQUENCES_H
 
 #include <stddef.h>
 
@@ -206,4 +206,4 @@ void ansi_format_fg_color_rgb(char *buf, size_t size, int r, int g, int b);
  */
 void ansi_format_bg_color_rgb(char *buf, size_t size, int r, int g, int b);
 
-#endif /* ANSI_SEQUENCES_H */
+#endif /* BLOOM_BOBA_ANSI_SEQUENCES_H */

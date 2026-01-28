@@ -45,6 +45,7 @@ AC_CHECK_FUNCS([memset socket select getaddrinfo])
 dnl Output files
 AC_CONFIG_FILES([
     Makefile
+    bloom-boba/Makefile
     include/Makefile
     src/Makefile
     lisp/Makefile

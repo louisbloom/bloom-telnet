@@ -1,8 +1,8 @@
 /* Telnet protocol implementation (RFC 854) */
 
 #include "../include/telnet.h"
-#include "dynamic_buffer.h"
 #include "lisp_extension.h"
+#include <bloom-boba/dynamic_buffer.h>
 #include <bloom-lisp/file_utils.h>
 #include <bloom-lisp/lisp.h>
 #include <errno.h>

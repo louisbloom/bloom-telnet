@@ -1,6 +1,6 @@
 # Makefile.am - Top-level automake file for bloom-telnet
 
-SUBDIRS = include src lisp tests
+SUBDIRS = bloom-boba include src lisp tests
 
 ACLOCAL_AMFLAGS = -I m4
 

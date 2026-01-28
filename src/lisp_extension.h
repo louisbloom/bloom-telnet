@@ -3,7 +3,7 @@
 #ifndef BLOOM_TELNET_LISP_H
 #define BLOOM_TELNET_LISP_H
 
-#include "dynamic_buffer.h"
+#include <bloom-boba/dynamic_buffer.h>
 #include <stddef.h>
 
 /* Initialize Lisp interpreter, environment, and load init file */

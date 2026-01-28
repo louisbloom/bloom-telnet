@@ -1,6 +1,6 @@
 /* ansi_sequences.c - Helper functions for parameterized ANSI sequences */
 
-#include "ansi_sequences.h"
+#include <bloom-boba/ansi_sequences.h>
 #include <stdio.h>
 
 /* SGR color parameter prefixes for 256-color and RGB modes */

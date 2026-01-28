@@ -26,14 +26,19 @@
 #include "../include/terminal_caps.h"
 #include "commands.h"
 #include "lisp_extension.h"
-#include <bloom-lisp/lineedit.h>
+#include <bloom-boba/cmd.h>
+#include <bloom-boba/components/textinput.h>
+#include <bloom-boba/dynamic_buffer.h>
+#include <bloom-boba/input_parser.h>
 
 /* Version information */
 #define BLOOM_TELNET_VERSION "0.1.0"
 
 /* Global state */
 static Telnet *g_telnet = NULL;
-static LineEditState *g_lineedit = NULL;
+static TuiTextInput *g_textinput = NULL;
+static TuiInputParser *g_input_parser = NULL;
+static DynamicBuffer *g_render_buf = NULL;
 static int g_connected = 0;
 static int g_quit_requested = 0;
 int g_term_rows = 24;
@@ -158,9 +163,19 @@ static void cleanup(void) {
     g_telnet = NULL;
   }
 
-  if (g_lineedit) {
-    lineedit_destroy(g_lineedit);
-    g_lineedit = NULL;
+  if (g_textinput) {
+    tui_textinput_free(g_textinput);
+    g_textinput = NULL;
+  }
+
+  if (g_input_parser) {
+    tui_input_parser_free(g_input_parser);
+    g_input_parser = NULL;
+  }
+
+  if (g_render_buf) {
+    dynamic_buffer_destroy(g_render_buf);
+    g_render_buf = NULL;
   }
 
   lisp_x_cleanup();
@@ -269,45 +284,98 @@ static EventReadiness wait_for_events(int socket_fd) {
   return events;
 }
 
-/* Handle user input from stdin. Returns 0 on success, -1 on EOF/quit */
-static int handle_user_input(const char **prompt) {
-  char *line = lineedit_readline(g_lineedit, *prompt);
-
-  if (line == NULL) {
-    /* EOF (Ctrl+D) or error */
-    g_quit_requested = 1;
-#ifndef _WIN32
-    printf("\r\n");
-#endif
-    return -1;
-  }
-
+/* Process a submitted line */
+static void process_line(const char *line, const char **prompt) {
   if (line[0] != '\0') {
-    lineedit_history_add(g_lineedit, line);
+    tui_textinput_history_add(g_textinput, line);
   }
 
   /* Check for command */
   if (line[0] == ':') {
+    /* Move to new line before command output */
+    printf("\r\n");
     process_command(line, g_telnet, &g_connected, &g_quit_requested,
                     g_term_cols, g_term_rows);
   } else if (g_connected) {
+    /* Move to new line before sending */
+    printf("\r\n");
     /* Process through user input hook (sends empty lines too) */
     const char *processed = lisp_x_call_user_input_hook(line, strlen(line));
     if (processed) {
       telnet_send_with_crlf(g_telnet, processed, strlen(processed));
     }
   } else if (line[0] != '\0') {
-    printf("Not connected. Use :connect <host> <port>\r\n");
+    printf("\r\nNot connected. Use :connect <host> <port>\r\n");
+  } else {
+    /* Empty line when not connected - just move to new line */
+    printf("\r\n");
   }
-
-  free(line);
 
   /* Update prompt and visibility */
   *prompt = lisp_x_get_prompt();
-  lineedit_set_show_prompt(g_lineedit, g_connected ? 0 : 1);
-  if (!g_connected) {
-    printf("%s", *prompt);
-    fflush(stdout);
+  tui_textinput_set_prompt(g_textinput, *prompt);
+  tui_textinput_set_show_prompt(g_textinput, g_connected ? 0 : 1);
+}
+
+/* Render the text input */
+static void render_textinput(void) {
+  dynamic_buffer_clear(g_render_buf);
+  tui_textinput_view(g_textinput, g_render_buf);
+  fwrite(dynamic_buffer_data(g_render_buf), 1, dynamic_buffer_len(g_render_buf),
+         stdout);
+  fflush(stdout);
+}
+
+/* Handle user input from stdin. Returns 0 on success, -1 on EOF/quit */
+static int handle_user_input(const char **prompt) {
+  unsigned char buf[256];
+  ssize_t n;
+
+#ifdef _WIN32
+  /* Windows: Use _getch() for non-blocking input */
+  n = 0;
+  while (_kbhit() && n < sizeof(buf)) {
+    buf[n++] = _getch();
+  }
+#else
+  n = read(STDIN_FILENO, buf, sizeof(buf));
+  if (n <= 0) {
+    if (n == 0 || errno == EAGAIN || errno == EWOULDBLOCK) {
+      return 0; /* No data available */
+    }
+    /* Error */
+    g_quit_requested = 1;
+    return -1;
+  }
+#endif
+
+  /* Feed bytes to input parser and process messages */
+  for (ssize_t i = 0; i < n; i++) {
+    TuiMsg msg;
+    if (tui_input_parser_feed(g_input_parser, buf[i], &msg)) {
+      TuiUpdateResult result = tui_textinput_update(g_textinput, msg);
+
+      /* Check for commands from textinput */
+      if (result.cmd) {
+        if (result.cmd->type == TUI_CMD_LINE_SUBMIT) {
+          const char *line = result.cmd->payload.line;
+          process_line(line, prompt);
+          tui_cmd_free(result.cmd);
+          render_textinput();
+        } else if (result.cmd->type == TUI_CMD_QUIT) {
+          /* EOF (Ctrl+D on empty line) */
+          g_quit_requested = 1;
+          tui_cmd_free(result.cmd);
+          printf("\r\n");
+          return -1;
+        } else {
+          tui_cmd_free(result.cmd);
+        }
+      } else {
+        /* No command, just re-render */
+        render_textinput();
+      }
+    }
   }
 
   return 0;
@@ -320,7 +388,7 @@ static int handle_telnet_data(char *recv_buffer, size_t buffer_size,
 
   if (received < 0) {
     g_connected = 0;
-    lineedit_set_show_prompt(g_lineedit, 1);
+    tui_textinput_set_show_prompt(g_textinput, 1);
     printf("\r\n*** Connection lost ***\r\n%s", *prompt);
     fflush(stdout);
     return -1;
@@ -348,11 +416,12 @@ static int run_event_loop(void) {
   char recv_buffer[4096];
   const char *prompt = lisp_x_get_prompt();
 
-  /* Print initial prompt (only when not connected) */
-  if (!g_connected) {
-    printf("%s", prompt);
-    fflush(stdout);
-  }
+  /* Configure textinput with current state */
+  tui_textinput_set_prompt(g_textinput, prompt);
+  tui_textinput_set_show_prompt(g_textinput, g_connected ? 0 : 1);
+
+  /* Render initial prompt */
+  render_textinput();
 
   while (!g_quit_requested) {
     int socket_fd = g_connected ? telnet_get_socket(g_telnet) : -1;
@@ -461,16 +530,30 @@ int main(int argc, char *argv[]) {
   /* Register telnet with Lisp extension */
   lisp_x_register_telnet(g_telnet);
 
-  /* Create lineedit state */
-  g_lineedit = lineedit_create();
-  if (!g_lineedit) {
-    fprintf(stderr, "Failed to create line editor\n");
+  /* Create input parser */
+  g_input_parser = tui_input_parser_create();
+  if (!g_input_parser) {
+    fprintf(stderr, "Failed to create input parser\n");
     return 1;
   }
 
-  /* Configure lineedit */
-  lineedit_set_history_size(g_lineedit, lisp_x_get_input_history_size());
-  lineedit_set_completer(g_lineedit, lisp_x_complete, NULL);
+  /* Create text input component */
+  g_textinput = tui_textinput_create(NULL);
+  if (!g_textinput) {
+    fprintf(stderr, "Failed to create text input\n");
+    return 1;
+  }
+
+  /* Create render buffer */
+  g_render_buf = dynamic_buffer_create(256);
+  if (!g_render_buf) {
+    fprintf(stderr, "Failed to create render buffer\n");
+    return 1;
+  }
+
+  /* Configure text input */
+  tui_textinput_set_history_size(g_textinput, lisp_x_get_input_history_size());
+  tui_textinput_set_completer(g_textinput, lisp_x_complete, NULL);
 
   /* Load init-post.lisp */
   lisp_x_load_init_post();
@@ -486,7 +569,7 @@ int main(int argc, char *argv[]) {
     } else {
       g_connected = 1;
       telnet_set_terminal_size(g_telnet, g_term_cols, g_term_rows);
-      lineedit_set_show_prompt(g_lineedit, 0);
+      tui_textinput_set_show_prompt(g_textinput, 0);
       printf("Connected.\n");
     }
   }

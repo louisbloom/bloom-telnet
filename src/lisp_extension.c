@@ -3,8 +3,8 @@
 #include "lisp_extension.h"
 #include "../include/telnet.h"
 #include "../include/terminal_caps.h"
-#include "dynamic_buffer.h"
 #include "path_utils.h"
+#include <bloom-boba/dynamic_buffer.h>
 #include <bloom-lisp/file_utils.h>
 #include <bloom-lisp/lisp.h>
 #include <stdio.h>
