@@ -21,9 +21,6 @@ PKG_PROG_PKG_CONFIG
 dnl Check for bloom-lisp
 PKG_CHECK_MODULES([BLOOMLISP], [bloom-lisp])
 
-dnl Check for math library
-AC_SEARCH_LIBS([floor], [m])
-
 dnl Platform-specific socket libraries
 case "$host_os" in
     mingw*|msys*)
@@ -43,7 +40,7 @@ AC_TYPE_SIZE_T
 AC_TYPE_SSIZE_T
 
 dnl Check for library functions
-AC_CHECK_FUNCS([memset socket select gethostbyname])
+AC_CHECK_FUNCS([memset socket select getaddrinfo])
 
 dnl Output files
 AC_CONFIG_FILES([

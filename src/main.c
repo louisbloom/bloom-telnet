@@ -25,7 +25,6 @@
 #include "../include/telnet.h"
 #include "../include/terminal_caps.h"
 #include "commands.h"
-#include "dynamic_buffer.h"
 #include "lisp_extension.h"
 #include <bloom-lisp/lineedit.h>
 
