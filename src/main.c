@@ -84,6 +84,9 @@ static void handle_sigwinch(int sig) {
   if (g_connected && g_telnet) {
     telnet_set_terminal_size(g_telnet, g_term_cols, g_term_rows);
   }
+  if (g_textinput) {
+    tui_textinput_set_terminal_width(g_textinput, g_term_cols);
+  }
 }
 #endif
 
@@ -554,6 +557,8 @@ int main(int argc, char *argv[]) {
   /* Configure text input */
   tui_textinput_set_history_size(g_textinput, lisp_x_get_input_history_size());
   tui_textinput_set_completer(g_textinput, lisp_x_complete, NULL);
+  tui_textinput_set_show_dividers(g_textinput, 1);
+  tui_textinput_set_terminal_width(g_textinput, g_term_cols);
 
   /* Load init-post.lisp */
   lisp_x_load_init_post();
