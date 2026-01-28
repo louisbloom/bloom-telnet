@@ -82,6 +82,12 @@ TuiViewport *telnet_app_get_viewport(TelnetAppModel *app);
 /* Set the prompt string */
 void telnet_app_set_prompt(TelnetAppModel *app, const char *prompt);
 
+/* Scrolling control */
+void telnet_app_scroll_up(TelnetAppModel *app, int lines);
+void telnet_app_scroll_down(TelnetAppModel *app, int lines);
+void telnet_app_page_up(TelnetAppModel *app);
+void telnet_app_page_down(TelnetAppModel *app);
+
 /* Get component interface for TelnetApp */
 const TuiComponent *telnet_app_component(void);
 

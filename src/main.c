@@ -166,8 +166,11 @@ static void update_terminal_size(void) {
 static void cleanup(void) {
   disable_raw_mode();
 
-  /* Move cursor to bottom of screen and clear line for clean exit */
-  printf(CSI "%d;1H" CSI "K", g_term_rows);
+  /* Disable mouse mode */
+  printf(CSI "?1006l" CSI "?1000l");
+  /* Exit alternate screen buffer (restores original terminal content) */
+  printf(CSI "?1049l");
+  fflush(stdout);
 
   if (g_telnet) {
     if (g_connected) {
@@ -390,6 +393,34 @@ static int handle_user_input(const char **prompt) {
   for (ssize_t i = 0; i < n; i++) {
     TuiMsg msg;
     if (tui_input_parser_feed(g_input_parser, buf[i], &msg)) {
+      /* Handle mouse scroll events */
+      if (msg.type == TUI_MSG_MOUSE) {
+        if (msg.data.mouse.button == TUI_MOUSE_WHEEL_UP) {
+          telnet_app_scroll_up(g_app, 3);
+          render_full_screen();
+          continue;
+        } else if (msg.data.mouse.button == TUI_MOUSE_WHEEL_DOWN) {
+          telnet_app_scroll_down(g_app, 3);
+          render_full_screen();
+          continue;
+        }
+        /* Other mouse events ignored for now */
+        continue;
+      }
+
+      /* Handle PageUp/PageDown keys */
+      if (msg.type == TUI_MSG_KEY_PRESS) {
+        if (msg.data.key.key == TUI_KEY_PAGE_UP) {
+          telnet_app_page_up(g_app);
+          render_full_screen();
+          continue;
+        } else if (msg.data.key.key == TUI_KEY_PAGE_DOWN) {
+          telnet_app_page_down(g_app);
+          render_full_screen();
+          continue;
+        }
+      }
+
       /* Route message through TelnetApp */
       TuiUpdateResult result = telnet_app_update(g_app, msg);
 
@@ -449,8 +480,10 @@ static int run_event_loop(void) {
   char recv_buffer[4096];
   const char *prompt = lisp_x_get_prompt();
 
-  /* Clear screen and render initial state */
-  printf(CSI "2J" CSI "H"); /* Clear screen and home cursor */
+  /* Enter alternate screen buffer, clear and home cursor */
+  printf(CSI "?1049h" CSI "2J" CSI "H");
+  /* Enable SGR extended mouse mode for scroll wheel support */
+  printf(CSI "?1000h" CSI "?1006h");
   fflush(stdout);
   render_full_screen();
 

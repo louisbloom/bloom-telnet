@@ -9,6 +9,7 @@ typedef enum {
   PARSER_STATE_GROUND,    /* Normal state, waiting for input */
   PARSER_STATE_ESCAPE,    /* Got ESC, waiting for next char */
   PARSER_STATE_CSI,       /* In CSI sequence (ESC [) */
+  PARSER_STATE_CSI_MOUSE, /* In SGR mouse sequence (ESC [ <) */
   PARSER_STATE_SS3,       /* In SS3 sequence (ESC O) */
   PARSER_STATE_UTF8,      /* In UTF-8 multi-byte sequence */
 } ParserState;
@@ -182,6 +183,77 @@ static TuiMsg parse_ss3_sequence(unsigned char c) {
   }
 }
 
+/* Parse SGR mouse sequence: <Cb;Cx;CyM or <Cb;Cx;Cym
+ * Where Cb = button code, Cx = column, Cy = row
+ * M = press, m = release
+ */
+static TuiMsg parse_sgr_mouse_sequence(const unsigned char *seq, int len) {
+  if (len < 5) /* Minimum: "0;1;1M" */
+    return tui_msg_none();
+
+  int button = 0, col = 0, row = 0;
+  const char *p = (const char *)seq;
+  char final = seq[len - 1];
+
+  /* Parse button code */
+  while (*p >= '0' && *p <= '9') {
+    button = button * 10 + (*p - '0');
+    p++;
+  }
+  if (*p != ';')
+    return tui_msg_none();
+  p++;
+
+  /* Parse column */
+  while (*p >= '0' && *p <= '9') {
+    col = col * 10 + (*p - '0');
+    p++;
+  }
+  if (*p != ';')
+    return tui_msg_none();
+  p++;
+
+  /* Parse row */
+  while (*p >= '0' && *p <= '9') {
+    row = row * 10 + (*p - '0');
+    p++;
+  }
+
+  /* Determine action from final character */
+  TuiMouseAction action;
+  if (final == 'M') {
+    action = TUI_MOUSE_ACTION_PRESS;
+  } else if (final == 'm') {
+    action = TUI_MOUSE_ACTION_RELEASE;
+  } else {
+    return tui_msg_none();
+  }
+
+  /* Map button code - lower 2 bits are button, bit 5 (32) is motion */
+  TuiMouseButton mouse_button;
+  if (button >= 64) {
+    /* Wheel events: 64 = up, 65 = down */
+    mouse_button = (TuiMouseButton)button;
+  } else {
+    int btn = button & 3;
+    if (btn == 0)
+      mouse_button = TUI_MOUSE_LEFT;
+    else if (btn == 1)
+      mouse_button = TUI_MOUSE_MIDDLE;
+    else if (btn == 2)
+      mouse_button = TUI_MOUSE_RIGHT;
+    else
+      mouse_button = TUI_MOUSE_RELEASE;
+
+    /* Check for motion (button 32+ indicates motion while button held) */
+    if (button & 32) {
+      action = TUI_MOUSE_ACTION_MOTION;
+    }
+  }
+
+  return tui_msg_mouse(mouse_button, action, col, row);
+}
+
 /* Parse a single byte and return message if complete */
 int tui_input_parser_feed(TuiInputParser *parser, unsigned char byte,
                           TuiMsg *msg) {
@@ -273,6 +345,12 @@ int tui_input_parser_feed(TuiInputParser *parser, unsigned char byte,
     break;
 
   case PARSER_STATE_CSI:
+    /* Check for SGR mouse sequence: ESC [ < ... */
+    if (parser->seq_len == 0 && byte == '<') {
+      parser->state = PARSER_STATE_CSI_MOUSE;
+      parser->seq_len = 0;
+      return 0;
+    }
     if (parser->seq_len < (int)sizeof(parser->seq_buf) - 1) {
       parser->seq_buf[parser->seq_len++] = byte;
     }
@@ -280,6 +358,19 @@ int tui_input_parser_feed(TuiInputParser *parser, unsigned char byte,
     if (byte >= 0x40 && byte <= 0x7E) {
       parser->seq_buf[parser->seq_len] = '\0';
       *msg = parse_csi_sequence(parser->seq_buf, parser->seq_len);
+      parser->state = PARSER_STATE_GROUND;
+      return msg->type != TUI_MSG_NONE;
+    }
+    return 0;
+
+  case PARSER_STATE_CSI_MOUSE:
+    if (parser->seq_len < (int)sizeof(parser->seq_buf) - 1) {
+      parser->seq_buf[parser->seq_len++] = byte;
+    }
+    /* SGR mouse sequences end with 'M' (press) or 'm' (release) */
+    if (byte == 'M' || byte == 'm') {
+      parser->seq_buf[parser->seq_len] = '\0';
+      *msg = parse_sgr_mouse_sequence(parser->seq_buf, parser->seq_len);
       parser->state = PARSER_STATE_GROUND;
       return msg->type != TUI_MSG_NONE;
     }

@@ -183,6 +183,34 @@ void telnet_app_set_prompt(TelnetAppModel *app, const char *prompt) {
   }
 }
 
+/* Scroll up by N lines */
+void telnet_app_scroll_up(TelnetAppModel *app, int lines) {
+  if (app && app->viewport) {
+    tui_viewport_scroll_up(app->viewport, lines);
+  }
+}
+
+/* Scroll down by N lines */
+void telnet_app_scroll_down(TelnetAppModel *app, int lines) {
+  if (app && app->viewport) {
+    tui_viewport_scroll_down(app->viewport, lines);
+  }
+}
+
+/* Page up */
+void telnet_app_page_up(TelnetAppModel *app) {
+  if (app && app->viewport) {
+    tui_viewport_page_up(app->viewport);
+  }
+}
+
+/* Page down */
+void telnet_app_page_down(TelnetAppModel *app) {
+  if (app && app->viewport) {
+    tui_viewport_page_down(app->viewport);
+  }
+}
+
 /* Component interface wrappers */
 static TuiInitResult telnet_app_init_wrapper(void *config) {
   TuiModel *model =

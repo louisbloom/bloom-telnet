@@ -13,6 +13,7 @@
 typedef enum {
   TUI_MSG_NONE = 0,        /* No message / null message */
   TUI_MSG_KEY_PRESS,       /* Key press event */
+  TUI_MSG_MOUSE,           /* Mouse event */
   TUI_MSG_WINDOW_SIZE,     /* Terminal window size changed */
   TUI_MSG_FOCUS,           /* Component gained focus */
   TUI_MSG_BLUR,            /* Component lost focus */
@@ -29,6 +30,31 @@ typedef enum {
   TUI_MOD_SHIFT = 1 << 2,
   TUI_MOD_META = 1 << 3,
 } TuiKeyMod;
+
+/* Mouse button codes (SGR extended mode) */
+typedef enum {
+  TUI_MOUSE_LEFT = 0,
+  TUI_MOUSE_MIDDLE = 1,
+  TUI_MOUSE_RIGHT = 2,
+  TUI_MOUSE_RELEASE = 3,      /* Button release (no specific button) */
+  TUI_MOUSE_WHEEL_UP = 64,
+  TUI_MOUSE_WHEEL_DOWN = 65,
+} TuiMouseButton;
+
+/* Mouse action types */
+typedef enum {
+  TUI_MOUSE_ACTION_PRESS,
+  TUI_MOUSE_ACTION_RELEASE,
+  TUI_MOUSE_ACTION_MOTION,
+} TuiMouseAction;
+
+/* Mouse message data */
+typedef struct {
+  TuiMouseButton button;
+  TuiMouseAction action;
+  int col;  /* 1-indexed column */
+  int row;  /* 1-indexed row */
+} TuiMouseMsg;
 
 /* Special key codes (non-printable keys) */
 typedef enum {
@@ -79,6 +105,7 @@ typedef struct {
   TuiMsgType type;
   union {
     TuiKeyMsg key;
+    TuiMouseMsg mouse;
     TuiWindowSizeMsg size;
     void *custom;    /* For application-defined message data */
   } data;
@@ -106,6 +133,10 @@ TuiMsg tui_msg_blur(void);
 
 /* Create a custom message */
 TuiMsg tui_msg_custom(int type, void *data);
+
+/* Create a mouse message */
+TuiMsg tui_msg_mouse(TuiMouseButton button, TuiMouseAction action, int col,
+                     int row);
 
 /* Check if message is a key press of specific type */
 int tui_msg_is_key(TuiMsg msg, int key);

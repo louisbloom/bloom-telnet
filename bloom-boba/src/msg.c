@@ -62,6 +62,19 @@ TuiMsg tui_msg_custom(int type, void *data) {
   return msg;
 }
 
+/* Create a mouse message */
+TuiMsg tui_msg_mouse(TuiMouseButton button, TuiMouseAction action, int col,
+                     int row) {
+  TuiMsg msg;
+  memset(&msg, 0, sizeof(msg));
+  msg.type = TUI_MSG_MOUSE;
+  msg.data.mouse.button = button;
+  msg.data.mouse.action = action;
+  msg.data.mouse.col = col;
+  msg.data.mouse.row = row;
+  return msg;
+}
+
 /* Check if message is a key press of specific type */
 int tui_msg_is_key(TuiMsg msg, int key) {
   return msg.type == TUI_MSG_KEY_PRESS && msg.data.key.key == key;
