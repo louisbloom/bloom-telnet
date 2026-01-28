@@ -49,3 +49,5 @@ venv/
 .env
 .cecli*
 .aider*
+.cache/
+compile_commands.json

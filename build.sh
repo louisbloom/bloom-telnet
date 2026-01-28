@@ -35,7 +35,7 @@ setup_local_deps() {
 	local local_pkgconfig="$HOME/.local/lib/pkgconfig"
 	local local_lib="$HOME/.local/lib"
 
-	# Add user-local pkgconfig path if it exists
+	# Prioritize user-local pkgconfig path (prepend to find ~/.local packages first)
 	if [ -d "$local_pkgconfig" ]; then
 		if [ -f "$local_pkgconfig/bloom-lisp.pc" ]; then
 			log_info "Found bloom-lisp in $local_pkgconfig"
@@ -44,7 +44,7 @@ setup_local_deps() {
 		fi
 	fi
 
-	# Verify bloom-lisp is available
+	# Verify bloom-lisp is available (includes lineedit)
 	if ! pkg-config --exists bloom-lisp 2>/dev/null; then
 		log_error "bloom-lisp not found. Install it to ~/.local or system-wide."
 		log_error "See: https://github.com/thomasc1971/bloom-lisp"
@@ -143,7 +143,7 @@ build_project() {
 
 	if [ "$use_bear" = true ]; then
 		log_info "Generating compile_commands.json with bear..."
-		bear -- make -j"$PARALLEL_JOBS"
+		bear --output ../compile_commands.json -- make -j"$PARALLEL_JOBS"
 	else
 		log_info "Running make with $PARALLEL_JOBS parallel jobs"
 		make -j"$PARALLEL_JOBS"
