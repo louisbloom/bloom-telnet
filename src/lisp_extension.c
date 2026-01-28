@@ -17,6 +17,9 @@ static Environment *lisp_env = NULL;
 /* Registered telnet pointer for telnet-send builtin */
 static Telnet *registered_telnet = NULL;
 
+/* Terminal echo callback */
+static TerminalEchoCallback echo_callback = NULL;
+
 /* Static buffers for hook processing */
 static char *ansi_strip_buffer = NULL;
 static size_t ansi_strip_buffer_size = 0;
@@ -155,7 +158,7 @@ static LispObject *builtin_strip_ansi(LispObject *args, Environment *env) {
   return lisp_make_string(stripped);
 }
 
-/* Builtin: terminal-echo - Output text to stdout (local echo) */
+/* Builtin: terminal-echo - Output text to textview/stdout (local echo) */
 static LispObject *builtin_terminal_echo(LispObject *args, Environment *env) {
   (void)env;
 
@@ -168,15 +171,22 @@ static LispObject *builtin_terminal_echo(LispObject *args, Environment *env) {
     return lisp_make_error("terminal-echo: argument must be a string");
   }
 
-  /* Output to stdout, converting \n to \r\n for proper terminal display */
   const char *text = text_obj->value.string;
-  for (const char *p = text; *p; p++) {
-    if (*p == '\n' && (p == text || *(p - 1) != '\r')) {
-      putchar('\r');
+  size_t len = strlen(text);
+
+  /* Use callback if registered (handles scroll region positioning) */
+  if (echo_callback) {
+    echo_callback(text, len);
+  } else {
+    /* Fallback: output to stdout, converting \n to \r\n */
+    for (const char *p = text; *p; p++) {
+      if (*p == '\n' && (p == text || *(p - 1) != '\r')) {
+        putchar('\r');
+      }
+      putchar(*p);
     }
-    putchar(*p);
+    fflush(stdout);
   }
-  fflush(stdout);
 
   return NIL;
 }
@@ -799,4 +809,9 @@ char **lisp_x_complete(const char *buffer, int cursor_pos, void *userdata) {
   completions[i] = NULL;
 
   return completions;
+}
+
+/* Register terminal echo callback */
+void lisp_x_register_echo_callback(TerminalEchoCallback callback) {
+  echo_callback = callback;
 }

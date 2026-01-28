@@ -1,7 +1,7 @@
 /* bloom-telnet - Terminal-based telnet client with Lisp scripting
  *
  * Main entry point implementing a TUI using raw terminal mode,
- * select()-based event loop, and bloom-lisp's lineedit for input.
+ * select()-based event loop, and software-based scrolling (Bubbletea-style).
  */
 
 #include <errno.h>
@@ -26,8 +26,9 @@
 #include "../include/terminal_caps.h"
 #include "commands.h"
 #include "lisp_extension.h"
+#include "telnet_app.h"
+#include <bloom-boba/ansi_sequences.h>
 #include <bloom-boba/cmd.h>
-#include <bloom-boba/components/textinput.h>
 #include <bloom-boba/dynamic_buffer.h>
 #include <bloom-boba/input_parser.h>
 
@@ -36,13 +37,16 @@
 
 /* Global state */
 static Telnet *g_telnet = NULL;
-static TuiTextInput *g_textinput = NULL;
+static TelnetAppModel *g_app = NULL;
 static TuiInputParser *g_input_parser = NULL;
 static DynamicBuffer *g_render_buf = NULL;
 static int g_connected = 0;
 static int g_quit_requested = 0;
 int g_term_rows = 24;
 int g_term_cols = 80;
+
+/* Convenience accessor for textinput component */
+#define g_textinput (telnet_app_get_textinput(g_app))
 
 #ifndef _WIN32
 static struct termios g_orig_termios;
@@ -69,6 +73,8 @@ static EventReadiness wait_for_events(int socket_fd);
 static int handle_user_input(const char **prompt);
 static int handle_telnet_data(char *recv_buffer, size_t buffer_size,
                               const char **prompt);
+static void render_full_screen(void);
+static void echo_to_viewport(const char *text, size_t len);
 
 /* Signal handler for SIGINT (Ctrl+C) */
 static void handle_sigint(int sig) {
@@ -84,9 +90,11 @@ static void handle_sigwinch(int sig) {
   if (g_connected && g_telnet) {
     telnet_set_terminal_size(g_telnet, g_term_cols, g_term_rows);
   }
-  if (g_textinput) {
-    tui_textinput_set_terminal_width(g_textinput, g_term_cols);
+  if (g_app) {
+    telnet_app_set_terminal_size(g_app, g_term_cols, g_term_rows);
   }
+  /* Re-render on resize */
+  render_full_screen();
 }
 #endif
 
@@ -158,6 +166,9 @@ static void update_terminal_size(void) {
 static void cleanup(void) {
   disable_raw_mode();
 
+  /* Move cursor to bottom of screen and clear line for clean exit */
+  printf(CSI "%d;1H" CSI "K", g_term_rows);
+
   if (g_telnet) {
     if (g_connected) {
       telnet_disconnect(g_telnet);
@@ -166,9 +177,9 @@ static void cleanup(void) {
     g_telnet = NULL;
   }
 
-  if (g_textinput) {
-    tui_textinput_free(g_textinput);
-    g_textinput = NULL;
+  if (g_app) {
+    telnet_app_free(g_app);
+    g_app = NULL;
   }
 
   if (g_input_parser) {
@@ -289,51 +300,73 @@ static EventReadiness wait_for_events(int socket_fd) {
 
 /* Process a submitted line */
 static void process_line(const char *line, const char **prompt) {
+  TuiTextInput *textinput = g_textinput;
   if (line[0] != '\0') {
-    tui_textinput_history_add(g_textinput, line);
+    tui_textinput_history_add(textinput, line);
   }
 
   /* Check for command */
   if (line[0] == ':') {
-    /* Move to new line before command output */
-    printf("\r\n");
+    int was_connected = g_connected;
+    echo_to_viewport("\n", 1);
     process_command(line, g_telnet, &g_connected, &g_quit_requested,
                     g_term_cols, g_term_rows);
+    /* Update prompt visibility on connect/disconnect */
+    if (g_connected && !was_connected) {
+      telnet_app_set_show_prompt(g_app, 0);
+    } else if (!g_connected && was_connected) {
+      telnet_app_set_show_prompt(g_app, 1);
+    }
   } else if (g_connected) {
-    /* Move to new line before sending */
-    printf("\r\n");
+    /* Echo user input to viewport */
+    echo_to_viewport(line, strlen(line));
+    echo_to_viewport("\n", 1);
+
     /* Process through user input hook (sends empty lines too) */
     const char *processed = lisp_x_call_user_input_hook(line, strlen(line));
     if (processed) {
       telnet_send_with_crlf(g_telnet, processed, strlen(processed));
     }
   } else if (line[0] != '\0') {
-    printf("\r\nNot connected. Use :connect <host> <port>\r\n");
+    echo_to_viewport("\nNot connected. Use :connect <host> <port>\n", 44);
   } else {
-    /* Empty line when not connected - just move to new line */
-    printf("\r\n");
+    /* Empty line when not connected */
+    echo_to_viewport("\n", 1);
   }
 
-  /* Update prompt and visibility */
+  /* Update prompt */
   *prompt = lisp_x_get_prompt();
-  tui_textinput_set_prompt(g_textinput, *prompt);
-  tui_textinput_set_show_prompt(g_textinput, g_connected ? 0 : 1);
-
-  /* Dividers only in local mode (not connected) - server output would disrupt
-   * them */
-  tui_textinput_set_show_dividers(g_textinput, g_connected ? 0 : 1);
-
-  /* Reset divider state since we've output text that disrupted the display */
-  tui_textinput_reset_dividers(g_textinput);
+  telnet_app_set_prompt(g_app, *prompt);
 }
 
-/* Render the text input */
-static void render_textinput(void) {
+/* Render the full screen (viewport + textinput) */
+static void render_full_screen(void) {
   dynamic_buffer_clear(g_render_buf);
-  tui_textinput_view(g_textinput, g_render_buf);
+
+  /* Hide cursor during render to prevent flicker */
+  dynamic_buffer_append_str(g_render_buf, CSI "?25l");
+
+  /* Render viewport and textinput with absolute positioning */
+  telnet_app_view(g_app, g_render_buf);
+
+  /* Show cursor */
+  dynamic_buffer_append_str(g_render_buf, CSI "?25h");
+
+  /* Output all at once */
   fwrite(dynamic_buffer_data(g_render_buf), 1, dynamic_buffer_len(g_render_buf),
          stdout);
   fflush(stdout);
+}
+
+/* Echo callback for terminal-echo builtin */
+static void echo_to_viewport(const char *text, size_t len) {
+  if (g_app) {
+    /* Append to viewport */
+    telnet_app_echo(g_app, text, len);
+
+    /* Re-render full screen */
+    render_full_screen();
+  }
 }
 
 /* Handle user input from stdin. Returns 0 on success, -1 on EOF/quit */
@@ -363,7 +396,8 @@ static int handle_user_input(const char **prompt) {
   for (ssize_t i = 0; i < n; i++) {
     TuiMsg msg;
     if (tui_input_parser_feed(g_input_parser, buf[i], &msg)) {
-      TuiUpdateResult result = tui_textinput_update(g_textinput, msg);
+      /* Route message through TelnetApp */
+      TuiUpdateResult result = telnet_app_update(g_app, msg);
 
       /* Check for commands from textinput */
       if (result.cmd) {
@@ -371,19 +405,19 @@ static int handle_user_input(const char **prompt) {
           const char *line = result.cmd->payload.line;
           process_line(line, prompt);
           tui_cmd_free(result.cmd);
-          render_textinput();
+          render_full_screen();
         } else if (result.cmd->type == TUI_CMD_QUIT) {
           /* EOF (Ctrl+D on empty line) */
           g_quit_requested = 1;
           tui_cmd_free(result.cmd);
-          printf("\r\n");
+          echo_to_viewport("\n", 1);
           return -1;
         } else {
           tui_cmd_free(result.cmd);
         }
       } else {
         /* No command, just re-render */
-        render_textinput();
+        render_full_screen();
       }
     }
   }
@@ -394,15 +428,13 @@ static int handle_user_input(const char **prompt) {
 /* Handle incoming telnet data. Returns 0 on success, -1 on disconnect */
 static int handle_telnet_data(char *recv_buffer, size_t buffer_size,
                               const char **prompt) {
+  (void)prompt; /* Unused */
   int received = telnet_receive(g_telnet, recv_buffer, buffer_size - 1);
 
   if (received < 0) {
     g_connected = 0;
-    tui_textinput_set_show_prompt(g_textinput, 1);
-    tui_textinput_set_show_dividers(g_textinput, 1);
-    tui_textinput_reset_dividers(g_textinput);
-    printf("\r\n*** Connection lost ***\r\n");
-    fflush(stdout);
+    telnet_app_set_show_prompt(g_app, 1);
+    echo_to_viewport("\n*** Connection lost ***\n", 25);
     return -1;
   }
 
@@ -415,9 +447,11 @@ static int handle_telnet_data(char *recv_buffer, size_t buffer_size,
     const char *filtered = lisp_x_call_telnet_input_filter_hook(
         recv_buffer, received, &filtered_len);
 
-    /* Output to terminal */
-    fwrite(filtered, 1, filtered_len, stdout);
-    fflush(stdout);
+    /* Append filtered data to viewport */
+    telnet_app_echo(g_app, filtered, filtered_len);
+
+    /* Re-render full screen */
+    render_full_screen();
   }
 
   return 0;
@@ -429,11 +463,13 @@ static int run_event_loop(void) {
   const char *prompt = lisp_x_get_prompt();
 
   /* Configure textinput with current state */
-  tui_textinput_set_prompt(g_textinput, prompt);
-  tui_textinput_set_show_prompt(g_textinput, g_connected ? 0 : 1);
+  telnet_app_set_prompt(g_app, prompt);
+  telnet_app_set_show_prompt(g_app, g_connected ? 0 : 1);
 
-  /* Render initial prompt */
-  render_textinput();
+  /* Clear screen and render initial state */
+  printf(CSI "2J" CSI "H"); /* Clear screen and home cursor */
+  fflush(stdout);
+  render_full_screen();
 
   while (!g_quit_requested) {
     int socket_fd = g_connected ? telnet_get_socket(g_telnet) : -1;
@@ -525,6 +561,9 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
+  /* Register terminal echo callback */
+  lisp_x_register_echo_callback(echo_to_viewport);
+
   /* Load additional scripts if specified */
   for (int i = 0; i < load_file_count; i++) {
     if (lisp_x_load_file(load_files[i]) < 0) {
@@ -549,44 +588,50 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  /* Create text input component */
-  g_textinput = tui_textinput_create(NULL);
-  if (!g_textinput) {
-    fprintf(stderr, "Failed to create text input\n");
+  /* Create TelnetApp component (composes viewport + textinput) */
+  TelnetAppConfig app_config = {
+      .terminal_width = g_term_cols,
+      .terminal_height = g_term_rows,
+      .prompt = lisp_x_get_prompt(),
+      .history_size = lisp_x_get_input_history_size(),
+      .completer = lisp_x_complete,
+      .completer_data = NULL,
+  };
+  g_app = telnet_app_create(&app_config);
+  if (!g_app) {
+    fprintf(stderr, "Failed to create TelnetApp\n");
     return 1;
   }
 
   /* Create render buffer */
-  g_render_buf = dynamic_buffer_create(256);
+  g_render_buf = dynamic_buffer_create(4096);
   if (!g_render_buf) {
     fprintf(stderr, "Failed to create render buffer\n");
     return 1;
   }
 
-  /* Configure text input */
-  tui_textinput_set_history_size(g_textinput, lisp_x_get_input_history_size());
-  tui_textinput_set_completer(g_textinput, lisp_x_complete, NULL);
-  tui_textinput_set_terminal_width(g_textinput, g_term_cols);
-  /* Dividers only shown when not connected (local mode) */
-  tui_textinput_set_show_dividers(g_textinput, 1);
-
   /* Load init-post.lisp */
   lisp_x_load_init_post();
 
-  /* Print banner */
-  printf("bloom-telnet %s - Type :help for commands\n", BLOOM_TELNET_VERSION);
+  /* Print banner to viewport */
+  telnet_app_echo(g_app, "bloom-telnet ", 13);
+  telnet_app_echo(g_app, BLOOM_TELNET_VERSION, strlen(BLOOM_TELNET_VERSION));
+  telnet_app_echo(g_app, " - Type :help for commands\n", 27);
 
   /* Connect if hostname provided */
   if (hostname) {
-    printf("Connecting to %s:%d...\n", hostname, port);
+    char msg[256];
+    snprintf(msg, sizeof(msg), "Connecting to %s:%d...\n", hostname, port);
+    telnet_app_echo(g_app, msg, strlen(msg));
     if (telnet_connect(g_telnet, hostname, port) < 0) {
-      fprintf(stderr, "Failed to connect to %s:%d\n", hostname, port);
+      snprintf(msg, sizeof(msg), "Failed to connect to %s:%d\n", hostname,
+               port);
+      telnet_app_echo(g_app, msg, strlen(msg));
     } else {
       g_connected = 1;
       telnet_set_terminal_size(g_telnet, g_term_cols, g_term_rows);
-      tui_textinput_set_show_prompt(g_textinput, 0);
-      tui_textinput_set_show_dividers(g_textinput, 0);
-      printf("Connected.\n");
+      telnet_app_set_show_prompt(g_app, 0);
+      telnet_app_echo(g_app, "Connected.\n", 11);
     }
   }
 

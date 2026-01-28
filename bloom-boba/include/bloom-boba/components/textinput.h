@@ -47,7 +47,7 @@ typedef struct TuiTextInput {
   int show_prompt;     /* Whether to display the prompt (default: 1) */
   int show_dividers;       /* Whether to show dividers above/below (default: 0) */
   int terminal_width;      /* Terminal width for divider rendering (0 = 80) */
-  int dividers_initialized; /* Whether divider lines have been set up */
+  int terminal_row;        /* Row for absolute positioning (1-indexed, 0 = not set) */
 
   /* History management */
   char **history;      /* Array of past input lines */
@@ -152,8 +152,11 @@ void tui_textinput_set_show_dividers(TuiTextInput *input, int show);
 /* Set terminal width for divider rendering */
 void tui_textinput_set_terminal_width(TuiTextInput *input, int width);
 
-/* Reset divider state (call after external output disrupts the display) */
-void tui_textinput_reset_dividers(TuiTextInput *input);
+/* Set terminal row for absolute positioning (1-indexed)
+ * When set, view() uses absolute cursor positioning instead of relative moves.
+ * This is the row for the input line; dividers use adjacent rows.
+ */
+void tui_textinput_set_terminal_row(TuiTextInput *input, int row);
 
 /* Get component interface for text input */
 const TuiComponent *tui_textinput_component(void);

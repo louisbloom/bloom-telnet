@@ -6,6 +6,9 @@
 
 #define MAX_MSGS_PER_FRAME 64
 
+/* Forward declaration */
+static int execute_cmd(TuiRuntime *runtime, TuiCmd *cmd);
+
 /* Create runtime with component */
 TuiRuntime *tui_runtime_create(TuiComponent *component, void *component_config,
                                const TuiRuntimeConfig *runtime_config) {
@@ -21,12 +24,13 @@ TuiRuntime *tui_runtime_create(TuiComponent *component, void *component_config,
   /* Store component interface */
   runtime->component = component;
 
-  /* Initialize model */
-  runtime->model = component->init(component_config);
-  if (!runtime->model) {
+  /* Initialize model (Elm Architecture: init returns (Model, Cmd)) */
+  TuiInitResult init_result = component->init(component_config);
+  if (!init_result.model) {
     free(runtime);
     return NULL;
   }
+  runtime->model = init_result.model;
 
   /* Create input parser */
   runtime->parser = tui_input_parser_create();
@@ -57,6 +61,11 @@ TuiRuntime *tui_runtime_create(TuiComponent *component, void *component_config,
 
   runtime->running = 1;
   runtime->quit_requested = 0;
+
+  /* Execute initial command if provided (Elm Architecture) */
+  if (init_result.cmd) {
+    execute_cmd(runtime, init_result.cmd);
+  }
 
   return runtime;
 }

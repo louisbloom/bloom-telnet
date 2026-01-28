@@ -59,4 +59,10 @@ const char *lisp_x_get_prompt(void);
  * completions */
 char **lisp_x_complete(const char *buffer, int cursor_pos, void *userdata);
 
+/* Terminal echo callback type - called by terminal-echo builtin */
+typedef void (*TerminalEchoCallback)(const char *text, size_t len);
+
+/* Register terminal echo callback for terminal-echo builtin */
+void lisp_x_register_echo_callback(TerminalEchoCallback callback);
+
 #endif /* BLOOM_TELNET_LISP_H */

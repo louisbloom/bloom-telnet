@@ -11,7 +11,9 @@ bloom_telnet_SOURCES = \
     lisp_extension.h \
     commands.c \
     commands.h \
-    terminal_caps.c
+    terminal_caps.c \
+    telnet_app.c \
+    telnet_app.h
 
 bloom_telnet_CPPFLAGS = \
     -I$(top_srcdir)/include \

@@ -220,7 +220,7 @@ class TestServer:
             else:
                 lines.append(f"  {cmd}")
         lines.append("")
-        return "\r\n".join(lines)
+        return "\n".join(lines)
 
     def run(self):
         """Run the server."""
@@ -290,8 +290,7 @@ class TestServer:
         BOLD = "\033[1m"
         RESET = "\033[0m"
 
-        banner = f"""
-{CYAN}{BOLD}  ____  _                       {MAGENTA} _____         _
+        banner = f"""{CYAN}{BOLD}  ____  _                       {MAGENTA} _____         _
 {CYAN} | __ )| | ___   ___  _ __ ___  {MAGENTA}|_   _|__  ___| |_
 {CYAN} |  _ \\| |/ _ \\ / _ \\| '_ ` _ \\ {MAGENTA}  | |/ _ \\/ __| __|
 {CYAN} | |_) | | (_) | (_) | | | | | |{MAGENTA}  | |  __/\\__ \\ |_

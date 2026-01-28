@@ -10,7 +10,9 @@ libbloom_boba_a_SOURCES = \
     src/runtime.c \
     src/dynamic_buffer.c \
     src/ansi_sequences.c \
-    src/components/textinput.c
+    src/components/textinput.c \
+    src/components/textview.c \
+    src/components/viewport.c
 
 libbloom_boba_a_CPPFLAGS = \
     -I$(srcdir)/include
@@ -26,4 +28,6 @@ EXTRA_DIST = \
     include/bloom-boba/runtime.h \
     include/bloom-boba/dynamic_buffer.h \
     include/bloom-boba/ansi_sequences.h \
-    include/bloom-boba/components/textinput.h
+    include/bloom-boba/components/textinput.h \
+    include/bloom-boba/components/textview.h \
+    include/bloom-boba/components/viewport.h

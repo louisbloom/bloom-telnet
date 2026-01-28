@@ -570,86 +570,104 @@ static void render_divider_inline(DynamicBuffer *out, int width) {
 
 /* Render text input to output buffer
  *
- * For single-line mode, uses ANSI sequences:
- * - Carriage return to start of line
- * - Clear to end of line
- * - Print prompt (if show_prompt is set)
- * - Print text content
- * - Position cursor at correct location
+ * When terminal_row is set (> 0), uses absolute cursor positioning:
+ * - Positions cursor absolutely using CSI row;col H
+ * - Renders dividers on adjacent rows (row-1 and row+1)
+ * - No relative cursor movements
  *
- * When dividers are enabled, uses a 3-line layout:
- * - Line 0: top divider
- * - Line 1: input line
- * - Line 2: bottom divider
- * Cursor is positioned on line 1 (input line) at start of render.
+ * When terminal_row is 0 (not set), uses legacy relative positioning.
+ *
+ * Layout with dividers (3 lines):
+ * - Row N-1: top divider
+ * - Row N:   input line (this is terminal_row)
+ * - Row N+1: bottom divider
  */
 void tui_textinput_view(const TuiTextInput *input, DynamicBuffer *out) {
   if (!input || !out)
     return;
 
   int term_width = input->terminal_width > 0 ? input->terminal_width : 80;
+  char pos_buf[32];
 
   if (!input->multiline) {
-    /* Single-line mode: use ANSI sequences for in-place update */
+    /* Single-line mode */
 
-    if (input->show_dividers) {
-      /* Cast away const to update initialization flag */
-      TuiTextInput *mutable_input = (TuiTextInput *)input;
+    if (input->terminal_row > 0) {
+      /* Absolute positioning mode */
+      int input_row = input->terminal_row;
 
-      if (!input->dividers_initialized) {
-        /* First render: set up the 3-line area */
-        /* We're on the input line, print top divider above */
-        dynamic_buffer_append_str(out, "\r");
+      if (input->show_dividers) {
+        /* Top divider (row - 1) */
+        int top_row = input_row - 1;
+        if (top_row >= 1) {
+          snprintf(pos_buf, sizeof(pos_buf), CSI "%d;1H", top_row);
+          dynamic_buffer_append_str(out, pos_buf);
+          dynamic_buffer_append_str(out, EL_TO_END);
+          render_divider_inline(out, term_width);
+        }
+      }
+
+      /* Input line */
+      snprintf(pos_buf, sizeof(pos_buf), CSI "%d;1H", input_row);
+      dynamic_buffer_append_str(out, pos_buf);
+      dynamic_buffer_append_str(out, EL_TO_END);
+
+      /* Output prompt if set and shown */
+      if (input->show_prompt && input->prompt && input->prompt_len > 0) {
+        dynamic_buffer_append_str(out, input->prompt);
+      }
+
+      /* Output text content */
+      if (input->text_len > 0) {
+        dynamic_buffer_append(out, input->text, input->text_len);
+      }
+
+      if (input->show_dividers) {
+        /* Bottom divider (row + 1) */
+        int bottom_row = input_row + 1;
+        snprintf(pos_buf, sizeof(pos_buf), CSI "%d;1H", bottom_row);
+        dynamic_buffer_append_str(out, pos_buf);
         dynamic_buffer_append_str(out, EL_TO_END);
         render_divider_inline(out, term_width);
-        dynamic_buffer_append_str(out, "\r\n"); /* Move to input line */
-        dynamic_buffer_append_str(out, EL_TO_END);
-        mutable_input->dividers_initialized = 1;
-      } else {
-        /* Subsequent renders: move up to top divider and redraw */
-        dynamic_buffer_append_str(out, CSI "A");   /* Move up 1 */
-        dynamic_buffer_append_str(out, "\r");
-        dynamic_buffer_append_str(out, EL_TO_END);
-        render_divider_inline(out, term_width);
-        dynamic_buffer_append_str(out, "\r\n"); /* Move to input line */
-        dynamic_buffer_append_str(out, EL_TO_END);
+      }
+
+      /* Position cursor on input line */
+      if (input->focused) {
+        int prompt_width =
+            (input->show_prompt && input->prompt) ? input->prompt_len : 0;
+        int cursor_visual_col = prompt_width + (int)input->cursor_col + 1; /* 1-indexed */
+
+        snprintf(pos_buf, sizeof(pos_buf), CSI "%d;%dH", input_row, cursor_visual_col);
+        dynamic_buffer_append_str(out, pos_buf);
       }
     } else {
-      /* No dividers - just clear current line */
+      /* Legacy relative positioning mode (terminal_row not set) */
+
+      /* Just clear and render on current line */
       dynamic_buffer_append_str(out, "\r");
       dynamic_buffer_append_str(out, EL_TO_END);
-    }
 
-    /* Output prompt if set and shown */
-    if (input->show_prompt && input->prompt && input->prompt_len > 0) {
-      dynamic_buffer_append_str(out, input->prompt);
-    }
+      /* Output prompt if set and shown */
+      if (input->show_prompt && input->prompt && input->prompt_len > 0) {
+        dynamic_buffer_append_str(out, input->prompt);
+      }
 
-    /* Output text content */
-    if (input->text_len > 0) {
-      dynamic_buffer_append(out, input->text, input->text_len);
-    }
+      /* Output text content */
+      if (input->text_len > 0) {
+        dynamic_buffer_append(out, input->text, input->text_len);
+      }
 
-    if (input->show_dividers) {
-      /* Draw bottom divider, then move back up */
-      dynamic_buffer_append_str(out, "\r\n");    /* Next line */
-      dynamic_buffer_append_str(out, EL_TO_END); /* Clear line */
-      render_divider_inline(out, term_width);
-      dynamic_buffer_append_str(out, CSI "A");   /* Move up 1 */
-    }
+      /* Position cursor */
+      if (input->focused) {
+        int prompt_width =
+            (input->show_prompt && input->prompt) ? input->prompt_len : 0;
+        int cursor_visual_col = prompt_width + (int)input->cursor_col;
 
-    /* Position cursor on input line */
-    if (input->focused) {
-      int prompt_width =
-          (input->show_prompt && input->prompt) ? input->prompt_len : 0;
-      int cursor_visual_col = prompt_width + (int)input->cursor_col;
-
-      /* Move cursor to correct position */
-      dynamic_buffer_append_str(out, "\r");
-      if (cursor_visual_col > 0) {
-        char move_buf[16];
-        snprintf(move_buf, sizeof(move_buf), CSI "%dC", cursor_visual_col);
-        dynamic_buffer_append_str(out, move_buf);
+        dynamic_buffer_append_str(out, "\r");
+        if (cursor_visual_col > 0) {
+          snprintf(pos_buf, sizeof(pos_buf), CSI "%dC", cursor_visual_col);
+          dynamic_buffer_append_str(out, pos_buf);
+        }
       }
     }
   } else {
@@ -854,9 +872,6 @@ void tui_textinput_set_prompt(TuiTextInput *input, const char *prompt) {
 /* Set whether to show dividers above/below the input */
 void tui_textinput_set_show_dividers(TuiTextInput *input, int show) {
   if (input) {
-    if (input->show_dividers != show) {
-      input->dividers_initialized = 0; /* Reset when toggling */
-    }
     input->show_dividers = show;
   }
 }
@@ -867,15 +882,17 @@ void tui_textinput_set_terminal_width(TuiTextInput *input, int width) {
     input->terminal_width = width;
 }
 
-/* Reset divider state (call after external output disrupts the display) */
-void tui_textinput_reset_dividers(TuiTextInput *input) {
+/* Set terminal row for absolute positioning */
+void tui_textinput_set_terminal_row(TuiTextInput *input, int row) {
   if (input)
-    input->dividers_initialized = 0;
+    input->terminal_row = row;
 }
 
 /* Component interface wrappers */
-static TuiModel *textinput_init(void *config) {
-  return (TuiModel *)tui_textinput_create((const TuiTextInputConfig *)config);
+static TuiInitResult textinput_init(void *config) {
+  TuiModel *model =
+      (TuiModel *)tui_textinput_create((const TuiTextInputConfig *)config);
+  return tui_init_result_none(model);
 }
 
 static TuiUpdateResult textinput_update(TuiModel *model, TuiMsg msg) {

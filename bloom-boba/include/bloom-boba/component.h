@@ -27,10 +27,16 @@ typedef struct {
   TuiCmd *cmd; /* Command to execute (NULL for no command) */
 } TuiUpdateResult;
 
+/* Init result - returned by init function (Elm Architecture: init returns (Model, Cmd)) */
+typedef struct {
+  TuiModel *model; /* Initialized model (NULL on failure) */
+  TuiCmd *cmd;     /* Initial command to execute (NULL for no command) */
+} TuiInitResult;
+
 /* Component interface - virtual function table */
 typedef struct TuiComponent {
-  /* Initialize and return new model instance */
-  TuiModel *(*init)(void *config);
+  /* Initialize and return model + optional initial command */
+  TuiInitResult (*init)(void *config);
 
   /* Update model with message, return optional command */
   TuiUpdateResult (*update)(TuiModel *model, TuiMsg msg);
@@ -54,6 +60,18 @@ static inline TuiUpdateResult tui_update_result_none(void) {
 /* Helper to create an update result with a command */
 static inline TuiUpdateResult tui_update_result(TuiCmd *cmd) {
   TuiUpdateResult result = {.cmd = cmd};
+  return result;
+}
+
+/* Helper to create an init result with model and command */
+static inline TuiInitResult tui_init_result(TuiModel *model, TuiCmd *cmd) {
+  TuiInitResult result = {.model = model, .cmd = cmd};
+  return result;
+}
+
+/* Helper to create an init result with no initial command */
+static inline TuiInitResult tui_init_result_none(TuiModel *model) {
+  TuiInitResult result = {.model = model, .cmd = NULL};
   return result;
 }
 

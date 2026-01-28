@@ -45,6 +45,21 @@ TuiCmd *tui_cmd_batch(TuiCmd **cmds, int count) {
   return cmd;
 }
 
+/* Convenience function: batch two commands together */
+TuiCmd *tui_cmd_batch2(TuiCmd *cmd1, TuiCmd *cmd2) {
+  /* Handle NULL cases */
+  if (!cmd1 && !cmd2)
+    return NULL;
+  if (!cmd1)
+    return cmd2;
+  if (!cmd2)
+    return cmd1;
+
+  /* Both non-NULL, create batch */
+  TuiCmd *cmds[2] = {cmd1, cmd2};
+  return tui_cmd_batch(cmds, 2);
+}
+
 /* Create a custom command with callback */
 TuiCmd *tui_cmd_custom(TuiCmdCallback callback, void *data,
                        void (*free_data)(void *)) {

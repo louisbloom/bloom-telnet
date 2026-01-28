@@ -55,6 +55,12 @@ TuiCmd *tui_cmd_quit(void);
 /* Create a batch of commands */
 TuiCmd *tui_cmd_batch(TuiCmd **cmds, int count);
 
+/* Convenience function: batch two commands together
+ * Skips NULL commands: if only one is non-NULL, returns that one.
+ * If both NULL, returns NULL.
+ */
+TuiCmd *tui_cmd_batch2(TuiCmd *cmd1, TuiCmd *cmd2);
+
 /* Create a custom command with callback */
 TuiCmd *tui_cmd_custom(TuiCmdCallback callback, void *data,
                        void (*free_data)(void *));
