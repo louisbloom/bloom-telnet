@@ -115,46 +115,49 @@
   ;; Note: Slash commands are handled by higher-priority hooks (e.g., practice.lisp)
   (if (not *tintin-enabled*)
     () ;; TinTin++ disabled, don't handle
-    (progn
-      ;; Note: main.c already echoes the original input, so we don't echo it here
-      (let ((processed (tintin-process-input text))
-            (commands nil))
-        ;; Split processed output by semicolons
-        (set! commands (tintin-split-commands processed))
-        ;; Send each command separately
-        (do ((i 0 (+ i 1))) ((>= i (length commands)))
-          (let ((cmd (list-ref commands i)))
-            (if (and (string? cmd) (not (string=? cmd "")))
-              (progn
-                ;; Echo expanded command to terminal (if different from original)
-                (if
-                  (and (string? cmd) (string? text) (not (string=? cmd text)))
-                  (tintin-echo (concat cmd "\r\n")))
-                ;; Send to telnet server with error handling
-                (condition-case err
-                  (progn
-                    ;; Check if we can send (connected or test mode)
-                    (let ((can-send
-                           (condition-case err2
-                             ;; Try to check connection mode
-                             (or (eq? *connection-mode* 'conn)
-                                 ;; If *connection-mode* undefined (test mode), check if telnet-send exists
-                                 (and (symbol? 'telnet-send) #t))
-                             ;; If *connection-mode* not defined, we're in test mode
-                             (error #t))))
-                      (if can-send
-                        ;; Send the command
-                        (telnet-send cmd)
-                        ;; Not connected
-                        (tintin-echo "\r\n*** Not connected ***\r\n"))))
-                  ;; Catch any send errors
-                  (error
-                   (tintin-echo
-                    (concat "\r\n*** Send failed: " (error-message err)
-                     " ***\r\n")))))))))
-      ;; Mark as handled via hook system
-      (set! *user-input-handled* #t)
-      (set! *user-input-result* nil))))
+    ;; Empty input - don't handle, let C send blank line to server
+    (if (or (not (string? text)) (string=? text ""))
+      ()
+      (progn
+        ;; Note: main.c already echoes the original input, so we don't echo it here
+        (let ((processed (tintin-process-input text))
+              (commands nil))
+          ;; Split processed output by semicolons
+          (set! commands (tintin-split-commands processed))
+          ;; Send each command separately
+          (do ((i 0 (+ i 1))) ((>= i (length commands)))
+            (let ((cmd (list-ref commands i)))
+              (if (and (string? cmd) (not (string=? cmd "")))
+                (progn
+                  ;; Echo expanded command to terminal (if different from original)
+                  (if
+                    (and (string? cmd) (string? text) (not (string=? cmd text)))
+                    (tintin-echo (concat cmd "\r\n")))
+                  ;; Send to telnet server with error handling
+                  (condition-case err
+                    (progn
+                      ;; Check if we can send (connected or test mode)
+                      (let ((can-send
+                             (condition-case err2
+                               ;; Try to check connection mode
+                               (or (eq? *connection-mode* 'conn)
+                                   ;; If *connection-mode* undefined (test mode), check if telnet-send exists
+                                   (and (symbol? 'telnet-send) #t))
+                               ;; If *connection-mode* not defined, we're in test mode
+                               (error #t))))
+                        (if can-send
+                          ;; Send the command
+                          (telnet-send cmd)
+                          ;; Not connected
+                          (tintin-echo "\r\n*** Not connected ***\r\n"))))
+                    ;; Catch any send errors
+                    (error
+                     (tintin-echo
+                      (concat "\r\n*** Send failed: " (error-message err)
+                       " ***\r\n")))))))))
+        ;; Mark as handled via hook system
+        (set! *user-input-handled* #t)
+        (set! *user-input-result* nil)))))
 
 ;; ============================================================================
 ;; TOGGLE FUNCTIONS
