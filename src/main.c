@@ -318,6 +318,13 @@ static void process_line(const char *line, const char **prompt) {
   *prompt = lisp_x_get_prompt();
   tui_textinput_set_prompt(g_textinput, *prompt);
   tui_textinput_set_show_prompt(g_textinput, g_connected ? 0 : 1);
+
+  /* Dividers only in local mode (not connected) - server output would disrupt
+   * them */
+  tui_textinput_set_show_dividers(g_textinput, g_connected ? 0 : 1);
+
+  /* Reset divider state since we've output text that disrupted the display */
+  tui_textinput_reset_dividers(g_textinput);
 }
 
 /* Render the text input */
@@ -392,7 +399,9 @@ static int handle_telnet_data(char *recv_buffer, size_t buffer_size,
   if (received < 0) {
     g_connected = 0;
     tui_textinput_set_show_prompt(g_textinput, 1);
-    printf("\r\n*** Connection lost ***\r\n%s", *prompt);
+    tui_textinput_set_show_dividers(g_textinput, 1);
+    tui_textinput_reset_dividers(g_textinput);
+    printf("\r\n*** Connection lost ***\r\n");
     fflush(stdout);
     return -1;
   }
@@ -557,8 +566,9 @@ int main(int argc, char *argv[]) {
   /* Configure text input */
   tui_textinput_set_history_size(g_textinput, lisp_x_get_input_history_size());
   tui_textinput_set_completer(g_textinput, lisp_x_complete, NULL);
-  tui_textinput_set_show_dividers(g_textinput, 1);
   tui_textinput_set_terminal_width(g_textinput, g_term_cols);
+  /* Dividers only shown when not connected (local mode) */
+  tui_textinput_set_show_dividers(g_textinput, 1);
 
   /* Load init-post.lisp */
   lisp_x_load_init_post();
@@ -575,6 +585,7 @@ int main(int argc, char *argv[]) {
       g_connected = 1;
       telnet_set_terminal_size(g_telnet, g_term_cols, g_term_rows);
       tui_textinput_set_show_prompt(g_textinput, 0);
+      tui_textinput_set_show_dividers(g_textinput, 0);
       printf("Connected.\n");
     }
   }

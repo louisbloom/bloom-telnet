@@ -45,8 +45,9 @@ typedef struct TuiTextInput {
   int focused;         /* Whether component has focus */
   int multiline;       /* Allow multiple lines (Enter inserts newline) */
   int show_prompt;     /* Whether to display the prompt (default: 1) */
-  int show_dividers;   /* Whether to show dividers above/below (default: 0) */
-  int terminal_width;  /* Terminal width for divider rendering (0 = 80) */
+  int show_dividers;       /* Whether to show dividers above/below (default: 0) */
+  int terminal_width;      /* Terminal width for divider rendering (0 = 80) */
+  int dividers_initialized; /* Whether divider lines have been set up */
 
   /* History management */
   char **history;      /* Array of past input lines */
@@ -150,6 +151,9 @@ void tui_textinput_set_show_dividers(TuiTextInput *input, int show);
 
 /* Set terminal width for divider rendering */
 void tui_textinput_set_terminal_width(TuiTextInput *input, int width);
+
+/* Reset divider state (call after external output disrupts the display) */
+void tui_textinput_reset_dividers(TuiTextInput *input);
 
 /* Get component interface for text input */
 const TuiComponent *tui_textinput_component(void);

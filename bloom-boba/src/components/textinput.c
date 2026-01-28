@@ -557,18 +557,15 @@ TuiUpdateResult tui_textinput_update(TuiTextInput *input, TuiMsg msg) {
   return tui_update_result_none();
 }
 
-/* Render a horizontal divider line */
-static void render_divider(DynamicBuffer *out, int width) {
+/* Render a horizontal divider line in place (no newline) */
+static void render_divider_inline(DynamicBuffer *out, int width) {
   /* Use Unicode box-drawing character ─ (U+2500) */
   const char *line_char = "\xe2\x94\x80"; /* UTF-8 encoding of ─ */
-  dynamic_buffer_append_str(out, "\r");
-  dynamic_buffer_append_str(out, EL_TO_END);
   dynamic_buffer_append_str(out, SGR_DIM); /* Dim color for divider */
   for (int i = 0; i < width; i++) {
     dynamic_buffer_append_str(out, line_char);
   }
   dynamic_buffer_append_str(out, SGR_RESET);
-  dynamic_buffer_append_str(out, "\r\n");
 }
 
 /* Render text input to output buffer
@@ -579,6 +576,12 @@ static void render_divider(DynamicBuffer *out, int width) {
  * - Print prompt (if show_prompt is set)
  * - Print text content
  * - Position cursor at correct location
+ *
+ * When dividers are enabled, uses a 3-line layout:
+ * - Line 0: top divider
+ * - Line 1: input line
+ * - Line 2: bottom divider
+ * Cursor is positioned on line 1 (input line) at start of render.
  */
 void tui_textinput_view(const TuiTextInput *input, DynamicBuffer *out) {
   if (!input || !out)
@@ -589,15 +592,33 @@ void tui_textinput_view(const TuiTextInput *input, DynamicBuffer *out) {
   if (!input->multiline) {
     /* Single-line mode: use ANSI sequences for in-place update */
 
-    /* Render top divider if enabled */
     if (input->show_dividers) {
-      render_divider(out, term_width);
-    }
+      /* Cast away const to update initialization flag */
+      TuiTextInput *mutable_input = (TuiTextInput *)input;
 
-    /* Move to start of line */
-    dynamic_buffer_append_str(out, "\r");
-    /* Clear to end of line */
-    dynamic_buffer_append_str(out, EL_TO_END);
+      if (!input->dividers_initialized) {
+        /* First render: set up the 3-line area */
+        /* We're on the input line, print top divider above */
+        dynamic_buffer_append_str(out, "\r");
+        dynamic_buffer_append_str(out, EL_TO_END);
+        render_divider_inline(out, term_width);
+        dynamic_buffer_append_str(out, "\r\n"); /* Move to input line */
+        dynamic_buffer_append_str(out, EL_TO_END);
+        mutable_input->dividers_initialized = 1;
+      } else {
+        /* Subsequent renders: move up to top divider and redraw */
+        dynamic_buffer_append_str(out, CSI "A");   /* Move up 1 */
+        dynamic_buffer_append_str(out, "\r");
+        dynamic_buffer_append_str(out, EL_TO_END);
+        render_divider_inline(out, term_width);
+        dynamic_buffer_append_str(out, "\r\n"); /* Move to input line */
+        dynamic_buffer_append_str(out, EL_TO_END);
+      }
+    } else {
+      /* No dividers - just clear current line */
+      dynamic_buffer_append_str(out, "\r");
+      dynamic_buffer_append_str(out, EL_TO_END);
+    }
 
     /* Output prompt if set and shown */
     if (input->show_prompt && input->prompt && input->prompt_len > 0) {
@@ -609,22 +630,21 @@ void tui_textinput_view(const TuiTextInput *input, DynamicBuffer *out) {
       dynamic_buffer_append(out, input->text, input->text_len);
     }
 
-    /* Render bottom divider if enabled */
     if (input->show_dividers) {
-      dynamic_buffer_append_str(out, "\r\n");
-      render_divider(out, term_width);
-      /* Move cursor back up to input line (up 2 lines) */
-      dynamic_buffer_append_str(out, CSI "2A");
+      /* Draw bottom divider, then move back up */
+      dynamic_buffer_append_str(out, "\r\n");    /* Next line */
+      dynamic_buffer_append_str(out, EL_TO_END); /* Clear line */
+      render_divider_inline(out, term_width);
+      dynamic_buffer_append_str(out, CSI "A");   /* Move up 1 */
     }
 
-    /* Position cursor */
+    /* Position cursor on input line */
     if (input->focused) {
       int prompt_width =
           (input->show_prompt && input->prompt) ? input->prompt_len : 0;
       int cursor_visual_col = prompt_width + (int)input->cursor_col;
 
       /* Move cursor to correct position */
-      /* Use \r then move forward to avoid issues with line wrapping */
       dynamic_buffer_append_str(out, "\r");
       if (cursor_visual_col > 0) {
         char move_buf[16];
@@ -833,14 +853,24 @@ void tui_textinput_set_prompt(TuiTextInput *input, const char *prompt) {
 
 /* Set whether to show dividers above/below the input */
 void tui_textinput_set_show_dividers(TuiTextInput *input, int show) {
-  if (input)
+  if (input) {
+    if (input->show_dividers != show) {
+      input->dividers_initialized = 0; /* Reset when toggling */
+    }
     input->show_dividers = show;
+  }
 }
 
 /* Set terminal width for divider rendering */
 void tui_textinput_set_terminal_width(TuiTextInput *input, int width) {
   if (input)
     input->terminal_width = width;
+}
+
+/* Reset divider state (call after external output disrupts the display) */
+void tui_textinput_reset_dividers(TuiTextInput *input) {
+  if (input)
+    input->dividers_initialized = 0;
 }
 
 /* Component interface wrappers */
