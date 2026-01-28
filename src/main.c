@@ -44,6 +44,13 @@ static struct termios g_orig_termios;
 static int g_raw_mode = 0;
 #endif
 
+/* Event readiness structure for unified event handling */
+typedef struct {
+  int stdin_ready;
+  int socket_ready;
+  int error;
+} EventReadiness;
+
 /* Forward declarations */
 static void cleanup(void);
 static void handle_sigint(int sig);
@@ -53,6 +60,10 @@ static void disable_raw_mode(void);
 static void update_terminal_size(void);
 static void print_usage(const char *progname);
 static void print_version(void);
+static EventReadiness wait_for_events(int socket_fd);
+static int handle_user_input(const char **prompt);
+static int handle_telnet_data(char *recv_buffer, size_t buffer_size,
+                              const char **prompt);
 
 /* Signal handler for SIGINT (Ctrl+C) */
 static void handle_sigint(int sig) {
@@ -187,6 +198,151 @@ static void print_version(void) {
   printf("bloom-telnet %s\n", BLOOM_TELNET_VERSION);
 }
 
+/* Wait for events on stdin and/or socket */
+static EventReadiness wait_for_events(int socket_fd) {
+  EventReadiness events = {0, 0, 0};
+
+#ifdef _WIN32
+  /* Windows: Use _kbhit() for stdin, select() for socket */
+  if (_kbhit()) {
+    events.stdin_ready = 1;
+  }
+
+  if (socket_fd >= 0) {
+    fd_set read_fds;
+    struct timeval tv = {0, 0}; /* Zero timeout for non-blocking check */
+
+    FD_ZERO(&read_fds);
+    FD_SET((SOCKET)socket_fd, &read_fds);
+
+    int ready = select(0, &read_fds, NULL, NULL, &tv);
+    if (ready > 0 && FD_ISSET((SOCKET)socket_fd, &read_fds)) {
+      events.socket_ready = 1;
+    }
+  }
+
+  /* If nothing ready, sleep briefly to prevent busy-waiting */
+  if (!events.stdin_ready && !events.socket_ready) {
+    Sleep(10);
+  }
+#else
+  /* Unix: Use select() for both stdin and socket */
+  fd_set read_fds;
+  struct timeval tv;
+  int max_fd = STDIN_FILENO;
+
+  FD_ZERO(&read_fds);
+  FD_SET(STDIN_FILENO, &read_fds);
+
+  if (socket_fd >= 0) {
+    FD_SET(socket_fd, &read_fds);
+    if (socket_fd > max_fd) {
+      max_fd = socket_fd;
+    }
+  }
+
+  /* Timer tick every 100ms */
+  tv.tv_sec = 0;
+  tv.tv_usec = 100000;
+
+  int ready = select(max_fd + 1, &read_fds, NULL, NULL, &tv);
+
+  if (ready < 0) {
+    if (errno == EINTR) {
+      /* Interrupted by signal, not an error */
+      return events;
+    }
+    perror("select");
+    events.error = 1;
+    return events;
+  }
+
+  if (FD_ISSET(STDIN_FILENO, &read_fds)) {
+    events.stdin_ready = 1;
+  }
+
+  if (socket_fd >= 0 && FD_ISSET(socket_fd, &read_fds)) {
+    events.socket_ready = 1;
+  }
+#endif
+
+  return events;
+}
+
+/* Handle user input from stdin. Returns 0 on success, -1 on EOF/quit */
+static int handle_user_input(const char **prompt) {
+  char *line = lineedit_readline(g_lineedit, *prompt);
+
+  if (line == NULL) {
+    /* EOF (Ctrl+D) or error */
+    g_quit_requested = 1;
+#ifndef _WIN32
+    printf("\r\n");
+#endif
+    return -1;
+  }
+
+  if (line[0] != '\0') {
+    lineedit_history_add(g_lineedit, line);
+
+    /* Check for command */
+    if (line[0] == ':') {
+      process_command(line, g_telnet, &g_connected, &g_quit_requested,
+                      g_term_cols, g_term_rows);
+    } else if (g_connected) {
+      /* Process through user input hook */
+      const char *processed = lisp_x_call_user_input_hook(line, strlen(line));
+      if (processed && processed[0] != '\0') {
+        telnet_send_with_crlf(g_telnet, processed, strlen(processed));
+      }
+    } else {
+      printf("Not connected. Use :connect <host> <port>\r\n");
+    }
+  }
+
+  free(line);
+
+  /* Update prompt and visibility */
+  *prompt = lisp_x_get_prompt();
+  lineedit_set_show_prompt(g_lineedit, g_connected ? 0 : 1);
+  if (!g_connected) {
+    printf("%s", *prompt);
+    fflush(stdout);
+  }
+
+  return 0;
+}
+
+/* Handle incoming telnet data. Returns 0 on success, -1 on disconnect */
+static int handle_telnet_data(char *recv_buffer, size_t buffer_size,
+                              const char **prompt) {
+  int received = telnet_receive(g_telnet, recv_buffer, buffer_size - 1);
+
+  if (received < 0) {
+    g_connected = 0;
+    lineedit_set_show_prompt(g_lineedit, 1);
+    printf("\r\n*** Connection lost ***\r\n%s", *prompt);
+    fflush(stdout);
+    return -1;
+  }
+
+  if (received > 0) {
+    recv_buffer[received] = '\0';
+
+    /* Call input hooks */
+    lisp_x_call_telnet_input_hook(recv_buffer, received);
+    size_t filtered_len;
+    const char *filtered = lisp_x_call_telnet_input_filter_hook(
+        recv_buffer, received, &filtered_len);
+
+    /* Output to terminal */
+    fwrite(filtered, 1, filtered_len, stdout);
+    fflush(stdout);
+  }
+
+  return 0;
+}
+
 /* Main event loop */
 static int run_event_loop(void) {
   char recv_buffer[4096];
@@ -199,175 +355,24 @@ static int run_event_loop(void) {
   }
 
   while (!g_quit_requested) {
-#ifdef _WIN32
-    /* Windows: Simple polling approach */
-    if (_kbhit()) {
-      /* Read input line using lineedit */
-      char *line = lineedit_readline(g_lineedit, prompt);
-      if (line == NULL) {
-        /* EOF or error */
-        g_quit_requested = 1;
-        break;
-      }
+    int socket_fd = g_connected ? telnet_get_socket(g_telnet) : -1;
+    EventReadiness events = wait_for_events(socket_fd);
 
-      if (line[0] != '\0') {
-        lineedit_history_add(g_lineedit, line);
-
-        /* Check for command */
-        if (line[0] == ':') {
-          process_command(line, g_telnet, &g_connected, &g_quit_requested,
-                          g_term_cols, g_term_rows);
-        } else if (g_connected) {
-          /* Process through user input hook */
-          const char *processed =
-              lisp_x_call_user_input_hook(line, strlen(line));
-          if (processed && processed[0] != '\0') {
-            telnet_send_with_crlf(g_telnet, processed, strlen(processed));
-          }
-        } else {
-          printf("Not connected. Use :connect <host> <port>\r\n");
-        }
-      }
-
-      free(line);
-      prompt = lisp_x_get_prompt();
-      /* Update prompt visibility based on connection state */
-      lineedit_set_show_prompt(g_lineedit, g_connected ? 0 : 1);
-      if (!g_connected) {
-        printf("%s", prompt);
-        fflush(stdout);
-      }
-    }
-
-    /* Check telnet socket */
-    if (g_connected) {
-      int received =
-          telnet_receive(g_telnet, recv_buffer, sizeof(recv_buffer) - 1);
-      if (received < 0) {
-        g_connected = 0;
-        lineedit_set_show_prompt(g_lineedit, 1);
-        printf("\r\n*** Connection lost ***\r\n%s", prompt);
-        fflush(stdout);
-      } else if (received > 0) {
-        recv_buffer[received] = '\0';
-
-        /* Call input hooks */
-        lisp_x_call_telnet_input_hook(recv_buffer, received);
-        size_t filtered_len;
-        const char *filtered = lisp_x_call_telnet_input_filter_hook(
-            recv_buffer, received, &filtered_len);
-
-        /* Output to terminal */
-        fwrite(filtered, 1, filtered_len, stdout);
-        fflush(stdout);
-      }
-    }
-
-    /* Run timers */
-    lisp_x_run_timers();
-
-    Sleep(10); /* Small delay to prevent busy-waiting */
-#else
-    /* Unix: Use select() for multiplexing */
-    fd_set read_fds;
-    struct timeval tv;
-    int max_fd = STDIN_FILENO;
-
-    FD_ZERO(&read_fds);
-    FD_SET(STDIN_FILENO, &read_fds);
-
-    if (g_connected) {
-      int sock = telnet_get_socket(g_telnet);
-      if (sock >= 0) {
-        FD_SET(sock, &read_fds);
-        if (sock > max_fd)
-          max_fd = sock;
-      }
-    }
-
-    /* Timer tick every 100ms */
-    tv.tv_sec = 0;
-    tv.tv_usec = 100000;
-
-    int ready = select(max_fd + 1, &read_fds, NULL, NULL, &tv);
-
-    if (ready < 0) {
-      if (errno == EINTR)
-        continue;
-      perror("select");
+    if (events.error) {
       break;
     }
 
-    /* Handle stdin input */
-    if (FD_ISSET(STDIN_FILENO, &read_fds)) {
-      char *line = lineedit_readline(g_lineedit, prompt);
-
-      if (line == NULL) {
-        /* EOF (Ctrl+D) */
-        g_quit_requested = 1;
-        printf("\r\n");
+    if (events.stdin_ready) {
+      if (handle_user_input(&prompt) < 0) {
         break;
       }
-
-      if (line[0] != '\0') {
-        lineedit_history_add(g_lineedit, line);
-
-        /* Check for command */
-        if (line[0] == ':') {
-          process_command(line, g_telnet, &g_connected, &g_quit_requested,
-                          g_term_cols, g_term_rows);
-        } else if (g_connected) {
-          /* Process through user input hook */
-          const char *processed =
-              lisp_x_call_user_input_hook(line, strlen(line));
-          if (processed && processed[0] != '\0') {
-            telnet_send_with_crlf(g_telnet, processed, strlen(processed));
-          }
-        } else {
-          printf("Not connected. Use :connect <host> <port>\r\n");
-        }
-      }
-
-      free(line);
-      prompt = lisp_x_get_prompt();
-      /* Update prompt visibility based on connection state */
-      lineedit_set_show_prompt(g_lineedit, g_connected ? 0 : 1);
-      if (!g_connected) {
-        printf("%s", prompt);
-        fflush(stdout);
-      }
     }
 
-    /* Handle telnet socket */
-    if (g_connected) {
-      int sock = telnet_get_socket(g_telnet);
-      if (sock >= 0 && FD_ISSET(sock, &read_fds)) {
-        int received =
-            telnet_receive(g_telnet, recv_buffer, sizeof(recv_buffer) - 1);
-        if (received < 0) {
-          g_connected = 0;
-          lineedit_set_show_prompt(g_lineedit, 1);
-          printf("\r\n*** Connection lost ***\r\n%s", prompt);
-          fflush(stdout);
-        } else if (received > 0) {
-          recv_buffer[received] = '\0';
-
-          /* Call input hooks */
-          lisp_x_call_telnet_input_hook(recv_buffer, received);
-          size_t filtered_len;
-          const char *filtered = lisp_x_call_telnet_input_filter_hook(
-              recv_buffer, received, &filtered_len);
-
-          /* Output to terminal */
-          fwrite(filtered, 1, filtered_len, stdout);
-          fflush(stdout);
-        }
-      }
+    if (g_connected && events.socket_ready) {
+      handle_telnet_data(recv_buffer, sizeof(recv_buffer), &prompt);
     }
 
-    /* Run timers */
     lisp_x_run_timers();
-#endif
   }
 
   return 0;
@@ -496,7 +501,7 @@ int main(int argc, char *argv[]) {
 
   /* Cleanup handled by atexit */
   free(load_files);
-  printf("\nGoodbye.\n");
+  printf("\r\nGoodbye.\r\n");
 
   return result;
 }
