@@ -637,7 +637,7 @@ const char *lisp_x_call_user_input_hook(const char *text, int cursor_pos) {
   }
 
   if (result->type != LISP_STRING) {
-    return "";
+    return NULL;
   }
 
   const char *transformed = result->value.string;

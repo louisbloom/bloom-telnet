@@ -2772,8 +2772,7 @@ Maps attribute names to their ANSI SGR codes.")
                   (do ((i 0 (+ i 1))) ((>= i (length cmd-list)))
                     (let ((cmd (list-ref cmd-list i)))
                       (if (and (string? cmd) (not (string=? cmd "")))
-                        (condition-case send-err
-                          (telnet-send (concat cmd "\r\n"))
+                        (condition-case send-err (telnet-send cmd)
                           (error
                            (tintin-echo
                             (concat "Action send failed: "
@@ -3130,7 +3129,7 @@ Maps attribute names to their ANSI SGR codes.")
                              (error #t))))
                       (if can-send
                         ;; Send the command
-                        (telnet-send (concat cmd "\r\n"))
+                        (telnet-send cmd)
                         ;; Not connected
                         (tintin-echo "\r\n*** Not connected ***\r\n"))))
                   ;; Catch any send errors
