@@ -311,12 +311,6 @@ static void process_line(const char *line, const char **prompt) {
     echo_to_viewport("\n", 1);
     process_command(line, g_telnet, &g_connected, &g_quit_requested,
                     g_term_cols, g_term_rows);
-    /* Update prompt visibility on connect/disconnect */
-    if (g_connected && !was_connected) {
-      telnet_app_set_show_prompt(g_app, 0);
-    } else if (!g_connected && was_connected) {
-      telnet_app_set_show_prompt(g_app, 1);
-    }
   } else if (g_connected) {
     /* Echo user input to viewport */
     echo_to_viewport(line, strlen(line));
@@ -433,7 +427,6 @@ static int handle_telnet_data(char *recv_buffer, size_t buffer_size,
 
   if (received < 0) {
     g_connected = 0;
-    telnet_app_set_show_prompt(g_app, 1);
     echo_to_viewport("\n*** Connection lost ***\n", 25);
     return -1;
   }
@@ -461,10 +454,6 @@ static int handle_telnet_data(char *recv_buffer, size_t buffer_size,
 static int run_event_loop(void) {
   char recv_buffer[4096];
   const char *prompt = lisp_x_get_prompt();
-
-  /* Configure textinput with current state */
-  telnet_app_set_prompt(g_app, prompt);
-  telnet_app_set_show_prompt(g_app, g_connected ? 0 : 1);
 
   /* Clear screen and render initial state */
   printf(CSI "2J" CSI "H"); /* Clear screen and home cursor */
@@ -593,6 +582,7 @@ int main(int argc, char *argv[]) {
       .terminal_width = g_term_cols,
       .terminal_height = g_term_rows,
       .prompt = lisp_x_get_prompt(),
+      .show_prompt = 1,
       .history_size = lisp_x_get_input_history_size(),
       .completer = lisp_x_complete,
       .completer_data = NULL,
@@ -630,7 +620,6 @@ int main(int argc, char *argv[]) {
     } else {
       g_connected = 1;
       telnet_set_terminal_size(g_telnet, g_term_cols, g_term_rows);
-      telnet_app_set_show_prompt(g_app, 0);
       telnet_app_echo(g_app, "Connected.\n", 11);
     }
   }

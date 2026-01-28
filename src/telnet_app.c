@@ -67,6 +67,7 @@ TelnetAppModel *telnet_app_create(const TelnetAppConfig *config) {
     if (config->prompt) {
       tui_textinput_set_prompt(app->textinput, config->prompt);
     }
+    tui_textinput_set_show_prompt(app->textinput, config->show_prompt);
     if (config->history_size > 0) {
       tui_textinput_set_history_size(app->textinput, config->history_size);
     }
@@ -173,13 +174,6 @@ TuiTextInput *telnet_app_get_textinput(TelnetAppModel *app) {
 /* Get the viewport component */
 TuiViewport *telnet_app_get_viewport(TelnetAppModel *app) {
   return app ? app->viewport : NULL;
-}
-
-/* Set whether textinput shows prompt */
-void telnet_app_set_show_prompt(TelnetAppModel *app, int show) {
-  if (app && app->textinput) {
-    tui_textinput_set_show_prompt(app->textinput, show);
-  }
 }
 
 /* Set the prompt string */

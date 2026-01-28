@@ -52,7 +52,7 @@
 (defvar *input-history-size* 100
   "Maximum number of input history entries to keep.")
 
-(defvar *prompt* "> " "Input prompt string.")
+(defvar *prompt* "❯ " "Input prompt string.")
 
 ;; ============================================================================
 ;; WORD STORE HELPER FUNCTIONS

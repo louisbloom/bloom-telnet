@@ -22,6 +22,7 @@ typedef struct {
   int terminal_width;
   int terminal_height;
   const char *prompt;              /* Initial prompt string */
+  int show_prompt;                 /* Show prompt (default: 1) */
   int history_size;                /* Input history size */
   TuiCompletionCallback completer; /* Tab completion callback */
   void *completer_data;            /* Data for completer */
@@ -77,9 +78,6 @@ TuiTextInput *telnet_app_get_textinput(TelnetAppModel *app);
 
 /* Get the viewport component (for direct access) */
 TuiViewport *telnet_app_get_viewport(TelnetAppModel *app);
-
-/* Set whether textinput shows prompt */
-void telnet_app_set_show_prompt(TelnetAppModel *app, int show);
 
 /* Set the prompt string */
 void telnet_app_set_prompt(TelnetAppModel *app, const char *prompt);
