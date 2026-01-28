@@ -561,6 +561,8 @@ TuiUpdateResult tui_textinput_update(TuiTextInput *input, TuiMsg msg) {
 static void render_divider_inline(DynamicBuffer *out, int width) {
   /* Use Unicode box-drawing character ─ (U+2500) */
   const char *line_char = "\xe2\x94\x80"; /* UTF-8 encoding of ─ */
+  /* Reset any inherited color state before applying dim */
+  dynamic_buffer_append_str(out, SGR_RESET);
   dynamic_buffer_append_str(out, SGR_DIM); /* Dim color for divider */
   for (int i = 0; i < width; i++) {
     dynamic_buffer_append_str(out, line_char);

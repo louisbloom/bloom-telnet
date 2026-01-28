@@ -400,12 +400,6 @@ static int handle_user_input(const char **prompt) {
           process_line(line, prompt);
           tui_cmd_free(result.cmd);
           render_full_screen();
-        } else if (result.cmd->type == TUI_CMD_QUIT) {
-          /* EOF (Ctrl+D on empty line) */
-          g_quit_requested = 1;
-          tui_cmd_free(result.cmd);
-          echo_to_viewport("\n", 1);
-          return -1;
         } else {
           tui_cmd_free(result.cmd);
         }

@@ -373,6 +373,11 @@ def main():
         "help", lambda args, conn: server.get_help_text(), "Show available commands"
     )
     server.add_command("quit", handle_quit, "Disconnect from server")
+    server.add_command(
+        "orange",
+        lambda args, conn: "\033[38;2;255;165;0mThis text is orange!\033[0m\r\n",
+        "Display text in orange color",
+    )
 
     server.run()
 

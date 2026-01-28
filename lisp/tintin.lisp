@@ -1210,10 +1210,15 @@ Maps attribute names to their ANSI SGR codes.")
                     (if (< match-pos 0)
                       line
                       (let ((match-end-pos (+ match-pos (length matched-text))))
-                        ;; Always use just reset - let post-processor handle restoration
-                        (let ((ansi-close "\033[0m"))
-                          (string-replace line matched-text
-                           (concat ansi-open matched-text ansi-close))))))
+                        ;; Restore previous color directly (or reset if none)
+                        (let ((prev-color
+                               (tintin-find-active-ansi-before line match-pos)))
+                          (let ((ansi-close
+                                 (if (string=? prev-color "")
+                                   "\033[0m"
+                                   (concat "\033[0m" prev-color))))
+                            (string-replace line matched-text
+                             (concat ansi-open matched-text ansi-close)))))))
                   line)))))))))
 
 ;; Apply highlights to a single line
@@ -5234,10 +5239,8 @@ Maps attribute names to their ANSI SGR codes.")
 (defun tintin-is-sgr-code (seq) (regex-match? "^\033\\[[0-9;]*m$" seq))
 
 ;; Post-process text to handle nested ANSI states
-;; When a reset code is encountered, if there are remaining states on the stack,
-;; restore the top state after the reset instead of leaving text uncolored.
-(defun tintin-post-process-ansi-stack (text)
-  (tintin-ansi-stack-loop text 0 (length text) "" '()))
+;; Color restoration is now handled directly in tintin-wrap-match
+(defun tintin-post-process-ansi-stack (text) text)
 
 ;; Recursive helper for ANSI stack processing
 (defun tintin-ansi-stack-loop (text pos len result stack)
