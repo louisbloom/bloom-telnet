@@ -284,6 +284,9 @@ int tui_input_parser_feed(TuiInputParser *parser, unsigned char byte,
       case 0x08: /* BS (Ctrl+H) */
         *msg = tui_msg_key(TUI_KEY_BACKSPACE, 0, TUI_MOD_NONE);
         return 1;
+      case 0x1F: /* Ctrl+_ */
+        *msg = tui_msg_key(TUI_KEY_NONE, '_', TUI_MOD_CTRL);
+        return 1;
       default:
         /* Ctrl+letter */
         if (byte >= 1 && byte <= 26) {

@@ -69,6 +69,12 @@ typedef struct TuiTextInput {
   char *kill_buf;          /* Killed text (malloc'd, NULL initially) */
   size_t kill_buf_len;     /* Length of killed text in bytes */
   int last_was_kill;       /* Whether previous key was a kill command */
+
+  /* Undo stack */
+  struct { char *text; size_t text_len; size_t cursor_byte; } *undo_stack;
+  int undo_count;
+  int undo_cap;
+  int ctrl_x_prefix;       /* Waiting for second key after C-x */
 } TuiTextInput;
 
 /* Configuration for creating text input */

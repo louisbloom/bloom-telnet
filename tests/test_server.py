@@ -32,6 +32,9 @@ OPT_ECHO = 1
 OPT_SGA = 3  # Suppress Go Ahead
 OPT_NAWS = 31  # Negotiate About Window Size
 
+# Prompt
+PROMPT = "\033[32;1m>\033[0m "
+
 
 class TelnetConnection:
     """Handles a single telnet client connection."""
@@ -151,6 +154,10 @@ class TelnetConnection:
         response = self.server.handle_input(data, self)
         if response:
             self.send(response)
+            self.send(PROMPT)
+        elif response is not None:
+            # Empty response (e.g. empty echo), still show prompt
+            self.send(PROMPT)
 
 
 class TestServer:
@@ -274,6 +281,7 @@ class TestServer:
 
             # Send colorful welcome banner
             connection.send(self.get_welcome_banner())
+            connection.send(PROMPT)
 
         except Exception as e:
             print(f"Error accepting connection: {e}")
