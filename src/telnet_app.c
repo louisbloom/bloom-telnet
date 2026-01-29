@@ -109,6 +109,7 @@ TuiUpdateResult telnet_app_update(TelnetAppModel *app, TuiMsg msg) {
   /* Route key messages to textinput (it always has focus in this simple model)
    */
   if (msg.type == TUI_MSG_KEY_PRESS) {
+    tui_viewport_scroll_to_bottom(app->viewport);
     return tui_textinput_update(app->textinput, msg);
   }
 

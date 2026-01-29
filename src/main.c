@@ -314,7 +314,7 @@ static void process_line(const char *line, const char **prompt) {
     int was_connected = g_connected;
     echo_to_viewport("\n", 1);
     process_command(line, g_telnet, &g_connected, &g_quit_requested,
-                    g_term_cols, g_term_rows);
+                    g_term_cols, g_term_rows, echo_to_viewport);
   } else if (g_connected) {
     /* Echo user input to viewport */
     echo_to_viewport(line, strlen(line));
