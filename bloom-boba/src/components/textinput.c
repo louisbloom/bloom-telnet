@@ -48,6 +48,84 @@ static int utf8_display_width(const char *str) {
   return width;
 }
 
+/* Count total codepoints in a UTF-8 string */
+static int utf8_codepoint_count(const char *text, size_t len) {
+  int count = 0;
+  size_t i = 0;
+  while (i < len) {
+    i += utf8_char_len(text + i);
+    count++;
+  }
+  return count;
+}
+
+/* Return byte offset of the Nth codepoint (0-indexed).
+ * If cp_index >= total codepoints, returns text_len. */
+static size_t utf8_byte_offset_of_cp(const char *text, size_t text_len,
+                                      int cp_index) {
+  size_t offset = 0;
+  int cp = 0;
+  while (offset < text_len && cp < cp_index) {
+    offset += utf8_char_len(text + offset);
+    cp++;
+  }
+  return offset;
+}
+
+/* Return codepoint index for a given byte position */
+static int utf8_cp_index_of_byte(const char *text, size_t byte_pos) {
+  int cp = 0;
+  size_t i = 0;
+  while (i < byte_pos) {
+    i += utf8_char_len(text + i);
+    cp++;
+  }
+  return cp;
+}
+
+/* Adjust horizontal scroll offset so cursor stays visible */
+static void handle_overflow(TuiTextInput *input) {
+  int prompt_width =
+      (input->show_prompt && input->prompt) ? input->prompt_len : 0;
+  int content_width = input->terminal_width - prompt_width;
+
+  if (content_width <= 0 || input->terminal_width == 0) {
+    input->offset = 0;
+    int total = utf8_codepoint_count(input->text, input->text_len);
+    input->offset_right = total;
+    return;
+  }
+
+  int total = utf8_codepoint_count(input->text, input->text_len);
+  int cursor_cp = utf8_cp_index_of_byte(input->text, input->cursor_byte);
+
+  if (total <= content_width) {
+    /* Everything fits */
+    input->offset = 0;
+    input->offset_right = total;
+    return;
+  }
+
+  if (cursor_cp < input->offset) {
+    /* Cursor scrolled left of window */
+    input->offset = cursor_cp;
+    input->offset_right = input->offset + content_width;
+    if (input->offset_right > total)
+      input->offset_right = total;
+  } else if (cursor_cp >= input->offset_right) {
+    /* Cursor scrolled right of window */
+    input->offset_right = cursor_cp + 1;
+    input->offset = input->offset_right - content_width;
+    if (input->offset < 0)
+      input->offset = 0;
+  } else {
+    /* Cursor in view — clamp offset_right */
+    input->offset_right = input->offset + content_width;
+    if (input->offset_right > total)
+      input->offset_right = total;
+  }
+}
+
 /* Count lines and find cursor position */
 static void recalculate_cursor_position(TuiTextInput *input) {
   input->cursor_row = 0;
@@ -63,6 +141,10 @@ static void recalculate_cursor_position(TuiTextInput *input) {
     }
   }
   input->cursor_col = col;
+
+  /* Adjust horizontal scroll for single-line overflow */
+  if (!input->multiline)
+    handle_overflow(input);
 }
 
 /* Ensure text buffer has enough capacity */
@@ -981,9 +1063,15 @@ void tui_textinput_view(const TuiTextInput *input, DynamicBuffer *out) {
         dynamic_buffer_append_str(out, input->prompt);
       }
 
-      /* Output text content */
+      /* Output text content (visible slice only for horizontal scroll) */
       if (input->text_len > 0) {
-        dynamic_buffer_append(out, input->text, input->text_len);
+        if (input->terminal_width > 0 && input->offset_right > input->offset) {
+          size_t byte_start = utf8_byte_offset_of_cp(input->text, input->text_len, input->offset);
+          size_t byte_end = utf8_byte_offset_of_cp(input->text, input->text_len, input->offset_right);
+          dynamic_buffer_append(out, input->text + byte_start, byte_end - byte_start);
+        } else {
+          dynamic_buffer_append(out, input->text, input->text_len);
+        }
       }
 
       if (input->show_dividers) {
@@ -999,7 +1087,8 @@ void tui_textinput_view(const TuiTextInput *input, DynamicBuffer *out) {
       if (input->focused) {
         int prompt_width =
             (input->show_prompt && input->prompt) ? input->prompt_len : 0;
-        int cursor_visual_col = prompt_width + (int)input->cursor_col + 1; /* 1-indexed */
+        int cursor_cp = utf8_cp_index_of_byte(input->text, input->cursor_byte);
+        int cursor_visual_col = prompt_width + (cursor_cp - input->offset) + 1; /* 1-indexed */
 
         snprintf(pos_buf, sizeof(pos_buf), CSI "%d;%dH", input_row, cursor_visual_col);
         dynamic_buffer_append_str(out, pos_buf);
@@ -1016,16 +1105,23 @@ void tui_textinput_view(const TuiTextInput *input, DynamicBuffer *out) {
         dynamic_buffer_append_str(out, input->prompt);
       }
 
-      /* Output text content */
+      /* Output text content (visible slice only for horizontal scroll) */
       if (input->text_len > 0) {
-        dynamic_buffer_append(out, input->text, input->text_len);
+        if (input->terminal_width > 0 && input->offset_right > input->offset) {
+          size_t byte_start = utf8_byte_offset_of_cp(input->text, input->text_len, input->offset);
+          size_t byte_end = utf8_byte_offset_of_cp(input->text, input->text_len, input->offset_right);
+          dynamic_buffer_append(out, input->text + byte_start, byte_end - byte_start);
+        } else {
+          dynamic_buffer_append(out, input->text, input->text_len);
+        }
       }
 
       /* Position cursor */
       if (input->focused) {
         int prompt_width =
             (input->show_prompt && input->prompt) ? input->prompt_len : 0;
-        int cursor_visual_col = prompt_width + (int)input->cursor_col;
+        int cursor_cp = utf8_cp_index_of_byte(input->text, input->cursor_byte);
+        int cursor_visual_col = prompt_width + (cursor_cp - input->offset);
 
         dynamic_buffer_append_str(out, "\r");
         if (cursor_visual_col > 0) {
@@ -1099,6 +1195,8 @@ void tui_textinput_clear(TuiTextInput *input) {
   input->cursor_byte = 0;
   input->cursor_row = 0;
   input->cursor_col = 0;
+  input->offset = 0;
+  input->offset_right = 0;
   if (input->text)
     input->text[0] = '\0';
   undo_free(input);

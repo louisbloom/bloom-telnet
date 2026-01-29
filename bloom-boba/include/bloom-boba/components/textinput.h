@@ -38,6 +38,8 @@ typedef struct TuiTextInput {
   int width;           /* Max width (0 = unlimited) */
   int height;          /* Max visible height (0 = grow to fit) */
   int scroll_offset;   /* Vertical scroll position (first visible line) */
+  int offset;          /* Horizontal scroll: left edge (codepoint index) */
+  int offset_right;    /* Horizontal scroll: right edge (codepoint index) */
 
   const char *prompt;  /* Optional prompt string (not owned) */
   int prompt_len;      /* Cached prompt display width */
