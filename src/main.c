@@ -6,6 +6,7 @@
 
 #include <errno.h>
 #include <gc.h>
+#include <getopt.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -519,35 +520,44 @@ int main(int argc, char *argv[]) {
   int load_file_capacity = 0;
 
   /* Parse command line arguments */
-  for (int i = 1; i < argc; i++) {
-    if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
+  static struct option long_options[] = {
+      {"help", no_argument, NULL, 'h'},
+      {"version", no_argument, NULL, 'v'},
+      {"load", required_argument, NULL, 'l'},
+      {NULL, 0, NULL, 0},
+  };
+
+  int opt;
+  while ((opt = getopt_long(argc, argv, "hvl:", long_options, NULL)) != -1) {
+    switch (opt) {
+    case 'h':
       print_usage(argv[0]);
       return 0;
-    } else if (strcmp(argv[i], "-v") == 0 ||
-               strcmp(argv[i], "--version") == 0) {
+    case 'v':
       print_version();
       return 0;
-    } else if ((strcmp(argv[i], "-l") == 0 || strcmp(argv[i], "--load") == 0) &&
-               i + 1 < argc) {
+    case 'l':
       if (load_file_count >= load_file_capacity) {
         load_file_capacity = load_file_capacity ? load_file_capacity * 2 : 4;
         load_files = realloc(load_files, load_file_capacity * sizeof(char *));
       }
-      load_files[load_file_count++] = argv[++i];
-    } else if (argv[i][0] != '-') {
-      if (!hostname) {
-        hostname = argv[i];
-      } else {
-        port = atoi(argv[i]);
-        if (port <= 0 || port > 65535) {
-          fprintf(stderr, "Invalid port: %s\n", argv[i]);
-          return 1;
-        }
-      }
-    } else {
-      fprintf(stderr, "Unknown option: %s\n", argv[i]);
+      load_files[load_file_count++] = optarg;
+      break;
+    default:
       print_usage(argv[0]);
       return 1;
+    }
+  }
+
+  for (int i = optind; i < argc; i++) {
+    if (!hostname) {
+      hostname = argv[i];
+    } else {
+      port = atoi(argv[i]);
+      if (port <= 0 || port > 65535) {
+        fprintf(stderr, "Invalid port: %s\n", argv[i]);
+        return 1;
+      }
     }
   }
 
