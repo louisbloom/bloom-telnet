@@ -2,9 +2,10 @@
  *
  * Implements Bubbletea-style software scrolling:
  * - Lines stored in memory
- * - Visible lines calculated from y_offset
+ * - Visible lines calculated from y_offset (visual line index)
  * - Rendering uses absolute cursor positioning
  * - No ANSI scroll regions
+ * - Supports wrap mode (long lines wrap) and clip mode (truncate at width)
  */
 
 #include <bloom-boba/components/viewport.h>
@@ -15,7 +16,7 @@
 
 #define VIEWPORT_TYPE_ID (TUI_COMPONENT_TYPE_BASE + 20)
 #define INITIAL_LINE_CAPACITY 64
-#define INITIAL_PENDING_CAPACITY 256
+#define SGR_STATE_BUF_SIZE 256
 
 /* Calculate display width of a string (excluding ANSI sequences) */
 static size_t calc_display_width(const char *text, size_t len) {
@@ -39,6 +40,35 @@ static size_t calc_display_width(const char *text, size_t len) {
   }
 
   return width;
+}
+
+/* Calculate how many visual (screen) rows a line occupies */
+static int calc_visual_line_count(size_t display_width, int viewport_width,
+                                  int wrap_mode) {
+  if (!wrap_mode || viewport_width <= 0 || display_width == 0)
+    return 1;
+  return (int)((display_width + viewport_width - 1) / viewport_width);
+}
+
+/* Recompute visual_lines for all lines and total_visual_lines */
+static void recompute_all_visual_lines(TuiViewport *vp) {
+  vp->total_visual_lines = 0;
+  for (size_t i = 0; i < vp->line_count; i++) {
+    vp->lines[i].visual_lines = calc_visual_line_count(
+        vp->lines[i].display_width, vp->width, vp->wrap_mode);
+    vp->total_visual_lines += vp->lines[i].visual_lines;
+  }
+}
+
+/* Clamp y_offset to valid range based on total_visual_lines */
+static void clamp_y_offset(TuiViewport *vp) {
+  if (vp->total_visual_lines > (size_t)vp->height) {
+    size_t max_offset = vp->total_visual_lines - vp->height;
+    if (vp->y_offset > max_offset)
+      vp->y_offset = max_offset;
+  } else {
+    vp->y_offset = 0;
+  }
 }
 
 /* Add a line to the viewport */
@@ -66,7 +96,35 @@ static int add_line(TuiViewport *vp, const char *text, size_t len) {
   line->text = line_text;
   line->len = len;
   line->display_width = calc_display_width(text, len);
+  line->visual_lines =
+      calc_visual_line_count(line->display_width, vp->width, vp->wrap_mode);
+  vp->total_visual_lines += line->visual_lines;
   vp->line_count++;
+
+  return 0;
+}
+
+/* Append text to the last line in-place, creating one if needed */
+static int append_to_last_line(TuiViewport *vp, const char *text, size_t len) {
+  if (vp->line_count == 0) {
+    if (add_line(vp, "", 0) < 0)
+      return -1;
+  }
+  TuiViewportLine *last = &vp->lines[vp->line_count - 1];
+  char *new_text = realloc(last->text, last->len + len + 1);
+  if (!new_text)
+    return -1;
+  memcpy(new_text + last->len, text, len);
+  last->len += len;
+  new_text[last->len] = '\0';
+  last->text = new_text;
+  last->display_width = calc_display_width(last->text, last->len);
+
+  /* Update visual line count */
+  vp->total_visual_lines -= last->visual_lines;
+  last->visual_lines =
+      calc_visual_line_count(last->display_width, vp->width, vp->wrap_mode);
+  vp->total_visual_lines += last->visual_lines;
 
   return 0;
 }
@@ -78,8 +136,9 @@ static void trim_old_lines(TuiViewport *vp) {
 
   size_t to_remove = vp->line_count - vp->max_lines;
 
-  /* Free old lines */
+  /* Free old lines and subtract their visual lines */
   for (size_t i = 0; i < to_remove; i++) {
+    vp->total_visual_lines -= vp->lines[i].visual_lines;
     free(vp->lines[i].text);
   }
 
@@ -88,11 +147,145 @@ static void trim_old_lines(TuiViewport *vp) {
           (vp->line_count - to_remove) * sizeof(TuiViewportLine));
   vp->line_count -= to_remove;
 
-  /* Adjust y_offset */
-  if (vp->y_offset >= to_remove) {
-    vp->y_offset -= to_remove;
+  /* Adjust y_offset — compute visual lines removed for offset adjustment */
+  /* Since we removed content lines that mapped to some visual lines,
+     we already subtracted from total_visual_lines above. Just clamp. */
+  clamp_y_offset(vp);
+}
+
+/* Find which content line contains the given visual line offset.
+ * Returns the content line index and sets *sub_line to the visual row
+ * offset within that content line (0-indexed). */
+static size_t find_content_line_for_visual(const TuiViewport *vp,
+                                           size_t visual_offset,
+                                           int *sub_line) {
+  size_t accumulated = 0;
+  for (size_t i = 0; i < vp->line_count; i++) {
+    size_t next = accumulated + vp->lines[i].visual_lines;
+    if (visual_offset < next) {
+      *sub_line = (int)(visual_offset - accumulated);
+      return i;
+    }
+    accumulated = next;
+  }
+  /* Past end — return last line */
+  *sub_line = 0;
+  return vp->line_count;
+}
+
+/* Render the sub_line-th visual row of a content line to the output buffer.
+ * Handles ANSI state replay for wrapped continuation rows. */
+static void render_line_segment(const TuiViewportLine *line, int viewport_width,
+                                int sub_line, int wrap_mode,
+                                DynamicBuffer *out) {
+  const char *text = line->text;
+  size_t len = line->len;
+
+  if (!wrap_mode || sub_line == 0) {
+    /* Clip mode or first visual row: emit up to viewport_width display cols */
+    int col = 0;
+    int in_escape = 0;
+
+    for (size_t i = 0; i < len; i++) {
+      if (in_escape) {
+        dynamic_buffer_append(out, &text[i], 1);
+        if ((text[i] >= 'A' && text[i] <= 'Z') ||
+            (text[i] >= 'a' && text[i] <= 'z')) {
+          in_escape = 0;
+        }
+      } else if (text[i] == '\033' && i + 1 < len && text[i + 1] == '[') {
+        in_escape = 1;
+        dynamic_buffer_append(out, &text[i], 1); /* ESC */
+      } else if ((unsigned char)text[i] >= 0x20) {
+        if (col >= viewport_width)
+          break;
+        dynamic_buffer_append(out, &text[i], 1);
+        col++;
+      } else {
+        dynamic_buffer_append(out, &text[i], 1);
+      }
+    }
+    /* Reset at end to prevent color bleeding */
+    dynamic_buffer_append_str(out, SGR_RESET);
   } else {
-    vp->y_offset = 0;
+    /* Wrap mode, sub_line > 0: skip first sub_line * viewport_width display
+     * columns, collecting ANSI SGR state, then emit next viewport_width cols */
+    int skip_target = sub_line * viewport_width;
+    int skipped = 0;
+    int col = 0;
+    int in_escape = 0;
+
+    /* SGR state buffer — accumulates active SGR sequences */
+    char sgr_buf[SGR_STATE_BUF_SIZE];
+    size_t sgr_len = 0;
+
+    /* Track start of current CSI sequence for SGR capture */
+    size_t csi_start = 0;
+    int in_csi = 0;
+
+    size_t i = 0;
+    /* Phase 1: skip display columns, collecting ANSI state */
+    for (; i < len && skipped < skip_target; i++) {
+      if (in_escape) {
+        if ((text[i] >= 'A' && text[i] <= 'Z') ||
+            (text[i] >= 'a' && text[i] <= 'z')) {
+          in_escape = 0;
+          /* Check if this was an SGR sequence (ends with 'm') */
+          if (text[i] == 'm' && in_csi) {
+            size_t seq_len = i - csi_start + 1;
+            /* Check for reset: ESC[0m or ESC[m */
+            int is_reset = 0;
+            if (seq_len == 4 && text[csi_start + 2] == '0')
+              is_reset = 1; /* ESC[0m */
+            if (seq_len == 3)
+              is_reset = 1; /* ESC[m */
+            if (is_reset) {
+              sgr_len = 0;
+            } else if (sgr_len + seq_len < SGR_STATE_BUF_SIZE) {
+              memcpy(sgr_buf + sgr_len, text + csi_start, seq_len);
+              sgr_len += seq_len;
+            }
+          }
+          in_csi = 0;
+        }
+      } else if (text[i] == '\033' && i + 1 < len && text[i + 1] == '[') {
+        in_escape = 1;
+        in_csi = 1;
+        csi_start = i;
+        i++; /* Skip '[' */
+      } else if ((unsigned char)text[i] >= 0x20) {
+        skipped++;
+      }
+    }
+
+    /* Emit accumulated SGR state before visible content */
+    if (sgr_len > 0) {
+      dynamic_buffer_append(out, sgr_buf, sgr_len);
+    }
+
+    /* Phase 2: emit next viewport_width display columns */
+    in_escape = 0;
+    for (; i < len; i++) {
+      if (in_escape) {
+        dynamic_buffer_append(out, &text[i], 1);
+        if ((text[i] >= 'A' && text[i] <= 'Z') ||
+            (text[i] >= 'a' && text[i] <= 'z')) {
+          in_escape = 0;
+        }
+      } else if (text[i] == '\033' && i + 1 < len && text[i + 1] == '[') {
+        in_escape = 1;
+        dynamic_buffer_append(out, &text[i], 1); /* ESC */
+      } else if ((unsigned char)text[i] >= 0x20) {
+        if (col >= viewport_width)
+          break;
+        dynamic_buffer_append(out, &text[i], 1);
+        col++;
+      } else {
+        dynamic_buffer_append(out, &text[i], 1);
+      }
+    }
+    /* Reset at end to prevent color bleeding */
+    dynamic_buffer_append_str(out, SGR_RESET);
   }
 }
 
@@ -113,16 +306,6 @@ TuiViewport *tui_viewport_create(void) {
   vp->line_capacity = INITIAL_LINE_CAPACITY;
   vp->line_count = 0;
 
-  /* Allocate pending buffer */
-  vp->pending = malloc(INITIAL_PENDING_CAPACITY);
-  if (!vp->pending) {
-    free(vp->lines);
-    free(vp);
-    return NULL;
-  }
-  vp->pending_cap = INITIAL_PENDING_CAPACITY;
-  vp->pending_len = 0;
-
   /* Defaults */
   vp->width = 80;
   vp->height = 24;
@@ -131,6 +314,8 @@ TuiViewport *tui_viewport_create(void) {
   vp->max_lines = 10000; /* Reasonable default */
   vp->render_row = 1;
   vp->render_col = 1;
+  vp->wrap_mode = 1; /* Wrap by default */
+  vp->total_visual_lines = 0;
 
   return vp;
 }
@@ -145,7 +330,6 @@ void tui_viewport_free(TuiViewport *vp) {
     free(vp->lines[i].text);
   }
   free(vp->lines);
-  free(vp->pending);
   free(vp);
 }
 
@@ -164,7 +348,7 @@ void tui_viewport_append(TuiViewport *vp, const char *text, size_t len) {
     const char *nl = memchr(start, '\n', end - start);
 
     if (nl) {
-      /* Found newline - add pending + this segment as a complete line */
+      /* Found newline - append segment to last line, then start a new line */
       size_t seg_len = nl - start;
 
       /* Handle \r\n by stripping \r */
@@ -172,24 +356,13 @@ void tui_viewport_append(TuiViewport *vp, const char *text, size_t len) {
         seg_len--;
       }
 
-      if (vp->pending_len > 0) {
-        /* Append segment to pending, then add as line */
-        size_t total = vp->pending_len + seg_len;
-        if (total > vp->pending_cap) {
-          size_t new_cap = total * 2;
-          char *new_pending = realloc(vp->pending, new_cap);
-          if (new_pending) {
-            vp->pending = new_pending;
-            vp->pending_cap = new_cap;
-          }
-        }
-        memcpy(vp->pending + vp->pending_len, start, seg_len);
-        add_line(vp, vp->pending, total);
-        vp->pending_len = 0;
-      } else {
-        /* Add segment directly as line */
-        add_line(vp, start, seg_len);
+      /* Append this segment to the current (last) line */
+      if (seg_len > 0) {
+        append_to_last_line(vp, start, seg_len);
       }
+
+      /* Start a new empty line */
+      add_line(vp, "", 0);
 
       start = nl + 1;
       /* Skip \r after \n (handle \n\r line endings) */
@@ -197,21 +370,9 @@ void tui_viewport_append(TuiViewport *vp, const char *text, size_t len) {
         start++;
       }
     } else {
-      /* No newline - add to pending buffer */
+      /* No newline - append to last line */
       size_t seg_len = end - start;
-      size_t needed = vp->pending_len + seg_len;
-
-      if (needed > vp->pending_cap) {
-        size_t new_cap = needed * 2;
-        char *new_pending = realloc(vp->pending, new_cap);
-        if (new_pending) {
-          vp->pending = new_pending;
-          vp->pending_cap = new_cap;
-        }
-      }
-
-      memcpy(vp->pending + vp->pending_len, start, seg_len);
-      vp->pending_len += seg_len;
+      append_to_last_line(vp, start, seg_len);
       break;
     }
   }
@@ -234,8 +395,8 @@ void tui_viewport_clear(TuiViewport *vp) {
     free(vp->lines[i].text);
   }
   vp->line_count = 0;
-  vp->pending_len = 0;
   vp->y_offset = 0;
+  vp->total_visual_lines = 0;
 }
 
 /* Scroll up by N lines */
@@ -259,8 +420,8 @@ void tui_viewport_scroll_down(TuiViewport *vp, int lines) {
 
   /* Clamp to valid range */
   size_t max_offset = 0;
-  if (vp->line_count > (size_t)vp->height) {
-    max_offset = vp->line_count - vp->height;
+  if (vp->total_visual_lines > (size_t)vp->height) {
+    max_offset = vp->total_visual_lines - vp->height;
   }
   if (vp->y_offset > max_offset) {
     vp->y_offset = max_offset;
@@ -286,8 +447,8 @@ void tui_viewport_scroll_to_bottom(TuiViewport *vp) {
   if (!vp)
     return;
 
-  if (vp->line_count > (size_t)vp->height) {
-    vp->y_offset = vp->line_count - vp->height;
+  if (vp->total_visual_lines > (size_t)vp->height) {
+    vp->y_offset = vp->total_visual_lines - vp->height;
   } else {
     vp->y_offset = 0;
   }
@@ -298,11 +459,11 @@ int tui_viewport_at_bottom(const TuiViewport *vp) {
   if (!vp)
     return 1;
 
-  if (vp->line_count <= (size_t)vp->height) {
+  if (vp->total_visual_lines <= (size_t)vp->height) {
     return 1;
   }
 
-  return vp->y_offset >= vp->line_count - vp->height;
+  return vp->y_offset >= vp->total_visual_lines - vp->height;
 }
 
 /* Set viewport size */
@@ -313,15 +474,9 @@ void tui_viewport_set_size(TuiViewport *vp, int width, int height) {
   vp->width = width > 0 ? width : 1;
   vp->height = height > 0 ? height : 1;
 
-  /* Re-clamp y_offset */
-  if (vp->line_count > (size_t)vp->height) {
-    size_t max_offset = vp->line_count - vp->height;
-    if (vp->y_offset > max_offset) {
-      vp->y_offset = max_offset;
-    }
-  } else {
-    vp->y_offset = 0;
-  }
+  /* Recompute visual lines (width may have changed) */
+  recompute_all_visual_lines(vp);
+  clamp_y_offset(vp);
 }
 
 /* Set render position */
@@ -349,6 +504,16 @@ void tui_viewport_set_auto_scroll(TuiViewport *vp, int enabled) {
   }
 }
 
+/* Set wrap mode */
+void tui_viewport_set_wrap_mode(TuiViewport *vp, int wrap) {
+  if (!vp)
+    return;
+
+  vp->wrap_mode = wrap ? 1 : 0;
+  recompute_all_visual_lines(vp);
+  clamp_y_offset(vp);
+}
+
 /* Get line count */
 size_t tui_viewport_line_count(const TuiViewport *vp) {
   return vp ? vp->line_count : 0;
@@ -360,15 +525,11 @@ void tui_viewport_view(const TuiViewport *vp, DynamicBuffer *out) {
     return;
 
   char buf[64];
-  int show_pending = (vp->pending_len > 0 && tui_viewport_at_bottom(vp));
-  /* Reserve last row for pending when viewport is full */
-  int lines_to_show = vp->height;
-  size_t start_offset = vp->y_offset;
-  if (show_pending && vp->line_count >= (size_t)vp->height) {
-    lines_to_show = vp->height - 1;
-    /* Skip one older line so newest lines + pending fit */
-    start_offset = vp->y_offset + 1;
-  }
+
+  /* Find the content line corresponding to y_offset */
+  int sub_line = 0;
+  size_t content_idx =
+      find_content_line_for_visual(vp, vp->y_offset, &sub_line);
 
   for (int row = 0; row < vp->height; row++) {
     int screen_row = vp->render_row + row;
@@ -376,25 +537,15 @@ void tui_viewport_view(const TuiViewport *vp, DynamicBuffer *out) {
     dynamic_buffer_append_str(out, buf);
     dynamic_buffer_append_str(out, CSI "K");
 
-    if (row < lines_to_show) {
-      size_t line_idx = start_offset + row;
-      if (line_idx < vp->line_count) {
-        TuiViewportLine *line = &vp->lines[line_idx];
-        dynamic_buffer_append(out, line->text, line->len);
+    if (content_idx < vp->line_count) {
+      render_line_segment(&vp->lines[content_idx], vp->width, sub_line,
+                          vp->wrap_mode, out);
+      sub_line++;
+      if (sub_line >= vp->lines[content_idx].visual_lines) {
+        content_idx++;
+        sub_line = 0;
       }
     }
-  }
-
-  /* Show pending on last row (or after last line if viewport not full) */
-  if (show_pending) {
-    int last_row = vp->render_row + vp->height - 1;
-    if (vp->line_count < (size_t)vp->height) {
-      last_row = vp->render_row + vp->line_count;
-    }
-    snprintf(buf, sizeof(buf), CSI "%d;%dH", last_row, vp->render_col);
-    dynamic_buffer_append_str(out, buf);
-    dynamic_buffer_append_str(out, CSI "K");
-    dynamic_buffer_append(out, vp->pending, vp->pending_len);
   }
 }
 

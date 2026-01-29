@@ -20,6 +20,7 @@ typedef struct TuiViewportLine {
   char *text;          /* Line content (owned, null-terminated) */
   size_t len;          /* Byte length */
   size_t display_width; /* Visual width (excludes ANSI sequences) */
+  int visual_lines;    /* Number of screen rows this line occupies (>= 1) */
 } TuiViewportLine;
 
 /* Viewport model */
@@ -31,17 +32,16 @@ typedef struct TuiViewport {
   size_t line_count;
   size_t line_capacity;
 
-  /* Partial line buffer (content without trailing newline) */
-  char *pending;
-  size_t pending_len;
-  size_t pending_cap;
-
   /* Viewport state */
   int width;
   int height;
-  size_t y_offset;  /* First visible line index */
+  size_t y_offset;  /* First visible visual line index */
   int auto_scroll;  /* Scroll to bottom on new content */
   int max_lines;    /* Max lines to keep (memory limit, 0 = unlimited) */
+
+  /* Wrapping */
+  size_t total_visual_lines; /* Sum of all lines' visual_lines */
+  int wrap_mode;             /* 0 = clip (truncate at width), 1 = wrap (default) */
 
   /* Render position (absolute, 1-indexed) */
   int render_row; /* Starting row */
@@ -73,6 +73,7 @@ void tui_viewport_set_size(TuiViewport *vp, int width, int height);
 void tui_viewport_set_render_position(TuiViewport *vp, int row, int col);
 void tui_viewport_set_max_lines(TuiViewport *vp, int max);
 void tui_viewport_set_auto_scroll(TuiViewport *vp, int enabled);
+void tui_viewport_set_wrap_mode(TuiViewport *vp, int wrap);
 
 /* Get line count (for testing/debugging) */
 size_t tui_viewport_line_count(const TuiViewport *vp);
