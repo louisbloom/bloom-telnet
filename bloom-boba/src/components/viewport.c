@@ -18,6 +18,40 @@
 #define INITIAL_LINE_CAPACITY 64
 #define SGR_STATE_BUF_SIZE 256
 
+/* A printable byte that starts a new display column.
+ * Excludes ANSI escape intro bytes (handled separately) and
+ * UTF-8 continuation bytes (10xxxxxx) which don't start a character. */
+#define IS_DISPLAY_COL(b) ((unsigned char)(b) >= 0x20 && ((unsigned char)(b) & 0xC0) != 0x80)
+
+/* Emit up to max_cols display columns from text[*pos..len) into out.
+ * Returns number of display columns emitted. */
+static int emit_cols(const char *text, size_t len, size_t *pos, int max_cols,
+                     DynamicBuffer *out) {
+  int col = 0;
+  int in_escape = 0;
+  for (; *pos < len; (*pos)++) {
+    unsigned char ch = (unsigned char)text[*pos];
+    if (in_escape) {
+      dynamic_buffer_append(out, &text[*pos], 1);
+      if ((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z'))
+        in_escape = 0;
+    } else if (ch == '\033' && *pos + 1 < len && text[*pos + 1] == '[') {
+      in_escape = 1;
+      dynamic_buffer_append(out, &text[*pos], 1); /* ESC */
+    } else if (ch >= 0x20) {
+      if (IS_DISPLAY_COL(text[*pos])) {
+        if (col >= max_cols)
+          break;
+        col++;
+      }
+      dynamic_buffer_append(out, &text[*pos], 1);
+    } else {
+      dynamic_buffer_append(out, &text[*pos], 1);
+    }
+  }
+  return col;
+}
+
 /* Calculate display width of a string (excluding ANSI sequences) */
 static size_t calc_display_width(const char *text, size_t len) {
   size_t width = 0;
@@ -34,8 +68,8 @@ static size_t calc_display_width(const char *text, size_t len) {
       in_escape = 1;
       i++; /* Skip '[' */
     } else if ((unsigned char)text[i] >= 0x20) {
-      /* Printable character (simplified - doesn't handle wide chars) */
-      width++;
+      if (IS_DISPLAY_COL(text[i]))
+        width++;
     }
   }
 
@@ -183,28 +217,8 @@ static void render_line_segment(const TuiViewportLine *line, int viewport_width,
 
   if (!wrap_mode || sub_line == 0) {
     /* Clip mode or first visual row: emit up to viewport_width display cols */
-    int col = 0;
-    int in_escape = 0;
-
-    for (size_t i = 0; i < len; i++) {
-      if (in_escape) {
-        dynamic_buffer_append(out, &text[i], 1);
-        if ((text[i] >= 'A' && text[i] <= 'Z') ||
-            (text[i] >= 'a' && text[i] <= 'z')) {
-          in_escape = 0;
-        }
-      } else if (text[i] == '\033' && i + 1 < len && text[i + 1] == '[') {
-        in_escape = 1;
-        dynamic_buffer_append(out, &text[i], 1); /* ESC */
-      } else if ((unsigned char)text[i] >= 0x20) {
-        if (col >= viewport_width)
-          break;
-        dynamic_buffer_append(out, &text[i], 1);
-        col++;
-      } else {
-        dynamic_buffer_append(out, &text[i], 1);
-      }
-    }
+    size_t pos = 0;
+    emit_cols(text, len, &pos, viewport_width, out);
     /* Reset at end to prevent color bleeding */
     dynamic_buffer_append_str(out, SGR_RESET);
   } else {
@@ -212,7 +226,6 @@ static void render_line_segment(const TuiViewportLine *line, int viewport_width,
      * columns, collecting ANSI SGR state, then emit next viewport_width cols */
     int skip_target = sub_line * viewport_width;
     int skipped = 0;
-    int col = 0;
     int in_escape = 0;
 
     /* SGR state buffer — accumulates active SGR sequences */
@@ -254,7 +267,8 @@ static void render_line_segment(const TuiViewportLine *line, int viewport_width,
         csi_start = i;
         i++; /* Skip '[' */
       } else if ((unsigned char)text[i] >= 0x20) {
-        skipped++;
+        if (IS_DISPLAY_COL(text[i]))
+          skipped++;
       }
     }
 
@@ -264,26 +278,7 @@ static void render_line_segment(const TuiViewportLine *line, int viewport_width,
     }
 
     /* Phase 2: emit next viewport_width display columns */
-    in_escape = 0;
-    for (; i < len; i++) {
-      if (in_escape) {
-        dynamic_buffer_append(out, &text[i], 1);
-        if ((text[i] >= 'A' && text[i] <= 'Z') ||
-            (text[i] >= 'a' && text[i] <= 'z')) {
-          in_escape = 0;
-        }
-      } else if (text[i] == '\033' && i + 1 < len && text[i + 1] == '[') {
-        in_escape = 1;
-        dynamic_buffer_append(out, &text[i], 1); /* ESC */
-      } else if ((unsigned char)text[i] >= 0x20) {
-        if (col >= viewport_width)
-          break;
-        dynamic_buffer_append(out, &text[i], 1);
-        col++;
-      } else {
-        dynamic_buffer_append(out, &text[i], 1);
-      }
-    }
+    emit_cols(text, len, &i, viewport_width, out);
     /* Reset at end to prevent color bleeding */
     dynamic_buffer_append_str(out, SGR_RESET);
   }
