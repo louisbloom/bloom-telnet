@@ -387,6 +387,83 @@ static void transpose_chars(TuiTextInput *input) {
   recalculate_cursor_position(input);
 }
 
+/* Capture pre-edit state into caller-owned variables */
+static inline void undo_snapshot(TuiTextInput *input, size_t *out_len,
+                                 size_t *out_cursor, char **out_text) {
+  *out_len = input->text_len;
+  *out_cursor = input->cursor_byte;
+  *out_text = (char *)malloc(input->text_len + 1);
+  if (*out_text)
+    memcpy(*out_text, input->text, input->text_len + 1);
+}
+
+/* Push snapshot onto undo stack only if text actually changed */
+static void undo_commit(TuiTextInput *input, char *snap_text, size_t snap_len,
+                        size_t snap_cursor) {
+  if (!snap_text)
+    return;
+
+  /* Text unchanged — discard snapshot */
+  if (snap_len == input->text_len &&
+      memcmp(snap_text, input->text, snap_len) == 0) {
+    free(snap_text);
+    return;
+  }
+
+  /* Grow stack if needed */
+  if (input->undo_count >= input->undo_cap) {
+    int new_cap = input->undo_cap == 0 ? 32 : input->undo_cap * 2;
+    void *new_stack =
+        realloc(input->undo_stack, new_cap * sizeof(*input->undo_stack));
+    if (!new_stack) {
+      free(snap_text);
+      return;
+    }
+    input->undo_stack = new_stack;
+    input->undo_cap = new_cap;
+  }
+
+  /* Transfer ownership of snap_text to the stack */
+  int idx = input->undo_count;
+  input->undo_stack[idx].text = snap_text;
+  input->undo_stack[idx].text_len = snap_len;
+  input->undo_stack[idx].cursor_byte = snap_cursor;
+  input->undo_count++;
+}
+
+/* Restore most recent undo snapshot */
+static void undo_pop(TuiTextInput *input) {
+  if (input->undo_count == 0)
+    return;
+
+  int idx = input->undo_count - 1;
+
+  /* Restore state */
+  if (ensure_capacity(input, input->undo_stack[idx].text_len + 1) < 0)
+    return;
+  memcpy(input->text, input->undo_stack[idx].text,
+         input->undo_stack[idx].text_len + 1);
+  input->text_len = input->undo_stack[idx].text_len;
+  input->cursor_byte = input->undo_stack[idx].cursor_byte;
+  if (input->cursor_byte > input->text_len)
+    input->cursor_byte = input->text_len;
+  recalculate_cursor_position(input);
+
+  free(input->undo_stack[idx].text);
+  input->undo_count--;
+}
+
+/* Free the undo stack */
+static void undo_free(TuiTextInput *input) {
+  for (int i = 0; i < input->undo_count; i++) {
+    free(input->undo_stack[i].text);
+  }
+  free(input->undo_stack);
+  input->undo_stack = NULL;
+  input->undo_count = 0;
+  input->undo_cap = 0;
+}
+
 /* Free completion list */
 static void free_completions(TuiTextInput *input) {
   if (input->completions) {
@@ -592,6 +669,7 @@ void tui_textinput_free(TuiTextInput *input) {
   }
   free_completions(input);
   free(input->kill_buf);
+  undo_free(input);
   free(input);
 }
 
@@ -614,6 +692,22 @@ TuiUpdateResult tui_textinput_update(TuiTextInput *input, TuiMsg msg) {
     return tui_update_result_none();
 
   TuiKeyMsg key = msg.data.key;
+
+  /* Handle C-x prefix: if set, check for C-x C-u (undo) */
+  if (input->ctrl_x_prefix) {
+    input->ctrl_x_prefix = 0;
+    if ((key.mods & TUI_MOD_CTRL) && (key.rune == 'u' || key.rune == 'U') &&
+        key.key == TUI_KEY_NONE) {
+      undo_pop(input);
+      return tui_update_result_none();
+    }
+    /* Not C-u after C-x: fall through to normal handling */
+  }
+
+  /* Snapshot pre-edit state; will be pushed to undo stack only if text changes */
+  size_t snap_len, snap_cursor;
+  char *snap_text;
+  undo_snapshot(input, &snap_len, &snap_cursor, &snap_text);
 
   /* Track consecutive kill commands for append behavior */
   int was_kill = input->last_was_kill;
@@ -693,6 +787,7 @@ TuiUpdateResult tui_textinput_update(TuiTextInput *input, TuiMsg msg) {
         free(input->saved_input);
         input->saved_input = NULL;
       }
+      free(snap_text);
       return tui_update_result(tui_cmd_line_submit(line));
     }
     break;
@@ -712,6 +807,7 @@ TuiUpdateResult tui_textinput_update(TuiTextInput *input, TuiMsg msg) {
         } else if (key.rune == 'd' || key.rune == 'D') {
           /* Ctrl+D: EOF on empty line, delete char otherwise */
           if (input->text_len == 0 && !input->multiline) {
+            free(snap_text);
             return tui_update_result(tui_cmd_quit());
           } else {
             delete_at(input);
@@ -742,12 +838,14 @@ TuiUpdateResult tui_textinput_update(TuiTextInput *input, TuiMsg msg) {
           input->last_was_kill = 1;
         } else if (key.rune == 'n' || key.rune == 'N') {
           /* Ctrl+N: Next history entry */
-          if (!input->multiline)
+          if (!input->multiline) {
             history_next(input);
+          }
         } else if (key.rune == 'p' || key.rune == 'P') {
           /* Ctrl+P: Previous history entry */
-          if (!input->multiline)
+          if (!input->multiline) {
             history_prev(input);
+          }
         } else if (key.rune == 't' || key.rune == 'T') {
           /* Ctrl+T: Transpose characters before cursor */
           transpose_chars(input);
@@ -793,11 +891,19 @@ TuiUpdateResult tui_textinput_update(TuiTextInput *input, TuiMsg msg) {
             }
             input->last_was_kill = 1;
           }
+        } else if (key.rune == 'x' || key.rune == 'X') {
+          /* Ctrl+X: prefix for C-x C-u (undo) */
+          input->ctrl_x_prefix = 1;
         } else if (key.rune == 'y' || key.rune == 'Y') {
           /* Ctrl+Y: Yank (paste from kill buffer) */
           if (input->kill_buf && input->kill_buf_len > 0) {
             insert_text(input, input->kill_buf, input->kill_buf_len);
           }
+        } else if (key.rune == '_') {
+          /* Ctrl+_: Undo — discard snapshot so the undo itself isn't undoable */
+          free(snap_text);
+          undo_pop(input);
+          return tui_update_result_none();
         }
       } else {
         insert_codepoint(input, key.rune);
@@ -809,6 +915,7 @@ TuiUpdateResult tui_textinput_update(TuiTextInput *input, TuiMsg msg) {
     break;
   }
 
+  undo_commit(input, snap_text, snap_len, snap_cursor);
   return tui_update_result_none();
 }
 
@@ -994,6 +1101,7 @@ void tui_textinput_clear(TuiTextInput *input) {
   input->cursor_col = 0;
   if (input->text)
     input->text[0] = '\0';
+  undo_free(input);
 }
 
 /* Set focus state */
