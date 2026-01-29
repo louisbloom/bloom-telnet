@@ -732,11 +732,6 @@ int lisp_x_eval_and_echo(const char *code, DynamicBuffer *buf) {
 
   dynamic_buffer_clear(buf);
 
-  /* Echo the command */
-  dynamic_buffer_append_str(buf, "> ");
-  dynamic_buffer_append_str(buf, code);
-  dynamic_buffer_append_str(buf, "\r\n");
-
   /* Evaluate */
   LispObject *result = lisp_eval_string(code, lisp_env);
 

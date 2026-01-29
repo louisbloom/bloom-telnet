@@ -159,6 +159,10 @@ int process_command(const char *text, Telnet *telnet, int *connected_mode,
       }
     }
 
+    /* Echo the form before evaluating (so terminal-echo output appears after)
+     */
+    output_messagef("> %s\n", code);
+
     /* Delegate to eval mode logic */
     if (lisp_x_eval_and_echo(code, eval_buf) < 0) {
       output_message("\n*** Error: Buffer operation failed ***\n");
