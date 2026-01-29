@@ -428,6 +428,23 @@ int lisp_x_init(void) {
              lisp_make_builtin(builtin_telnet_send, "telnet-send"));
 
   /* Terminal capability builtin */
+  lisp_set_docstring(
+      "termcap",
+      "Query terminal capabilities.\n"
+      "\n"
+      "Usage:\n"
+      "- `(termcap 'cols)` - terminal width\n"
+      "- `(termcap 'rows)` - terminal height\n"
+      "- `(termcap 'type)` - terminal type string (e.g. \"xterm-256color\")\n"
+      "- `(termcap 'encoding)` - character encoding (e.g. \"UTF-8\")\n"
+      "- `(termcap 'color-level)` - color support level (0-3)\n"
+      "- `(termcap 'truecolor?)` - t if truecolor is supported\n"
+      "- `(termcap '256color?)` - t if 256 colors supported\n"
+      "- `(termcap 'unicode?)` - t if unicode is supported\n"
+      "- `(termcap 'describe)` - human-readable capability summary\n"
+      "- `(termcap 'reset)` - SGR reset escape sequence\n"
+      "- `(termcap 'fg-color r g b)` - foreground color escape sequence\n"
+      "- `(termcap 'bg-color r g b)` - background color escape sequence");
   env_define(lisp_env, "termcap",
              lisp_make_builtin(builtin_termcap, "termcap"));
 
