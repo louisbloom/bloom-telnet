@@ -190,6 +190,46 @@ static void cursor_right(TuiTextInput *input) {
   }
 }
 
+/* Move cursor left by one word (Ctrl+Left) */
+static void cursor_word_left(TuiTextInput *input) {
+  if (input->cursor_byte == 0)
+    return;
+
+  size_t pos = input->cursor_byte;
+
+  /* Skip whitespace before the word */
+  while (pos > 0 && (input->text[pos - 1] == ' ' || input->text[pos - 1] == '\t'))
+    pos--;
+
+  /* Skip the word itself */
+  while (pos > 0 && input->text[pos - 1] != ' ' && input->text[pos - 1] != '\t')
+    pos--;
+
+  input->cursor_byte = pos;
+  recalculate_cursor_position(input);
+}
+
+/* Move cursor right by one word (Ctrl+Right) */
+static void cursor_word_right(TuiTextInput *input) {
+  if (input->cursor_byte >= input->text_len)
+    return;
+
+  size_t pos = input->cursor_byte;
+
+  /* Skip the current word */
+  while (pos < input->text_len && input->text[pos] != ' ' &&
+         input->text[pos] != '\t')
+    pos++;
+
+  /* Skip whitespace after the word */
+  while (pos < input->text_len &&
+         (input->text[pos] == ' ' || input->text[pos] == '\t'))
+    pos++;
+
+  input->cursor_byte = pos;
+  recalculate_cursor_position(input);
+}
+
 /* Move cursor to start of current line */
 static void cursor_home(TuiTextInput *input) {
   while (input->cursor_byte > 0 && input->text[input->cursor_byte - 1] != '\n') {
@@ -274,6 +314,79 @@ static void cursor_down(TuiTextInput *input) {
   recalculate_cursor_position(input);
 }
 
+/* Save text to kill buffer (append=1 appends to existing buffer) */
+static void kill_save(TuiTextInput *input, const char *text, size_t len,
+                      int append) {
+  if (len == 0)
+    return;
+
+  if (append && input->kill_buf && input->kill_buf_len > 0) {
+    char *new_buf =
+        (char *)realloc(input->kill_buf, input->kill_buf_len + len);
+    if (!new_buf)
+      return;
+    memcpy(new_buf + input->kill_buf_len, text, len);
+    input->kill_buf = new_buf;
+    input->kill_buf_len += len;
+  } else {
+    free(input->kill_buf);
+    input->kill_buf = (char *)malloc(len);
+    if (!input->kill_buf) {
+      input->kill_buf_len = 0;
+      return;
+    }
+    memcpy(input->kill_buf, text, len);
+    input->kill_buf_len = len;
+  }
+}
+
+/* Transpose the two characters before the cursor (Ctrl+T) */
+static void transpose_chars(TuiTextInput *input) {
+  if (input->cursor_byte == 0 || input->text_len < 2)
+    return;
+
+  /* If at end of text, transpose the two chars before cursor.
+   * Otherwise, transpose char before and at cursor, then advance. */
+  size_t pos = input->cursor_byte;
+  if (pos >= input->text_len)
+    pos = input->text_len; /* at end */
+
+  /* Find the two characters to swap */
+  size_t c2_start, c2_end, c1_start;
+
+  if (pos >= input->text_len) {
+    /* At end: swap last two characters */
+    c2_end = input->text_len;
+    c2_start = utf8_prev_char(input->text, c2_end);
+    c1_start = utf8_prev_char(input->text, c2_start);
+  } else {
+    /* In middle: swap char before cursor with char at cursor */
+    c2_start = pos;
+    c2_end = pos + utf8_char_len(input->text + pos);
+    if (c2_end > input->text_len)
+      c2_end = input->text_len;
+    c1_start = utf8_prev_char(input->text, c2_start);
+  }
+
+  size_t c1_len = c2_start - c1_start;
+  size_t c2_len = c2_end - c2_start;
+
+  if (c1_len == 0 || c2_len == 0)
+    return;
+
+  /* Swap using a small temp buffer */
+  char tmp[8];
+  if (c1_len + c2_len > sizeof(tmp))
+    return;
+
+  memcpy(tmp, input->text + c2_start, c2_len);
+  memcpy(tmp + c2_len, input->text + c1_start, c1_len);
+  memcpy(input->text + c1_start, tmp, c1_len + c2_len);
+
+  input->cursor_byte = c2_end;
+  recalculate_cursor_position(input);
+}
+
 /* Free completion list */
 static void free_completions(TuiTextInput *input) {
   if (input->completions) {
@@ -285,46 +398,94 @@ static void free_completions(TuiTextInput *input) {
     input->completion_count = 0;
     input->completion_index = 0;
   }
+  input->completion_word_start = 0;
+  input->completion_word_len = 0;
 }
 
-/* Navigate to previous history entry (Up arrow) */
+/* Check if a history entry matches the current prefix filter */
+static int history_matches_prefix(const char *entry, const char *prefix,
+                                  size_t prefix_len) {
+  if (prefix_len == 0)
+    return 1;
+  return strncmp(entry, prefix, prefix_len) == 0;
+}
+
+/* Navigate to previous history entry (Up arrow / Ctrl+P)
+ * When the user has typed a prefix before navigating, only visit
+ * history entries that start with that prefix. */
 static void history_prev(TuiTextInput *input) {
   if (!input->history || input->history_count == 0)
     return;
 
   /* Save current input if we're at position -1 */
   if (input->history_pos == -1) {
-    if (input->saved_input)
-      free(input->saved_input);
+    free(input->saved_input);
     input->saved_input = strdup(input->text);
   }
 
-  /* Move to previous history entry */
-  if (input->history_pos < input->history_count - 1) {
-    input->history_pos++;
-    tui_textinput_set_text(input, input->history[input->history_pos]);
+  /* Search for next matching entry */
+  const char *prefix = input->saved_input ? input->saved_input : "";
+  size_t prefix_len = strlen(prefix);
+
+  for (int i = input->history_pos + 1; i < input->history_count; i++) {
+    if (history_matches_prefix(input->history[i], prefix, prefix_len)) {
+      input->history_pos = i;
+      tui_textinput_set_text(input, input->history[i]);
+      return;
+    }
   }
 }
 
-/* Navigate to next history entry (Down arrow) */
+/* Navigate to next history entry (Down arrow / Ctrl+N)
+ * Respects the same prefix filter as history_prev. */
 static void history_next(TuiTextInput *input) {
   if (input->history_pos < 0)
     return;
 
-  input->history_pos--;
+  const char *prefix = input->saved_input ? input->saved_input : "";
+  size_t prefix_len = strlen(prefix);
 
-  if (input->history_pos == -1) {
-    /* Restore saved input */
-    if (input->saved_input) {
-      tui_textinput_set_text(input, input->saved_input);
-      free(input->saved_input);
-      input->saved_input = NULL;
-    } else {
-      tui_textinput_clear(input);
+  /* Search for previous matching entry (toward more recent) */
+  for (int i = input->history_pos - 1; i >= 0; i--) {
+    if (history_matches_prefix(input->history[i], prefix, prefix_len)) {
+      input->history_pos = i;
+      tui_textinput_set_text(input, input->history[i]);
+      return;
     }
-  } else {
-    tui_textinput_set_text(input, input->history[input->history_pos]);
   }
+
+  /* No more matches — restore saved input */
+  input->history_pos = -1;
+  if (input->saved_input) {
+    tui_textinput_set_text(input, input->saved_input);
+    free(input->saved_input);
+    input->saved_input = NULL;
+  } else {
+    tui_textinput_clear(input);
+  }
+}
+
+/* Replace bytes in text buffer from [start, start+old_len) with new_word */
+static void replace_word(TuiTextInput *input, int start, int old_len,
+                         const char *new_word) {
+  int new_len = (int)strlen(new_word);
+  int tail_start = start + old_len;
+  int tail_len = (int)input->text_len - tail_start;
+  size_t new_text_len = (size_t)(start + new_len + tail_len);
+
+  if (ensure_capacity(input, new_text_len + 1) < 0)
+    return;
+
+  /* Shift tail to make room (or shrink) */
+  memmove(input->text + start + new_len, input->text + tail_start,
+          (size_t)tail_len);
+  /* Copy new word in */
+  memcpy(input->text + start, new_word, (size_t)new_len);
+
+  input->text_len = new_text_len;
+  input->text[input->text_len] = '\0';
+  input->cursor_byte = (size_t)(start + new_len);
+  recalculate_cursor_position(input);
 }
 
 /* Handle tab completion */
@@ -336,13 +497,24 @@ static void handle_tab_completion(TuiTextInput *input) {
   if (input->completions && input->completion_count > 0) {
     input->completion_index =
         (input->completion_index + 1) % input->completion_count;
-    tui_textinput_set_text(input, input->completions[input->completion_index]);
+    const char *word = input->completions[input->completion_index];
+    replace_word(input, input->completion_word_start,
+                 input->completion_word_len, word);
+    input->completion_word_len = (int)strlen(word);
     return;
   }
 
+  /* Find word start by scanning backward from cursor for space/tab */
+  int word_start = (int)input->cursor_byte;
+  while (word_start > 0 && input->text[word_start - 1] != ' ' &&
+         input->text[word_start - 1] != '\t') {
+    word_start--;
+  }
+  int word_len = (int)input->cursor_byte - word_start;
+
   /* Get new completions */
-  char **completions =
-      input->completer(input->text, (int)input->cursor_byte, input->completer_data);
+  char **completions = input->completer(input->text, (int)input->cursor_byte,
+                                        input->completer_data);
   if (!completions || !completions[0]) {
     /* No completions */
     if (completions)
@@ -358,9 +530,13 @@ static void handle_tab_completion(TuiTextInput *input) {
   input->completions = completions;
   input->completion_count = count;
   input->completion_index = 0;
+  input->completion_word_start = word_start;
+  input->completion_word_len = word_len;
 
   /* Apply first completion */
-  tui_textinput_set_text(input, input->completions[0]);
+  const char *word = input->completions[0];
+  replace_word(input, word_start, word_len, word);
+  input->completion_word_len = (int)strlen(word);
 }
 
 /* Create a new text input component */
@@ -415,6 +591,7 @@ void tui_textinput_free(TuiTextInput *input) {
     free(input->history);
   }
   free_completions(input);
+  free(input->kill_buf);
   free(input);
 }
 
@@ -438,14 +615,28 @@ TuiUpdateResult tui_textinput_update(TuiTextInput *input, TuiMsg msg) {
 
   TuiKeyMsg key = msg.data.key;
 
+  /* Track consecutive kill commands for append behavior */
+  int was_kill = input->last_was_kill;
+  input->last_was_kill = 0;
+
+  /* Any key other than Tab invalidates active completions */
+  if (key.key != TUI_KEY_TAB)
+    free_completions(input);
+
   /* Handle special keys */
   switch (key.key) {
   case TUI_KEY_LEFT:
-    cursor_left(input);
+    if (key.mods & TUI_MOD_CTRL)
+      cursor_word_left(input);
+    else
+      cursor_left(input);
     break;
 
   case TUI_KEY_RIGHT:
-    cursor_right(input);
+    if (key.mods & TUI_MOD_CTRL)
+      cursor_word_right(input);
+    else
+      cursor_right(input);
     break;
 
   case TUI_KEY_UP:
@@ -454,7 +645,6 @@ TuiUpdateResult tui_textinput_update(TuiTextInput *input, TuiMsg msg) {
     } else {
       /* Single-line: navigate history */
       history_prev(input);
-      free_completions(input);
     }
     break;
 
@@ -464,7 +654,6 @@ TuiUpdateResult tui_textinput_update(TuiTextInput *input, TuiMsg msg) {
     } else {
       /* Single-line: navigate history */
       history_next(input);
-      free_completions(input);
     }
     break;
 
@@ -504,7 +693,6 @@ TuiUpdateResult tui_textinput_update(TuiTextInput *input, TuiMsg msg) {
         free(input->saved_input);
         input->saved_input = NULL;
       }
-      free_completions(input);
       return tui_update_result(tui_cmd_line_submit(line));
     }
     break;
@@ -518,36 +706,9 @@ TuiUpdateResult tui_textinput_update(TuiTextInput *input, TuiMsg msg) {
         if (key.rune == 'a' || key.rune == 'A') {
           /* Ctrl+A: Move to start of line */
           cursor_home(input);
-        } else if (key.rune == 'e' || key.rune == 'E') {
-          /* Ctrl+E: Move to end of line */
-          cursor_end(input);
-        } else if (key.rune == 'k' || key.rune == 'K') {
-          /* Ctrl+K: Delete to end of line */
-          size_t end = input->cursor_byte;
-          while (end < input->text_len && input->text[end] != '\n') {
-            end++;
-          }
-          if (end > input->cursor_byte) {
-            memmove(input->text + input->cursor_byte, input->text + end,
-                    input->text_len - end);
-            input->text_len -= (end - input->cursor_byte);
-            input->text[input->text_len] = '\0';
-          }
-        } else if (key.rune == 'u' || key.rune == 'U') {
-          /* Ctrl+U: Delete to start of line */
-          size_t start = input->cursor_byte;
-          while (start > 0 && input->text[start - 1] != '\n') {
-            start--;
-          }
-          if (start < input->cursor_byte) {
-            size_t del_len = input->cursor_byte - start;
-            memmove(input->text + start, input->text + input->cursor_byte,
-                    input->text_len - input->cursor_byte);
-            input->text_len -= del_len;
-            input->cursor_byte = start;
-            input->text[input->text_len] = '\0';
-            recalculate_cursor_position(input);
-          }
+        } else if (key.rune == 'b' || key.rune == 'B') {
+          /* Ctrl+B: Move back one character */
+          cursor_left(input);
         } else if (key.rune == 'd' || key.rune == 'D') {
           /* Ctrl+D: EOF on empty line, delete char otherwise */
           if (input->text_len == 0 && !input->multiline) {
@@ -555,10 +716,91 @@ TuiUpdateResult tui_textinput_update(TuiTextInput *input, TuiMsg msg) {
           } else {
             delete_at(input);
           }
+        } else if (key.rune == 'e' || key.rune == 'E') {
+          /* Ctrl+E: Move to end of line */
+          cursor_end(input);
+        } else if (key.rune == 'f' || key.rune == 'F') {
+          /* Ctrl+F: Move forward one character */
+          cursor_right(input);
+        } else if (key.rune == 'h' || key.rune == 'H') {
+          /* Ctrl+H: Delete previous character (backspace) */
+          delete_before(input);
+        } else if (key.rune == 'k' || key.rune == 'K') {
+          /* Ctrl+K: Kill to end of line */
+          size_t end = input->cursor_byte;
+          while (end < input->text_len && input->text[end] != '\n') {
+            end++;
+          }
+          if (end > input->cursor_byte) {
+            kill_save(input, input->text + input->cursor_byte,
+                      end - input->cursor_byte, was_kill);
+            memmove(input->text + input->cursor_byte, input->text + end,
+                    input->text_len - end);
+            input->text_len -= (end - input->cursor_byte);
+            input->text[input->text_len] = '\0';
+          }
+          input->last_was_kill = 1;
+        } else if (key.rune == 'n' || key.rune == 'N') {
+          /* Ctrl+N: Next history entry */
+          if (!input->multiline)
+            history_next(input);
+        } else if (key.rune == 'p' || key.rune == 'P') {
+          /* Ctrl+P: Previous history entry */
+          if (!input->multiline)
+            history_prev(input);
+        } else if (key.rune == 't' || key.rune == 'T') {
+          /* Ctrl+T: Transpose characters before cursor */
+          transpose_chars(input);
+        } else if (key.rune == 'u' || key.rune == 'U') {
+          /* Ctrl+U: Kill to start of line */
+          size_t start = input->cursor_byte;
+          while (start > 0 && input->text[start - 1] != '\n') {
+            start--;
+          }
+          if (start < input->cursor_byte) {
+            size_t del_len = input->cursor_byte - start;
+            kill_save(input, input->text + start, del_len, 0);
+            memmove(input->text + start, input->text + input->cursor_byte,
+                    input->text_len - input->cursor_byte);
+            input->text_len -= del_len;
+            input->cursor_byte = start;
+            input->text[input->text_len] = '\0';
+            recalculate_cursor_position(input);
+          }
+          input->last_was_kill = 1;
+        } else if (key.rune == 'w' || key.rune == 'W') {
+          /* Ctrl+W: Kill word backward */
+          if (input->cursor_byte > 0) {
+            size_t pos = input->cursor_byte;
+            /* Skip whitespace backward */
+            while (pos > 0 &&
+                   (input->text[pos - 1] == ' ' ||
+                    input->text[pos - 1] == '\t'))
+              pos--;
+            /* Skip word backward */
+            while (pos > 0 && input->text[pos - 1] != ' ' &&
+                   input->text[pos - 1] != '\t')
+              pos--;
+            if (pos < input->cursor_byte) {
+              size_t del_len = input->cursor_byte - pos;
+              kill_save(input, input->text + pos, del_len, was_kill);
+              memmove(input->text + pos, input->text + input->cursor_byte,
+                      input->text_len - input->cursor_byte);
+              input->text_len -= del_len;
+              input->cursor_byte = pos;
+              input->text[input->text_len] = '\0';
+              recalculate_cursor_position(input);
+            }
+            input->last_was_kill = 1;
+          }
+        } else if (key.rune == 'y' || key.rune == 'Y') {
+          /* Ctrl+Y: Yank (paste from kill buffer) */
+          if (input->kill_buf && input->kill_buf_len > 0) {
+            insert_text(input, input->kill_buf, input->kill_buf_len);
+          }
         }
       } else {
         insert_codepoint(input, key.rune);
-        free_completions(input); /* Clear completions on any character input */
       }
     }
     break;

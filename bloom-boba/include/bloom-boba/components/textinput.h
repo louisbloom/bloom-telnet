@@ -62,6 +62,13 @@ typedef struct TuiTextInput {
   char **completions;              /* Current completion list (NULL-terminated) */
   int completion_count;            /* Number of completions */
   int completion_index;            /* Current cycling index */
+  int completion_word_start;       /* Byte offset where completed word starts */
+  int completion_word_len;         /* Byte length of current completed word */
+
+  /* Kill/yank buffer */
+  char *kill_buf;          /* Killed text (malloc'd, NULL initially) */
+  size_t kill_buf_len;     /* Length of killed text in bytes */
+  int last_was_kill;       /* Whether previous key was a kill command */
 } TuiTextInput;
 
 /* Configuration for creating text input */
