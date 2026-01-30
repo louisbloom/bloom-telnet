@@ -44,6 +44,8 @@ class TelnetConnection:
         self.addr = addr
         self.server = server
         self.buffer = b""
+        self.terminal_width = 80
+        self.banner_sent = False
 
     def send(self, data):
         """Send data to the client."""
@@ -87,7 +89,10 @@ class TelnetConnection:
             se_pos = data.find(bytes([IAC, SE]), i)
             if se_pos == -1:
                 return b"", len(data) - i  # Consume rest, incomplete
-            # For now, just acknowledge subnegotiations
+            # Parse NAWS subnegotiation: IAC SB NAWS width[2] height[2] IAC SE
+            sub_data = data[i + 2 : se_pos]
+            if len(sub_data) >= 5 and sub_data[0] == OPT_NAWS:
+                self.terminal_width = (sub_data[1] << 8) | sub_data[2]
             return b"", se_pos - i + 2
 
         # Other commands: consume the IAC and command byte
@@ -142,10 +147,20 @@ class TelnetConnection:
 
         return bytes(result)
 
+    def send_banner_if_needed(self):
+        """Send welcome banner once, after NAWS has been received."""
+        if not self.banner_sent:
+            self.banner_sent = True
+            self.send(self.server.get_welcome_banner(self.terminal_width))
+            self.send(PROMPT)
+
     def handle_data(self, raw_data):
         """Handle incoming data from the client."""
         # Process telnet protocol
         data = self.process_data(raw_data)
+
+        # Send banner after first data (NAWS negotiation will have set width)
+        self.send_banner_if_needed()
 
         if not data:
             return
@@ -278,16 +293,37 @@ class TestServer:
             # Offer to echo and suppress go-ahead
             connection.send_iac(WILL, OPT_ECHO)
             connection.send_iac(WILL, OPT_SGA)
-
-            # Send colorful welcome banner
-            connection.send(self.get_welcome_banner())
-            connection.send(PROMPT)
+            # Request window size from client
+            connection.send_iac(DO, OPT_NAWS)
+            # Banner is deferred until first client data (after NAWS arrives)
 
         except Exception as e:
             print(f"Error accepting connection: {e}")
 
-    def get_welcome_banner(self):
+    def _gradient_line(self, width):
+        """Generate a full-width pink-to-purple gradient bar using truecolor."""
+        # Pink (255, 105, 180) -> Purple (128, 0, 255)
+        r_start, g_start, b_start = 255, 105, 180
+        r_end, g_end, b_end = 128, 0, 255
+        parts = []
+        for i in range(width):
+            t = i / max(width - 1, 1)
+            r = int(r_start + (r_end - r_start) * t)
+            g = int(g_start + (g_end - g_start) * t)
+            b = int(b_start + (b_end - b_start) * t)
+            parts.append(f"\033[48;2;{r};{g};{b}m ")
+        parts.append("\033[0m")
+        return "".join(parts)
+
+    def get_welcome_banner(self, width=80):
         """Return a colorful ASCII art welcome banner."""
+        # ANSI attributes
+        BOLD = "\033[1m"
+        DIM = "\033[2m"
+        ITALIC = "\033[3m"
+        UNDERLINE = "\033[4m"
+        RESET = "\033[0m"
+
         # ANSI color codes
         CYAN = "\033[36m"
         MAGENTA = "\033[35m"
@@ -295,21 +331,24 @@ class TestServer:
         GREEN = "\033[32m"
         BLUE = "\033[34m"
         WHITE = "\033[37m"
-        BOLD = "\033[1m"
-        RESET = "\033[0m"
 
-        banner = f"""{CYAN}{BOLD}  ____  _                       {MAGENTA} _____         _
+        gradient = self._gradient_line(width)
+
+        banner = f"""\
+{gradient}
+{CYAN}{BOLD}  ____  _                       {MAGENTA} _____         _
 {CYAN} | __ )| | ___   ___  _ __ ___  {MAGENTA}|_   _|__  ___| |_
 {CYAN} |  _ \\| |/ _ \\ / _ \\| '_ ` _ \\ {MAGENTA}  | |/ _ \\/ __| __|
 {CYAN} | |_) | | (_) | (_) | | | | | |{MAGENTA}  | |  __/\\__ \\ |_
 {CYAN} |____/|_|\\___/ \\___/|_| |_| |_|{MAGENTA}  |_|\\___||___/\\__|{RESET}
+{gradient}
 
-{GREEN}  Welcome to the Bloom Test Server!{RESET}
-{YELLOW}  --------------------------------{RESET}
-{WHITE}  A test server for bloom-telnet development.
-  Unrecognized input is echoed back to you.{RESET}
+{GREEN}{BOLD}  \u2728 Welcome to the Bloom Test Server! \u2728{RESET}
+{DIM}  {"\u2500" * (width - 4)}{RESET}
+{WHITE}{ITALIC}  A test server for bloom-telnet development.{RESET}
+{WHITE}  Unrecognized input is echoed back to you.{RESET}
 
-{BLUE}  Commands:{RESET}
+{BLUE}{BOLD}{UNDERLINE}  Commands:{RESET}
 {self.get_help_text()}
 
 """
