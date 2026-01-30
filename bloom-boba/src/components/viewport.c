@@ -171,7 +171,9 @@ static void trim_old_lines(TuiViewport *vp) {
   size_t to_remove = vp->line_count - vp->max_lines;
 
   /* Free old lines and subtract their visual lines */
+  size_t visual_removed = 0;
   for (size_t i = 0; i < to_remove; i++) {
+    visual_removed += vp->lines[i].visual_lines;
     vp->total_visual_lines -= vp->lines[i].visual_lines;
     free(vp->lines[i].text);
   }
@@ -181,9 +183,12 @@ static void trim_old_lines(TuiViewport *vp) {
           (vp->line_count - to_remove) * sizeof(TuiViewportLine));
   vp->line_count -= to_remove;
 
-  /* Adjust y_offset — compute visual lines removed for offset adjustment */
-  /* Since we removed content lines that mapped to some visual lines,
-     we already subtracted from total_visual_lines above. Just clamp. */
+  /* Adjust y_offset for removed content, then clamp */
+  if (vp->y_offset > visual_removed) {
+    vp->y_offset -= visual_removed;
+  } else {
+    vp->y_offset = 0;
+  }
   clamp_y_offset(vp);
 }
 
