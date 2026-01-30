@@ -1280,10 +1280,18 @@ void tui_textinput_history_add(TuiTextInput *input, const char *line) {
       return;
   }
 
-  /* Don't add duplicate of most recent entry */
-  if (input->history_count > 0 && input->history[0] &&
-      strcmp(input->history[0], line) == 0) {
-    return;
+  /* Remove any existing duplicate entry (squash) */
+  for (int i = 0; i < input->history_count; i++) {
+    if (input->history[i] && strcmp(input->history[i], line) == 0) {
+      free(input->history[i]);
+      /* Shift entries up to fill the gap */
+      for (int j = i; j < input->history_count - 1; j++) {
+        input->history[j] = input->history[j + 1];
+      }
+      input->history[input->history_count - 1] = NULL;
+      input->history_count--;
+      break;
+    }
   }
 
   /* Make room for new entry at position 0 */

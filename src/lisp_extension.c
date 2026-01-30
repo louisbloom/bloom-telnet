@@ -452,9 +452,7 @@ int lisp_x_init(void) {
   env_define(lisp_env, "load-system-file",
              lisp_make_builtin(builtin_load_system_file, "load-system-file"));
 
-  /* Define default configuration variables */
-  env_define(lisp_env, "*input-history-size*", lisp_make_integer(100));
-  /* Note: *prompt* is defined in init.lisp to allow user customization */
+  /* Note: *input-history-size* and *prompt* are defined in init.lisp */
 
   /* Define default hooks as identity functions */
   LispObject *identity_hook = lisp_eval_string("(lambda (x) x)", lisp_env);
@@ -705,7 +703,7 @@ const char *lisp_x_call_user_input_hook(const char *text, int cursor_pos) {
 /* Get input history size from Lisp config */
 int lisp_x_get_input_history_size(void) {
   if (!lisp_env) {
-    return 100;
+    return 1000;
   }
 
   LispObject *value = env_lookup(lisp_env, "*input-history-size*");
@@ -715,7 +713,7 @@ int lisp_x_get_input_history_size(void) {
       return size;
     }
   }
-  return 100;
+  return 1000;
 }
 
 /* Register telnet instance */

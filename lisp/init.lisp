@@ -49,7 +49,7 @@
 ;; ============================================================================
 ;; INPUT CONFIGURATION
 ;; ============================================================================
-(defvar *input-history-size* 100
+(defvar *input-history-size* 1000
   "Maximum number of input history entries to keep.")
 
 (defvar *prompt* "❯ " "Input prompt string.")
