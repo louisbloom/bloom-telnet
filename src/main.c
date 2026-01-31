@@ -565,6 +565,12 @@ int main(int argc, char *argv[]) {
     }
   }
 
+  /* Suppress stderr when connected to a terminal (TUI mode).
+   * When piped/redirected, stderr remains available for diagnostics. */
+  if (isatty(STDERR_FILENO)) {
+    freopen("/dev/null", "w", stderr);
+  }
+
   /* Initialize GC */
   GC_INIT();
 
