@@ -55,8 +55,8 @@ void lisp_x_load_init_post(void);
 /* Get prompt string from Lisp config (default: "> ") */
 const char *lisp_x_get_prompt(void);
 
-/* Completion callback for lineedit - returns NULL-terminated array of
- * completions */
+/* Completion callback for bloom-boba textinput - returns NULL-terminated array
+ * of completions */
 char **lisp_x_complete(const char *buffer, int cursor_pos, void *userdata);
 
 /* Terminal echo callback type - called by terminal-echo builtin */

@@ -12,7 +12,7 @@ A terminal-based telnet client with Lisp scripting support, designed for MUD gam
 
 ## Dependencies
 
-- bloom-lisp (with lineedit)
+- bloom-lisp
 - Boehm GC (via bloom-lisp)
 - PCRE2 (via bloom-lisp)
 

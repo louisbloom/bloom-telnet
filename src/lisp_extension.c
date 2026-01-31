@@ -780,7 +780,7 @@ const char *lisp_x_get_prompt(void) {
   return "> ";
 }
 
-/* Completion callback for lineedit */
+/* Completion callback for bloom-boba textinput */
 char **lisp_x_complete(const char *buffer, int cursor_pos, void *userdata) {
   (void)userdata;
 
