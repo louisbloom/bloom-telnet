@@ -195,7 +195,7 @@
 ;; so that server reset codes don't kill highlight colors.
 (defun tintin-telnet-input-filter (text)
   (if (and *tintin-enabled* (> (hash-count *tintin-highlights*) 0))
-    (tintin-post-process-ansi-stack (tintin-apply-highlights text))
+    (tintin-apply-highlights text)
     text))
 
 ;; TinTin++ telnet input hook handler for triggering actions

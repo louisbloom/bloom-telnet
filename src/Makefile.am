@@ -17,13 +17,10 @@ bloom_telnet_SOURCES = \
 
 bloom_telnet_CPPFLAGS = \
     -I$(top_srcdir)/include \
-    -I$(top_srcdir)/bloom-boba/include \
+    $(BLOOMBOBA_CFLAGS) \
     $(BLOOMLISP_CFLAGS)
 
 bloom_telnet_LDADD = \
-    $(top_builddir)/bloom-boba/libbloom-boba.a \
+    $(BLOOMBOBA_LIBS) \
     $(BLOOMLISP_LIBS) \
     $(SOCKET_LIBS)
-
-# Ensure bloom-boba is built first
-bloom_telnet_DEPENDENCIES = $(top_builddir)/bloom-boba/libbloom-boba.a

@@ -51,3 +51,5 @@ venv/
 .aider*
 .cache/
 compile_commands.json
+crush.json
+.crushignore

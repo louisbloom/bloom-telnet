@@ -21,6 +21,9 @@ PKG_PROG_PKG_CONFIG
 dnl Check for bloom-lisp
 PKG_CHECK_MODULES([BLOOMLISP], [bloom-lisp])
 
+dnl Check for bloom-boba
+PKG_CHECK_MODULES([BLOOMBOBA], [bloom-boba])
+
 dnl Platform-specific socket libraries
 case "$host_os" in
     mingw*|msys*)
@@ -45,7 +48,6 @@ AC_CHECK_FUNCS([memset socket select getaddrinfo])
 dnl Output files
 AC_CONFIG_FILES([
     Makefile
-    bloom-boba/Makefile
     include/Makefile
     src/Makefile
     lisp/Makefile

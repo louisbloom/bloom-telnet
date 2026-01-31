@@ -176,10 +176,10 @@
         ;; Higher priority - insert at head
         (cons entry sorted-list)
         (if (= priority first-priority)
-          ;; Same priority - use pattern length as tiebreaker (longer first)
+          ;; Same priority - use pattern length as tiebreaker (shorter first)
           (let ((entry-pattern (car entry))
                 (first-pattern (car first-entry)))
-            (if (>= (length entry-pattern) (length first-pattern))
+            (if (<= (length entry-pattern) (length first-pattern))
               (cons entry sorted-list)
               (cons first-entry
                (tintin-insert-by-priority entry priority (cdr sorted-list)))))
