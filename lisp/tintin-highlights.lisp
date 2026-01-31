@@ -226,18 +226,16 @@
         (pos 0))
     (do ()
       ((>= pos len)
-       (progn
-         ;; If we're still in a highlight at end, close it and restore server state
-         (if current-highlight
-           (set! result (concat result (tintin-emit-server-state server-state))))
-         ;; Emit any trailing ANSI codes at the end position
-         (let ((trailing (tintin-get-ansi-at-pos pos ansi-map)))
-           (do ((remaining trailing (cdr remaining))) ((null? remaining))
-             (let ((seq (car remaining)))
-               (set! server-state (tintin-update-server-state server-state seq))
-               ;; Always emit trailing codes (they're after all text)
-               (set! result (concat result seq)))))
-         result))
+       ;; If we're still in a highlight at end, close it and restore server state
+       (if current-highlight
+         (set! result (concat result (tintin-emit-server-state server-state))))
+       ;; Emit any trailing ANSI codes at the end position
+       (let ((trailing (tintin-get-ansi-at-pos pos ansi-map)))
+         (do ((remaining trailing (cdr remaining))) ((null? remaining))
+           (let ((seq (car remaining)))
+             (set! server-state (tintin-update-server-state server-state seq))
+             ;; Always emit trailing codes (they're after all text)
+             (set! result (concat result seq))))) result)
       ;; Process any ANSI codes at this position (update server state)
       (let ((ansi-seqs (tintin-get-ansi-at-pos pos ansi-map)))
         (do ((remaining ansi-seqs (cdr remaining))) ((null? remaining))
