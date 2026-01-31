@@ -27,14 +27,12 @@
 #include "../include/terminal_caps.h"
 #include "commands.h"
 #include "lisp_extension.h"
+#include "logging.h"
 #include "telnet_app.h"
 #include <bloom-boba/ansi_sequences.h>
 #include <bloom-boba/cmd.h>
 #include <bloom-boba/dynamic_buffer.h>
 #include <bloom-boba/input_parser.h>
-
-/* Version information */
-#define BLOOM_TELNET_VERSION "0.1.0"
 
 /* Global state */
 static Telnet *g_telnet = NULL;
@@ -211,6 +209,8 @@ static void print_usage(const char *progname) {
           "  -h, --help          Show this help message\n"
           "  -v, --version       Show version information\n"
           "  -l, --load FILE     Load a Lisp script at startup\n"
+          "  -L, --log SPEC      Enable logging (e.g. '*:DEBUG', "
+          "'completion:DEBUG,*:WARN')\n"
           "\n"
           "Arguments:\n"
           "  hostname            Server hostname or IP address\n"
@@ -524,11 +524,12 @@ int main(int argc, char *argv[]) {
       {"help", no_argument, NULL, 'h'},
       {"version", no_argument, NULL, 'v'},
       {"load", required_argument, NULL, 'l'},
+      {"log", required_argument, NULL, 'L'},
       {NULL, 0, NULL, 0},
   };
 
   int opt;
-  while ((opt = getopt_long(argc, argv, "hvl:", long_options, NULL)) != -1) {
+  while ((opt = getopt_long(argc, argv, "hvl:L:", long_options, NULL)) != -1) {
     switch (opt) {
     case 'h':
       print_usage(argv[0]);
@@ -542,6 +543,9 @@ int main(int argc, char *argv[]) {
         load_files = realloc(load_files, load_file_capacity * sizeof(char *));
       }
       load_files[load_file_count++] = optarg;
+      break;
+    case 'L':
+      bloom_log_set_filter(optarg);
       break;
     default:
       print_usage(argv[0]);
@@ -578,7 +582,7 @@ int main(int argc, char *argv[]) {
 
   /* Detect terminal capabilities */
   if (termcaps_init() < 0) {
-    fprintf(stderr, "Warning: Could not detect terminal capabilities\n");
+    bloom_log(LOG_WARN, NULL, "Could not detect terminal capabilities");
   }
 
   /* Initialize Lisp */
@@ -589,13 +593,6 @@ int main(int argc, char *argv[]) {
 
   /* Register terminal echo callback */
   lisp_x_register_echo_callback(echo_to_viewport);
-
-  /* Load additional scripts if specified */
-  for (int i = 0; i < load_file_count; i++) {
-    if (lisp_x_load_file(load_files[i]) < 0) {
-      fprintf(stderr, "Failed to load: %s\n", load_files[i]);
-    }
-  }
 
   /* Create telnet client */
   g_telnet = telnet_create();
@@ -630,6 +627,17 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
+  /* Now that viewport is available, route log messages there */
+  bloom_log_set_echo(echo_to_viewport);
+
+  /* Load additional scripts if specified (after viewport so logs are visible)
+   */
+  for (int i = 0; i < load_file_count; i++) {
+    if (lisp_x_load_file(load_files[i]) < 0) {
+      bloom_log(LOG_ERROR, "lisp", "Failed to load: %s", load_files[i]);
+    }
+  }
+
   /* Create render buffer */
   g_render_buf = dynamic_buffer_create(4096);
   if (!g_render_buf) {
@@ -637,13 +645,8 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  /* Load init-post.lisp */
+  /* Load init-post.lisp (prints banner via script-echo) */
   lisp_x_load_init_post();
-
-  /* Print banner to viewport */
-  telnet_app_echo(g_app, "bloom-telnet ", 13);
-  telnet_app_echo(g_app, BLOOM_TELNET_VERSION, strlen(BLOOM_TELNET_VERSION));
-  telnet_app_echo(g_app, " - Type :help for commands\n", 27);
 
   /* Connect if hostname provided */
   if (hostname) {
@@ -663,7 +666,7 @@ int main(int argc, char *argv[]) {
 
   /* Enable raw mode for terminal */
   if (enable_raw_mode() < 0) {
-    fprintf(stderr, "Warning: Could not enable raw terminal mode\n");
+    bloom_log(LOG_WARN, NULL, "Could not enable raw terminal mode");
   }
 
   /* Run main event loop */

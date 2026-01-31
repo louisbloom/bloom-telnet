@@ -3,6 +3,7 @@
 #include "lisp_extension.h"
 #include "../include/telnet.h"
 #include "../include/terminal_caps.h"
+#include "logging.h"
 #include "path_utils.h"
 #include <bloom-boba/dynamic_buffer.h>
 #include <bloom-lisp/file_utils.h>
@@ -372,29 +373,93 @@ static int load_lisp_system_file(const char *filename) {
       LispObject *result = lisp_load_file(search_paths[i], lisp_env);
       if (result && result->type == LISP_ERROR) {
         char *err_str = lisp_print(result);
-        fprintf(stderr, "Lisp error loading %s: %s\n", search_paths[i],
-                err_str);
+        bloom_log(LOG_ERROR, "lisp", "Error loading %s: %s", search_paths[i],
+                  err_str);
       } else {
-        fprintf(stderr, "Loaded: %s\n", search_paths[i]);
+        bloom_log(LOG_INFO, "lisp", "Loaded: %s", search_paths[i]);
         return 1;
       }
     }
   }
 
-  fprintf(stderr, "Failed to load Lisp file: %s\n", filename);
+  bloom_log(LOG_ERROR, "lisp", "Failed to load Lisp file: %s", filename);
   return 0;
+}
+
+/* Interned log level symbols for pointer comparison */
+static LispObject *sym_log_debug = NULL;
+static LispObject *sym_log_info = NULL;
+static LispObject *sym_log_warn = NULL;
+static LispObject *sym_log_error = NULL;
+
+/* Builtin: bloom-log - Log a message with level and tag */
+static LispObject *builtin_bloom_log(LispObject *args, Environment *env) {
+  (void)env;
+
+  if (args == NIL)
+    return lisp_make_error("bloom-log requires 3 arguments: level tag message");
+
+  LispObject *level_obj = lisp_car(args);
+  args = lisp_cdr(args);
+  if (args == NIL)
+    return lisp_make_error("bloom-log requires 3 arguments: level tag message");
+
+  LispObject *tag_obj = lisp_car(args);
+  args = lisp_cdr(args);
+  if (args == NIL)
+    return lisp_make_error("bloom-log requires 3 arguments: level tag message");
+
+  LispObject *msg_obj = lisp_car(args);
+
+  if (level_obj->type != LISP_SYMBOL)
+    return lisp_make_error("bloom-log: level must be a symbol");
+  if (tag_obj->type != LISP_STRING)
+    return lisp_make_error("bloom-log: tag must be a string");
+  if (msg_obj->type != LISP_STRING)
+    return lisp_make_error("bloom-log: message must be a string");
+
+  LogLevel level;
+  if (level_obj == sym_log_debug)
+    level = LOG_DEBUG;
+  else if (level_obj == sym_log_info)
+    level = LOG_INFO;
+  else if (level_obj == sym_log_warn)
+    level = LOG_WARN;
+  else if (level_obj == sym_log_error)
+    level = LOG_ERROR;
+  else
+    return lisp_make_error(
+        "bloom-log: level must be 'debug, 'info, 'warn, or 'error");
+
+  bloom_log(level, tag_obj->value.string, "%s", msg_obj->value.string);
+  return NIL;
+}
+
+/* Builtin: set-log-filter - Set log filter at runtime */
+static LispObject *builtin_set_log_filter(LispObject *args, Environment *env) {
+  (void)env;
+
+  if (args == NIL)
+    return lisp_make_error("set-log-filter requires 1 argument");
+
+  LispObject *spec_obj = lisp_car(args);
+  if (spec_obj->type != LISP_STRING)
+    return lisp_make_error("set-log-filter: argument must be a string");
+
+  bloom_log_set_filter(spec_obj->value.string);
+  return NIL;
 }
 
 /* Initialize Lisp interpreter and environment */
 int lisp_x_init(void) {
   if (lisp_init() < 0) {
-    fprintf(stderr, "Failed to initialize Lisp interpreter\n");
+    bloom_log(LOG_ERROR, "lisp", "Failed to initialize Lisp interpreter");
     return -1;
   }
 
   lisp_env = env_create_global();
   if (!lisp_env) {
-    fprintf(stderr, "Failed to create Lisp environment\n");
+    bloom_log(LOG_ERROR, "lisp", "Failed to create Lisp environment");
     lisp_cleanup();
     return -1;
   }
@@ -414,7 +479,7 @@ int lisp_x_init(void) {
 
   if (!ansi_strip_buffer || !telnet_filter_buffer ||
       !telnet_filter_temp_buffer || !user_input_hook_buffer) {
-    fprintf(stderr, "Failed to allocate buffers\n");
+    bloom_log(LOG_ERROR, "lisp", "Failed to allocate buffers");
     lisp_x_cleanup();
     return -1;
   }
@@ -452,6 +517,21 @@ int lisp_x_init(void) {
   env_define(lisp_env, "load-system-file",
              lisp_make_builtin(builtin_load_system_file, "load-system-file"));
 
+  /* Intern log level symbols for pointer comparison in bloom-log */
+  sym_log_debug = lisp_intern("debug");
+  sym_log_info = lisp_intern("info");
+  sym_log_warn = lisp_intern("warn");
+  sym_log_error = lisp_intern("error");
+
+  /* Logging builtins */
+  env_define(lisp_env, "bloom-log",
+             lisp_make_builtin(builtin_bloom_log, "bloom-log"));
+  env_define(lisp_env, "set-log-filter",
+             lisp_make_builtin(builtin_set_log_filter, "set-log-filter"));
+
+  /* Version string accessible from Lisp */
+  env_define(lisp_env, "*version*", lisp_make_string(BLOOM_TELNET_VERSION));
+
   /* Note: *input-history-size* and *prompt* are defined in init.lisp */
 
   /* Define default hooks as identity functions */
@@ -484,7 +564,7 @@ int lisp_x_load_file(const char *filepath) {
     LispObject *result = lisp_load_file(filepath, lisp_env);
     if (result && result->type == LISP_ERROR) {
       char *err_str = lisp_print(result);
-      fprintf(stderr, "Error loading %s: %s\n", filepath, err_str);
+      bloom_log(LOG_ERROR, "lisp", "Error loading %s: %s", filepath, err_str);
       return -1;
     }
     return 0;
@@ -537,27 +617,34 @@ void lisp_x_call_telnet_input_hook(const char *text, size_t len) {
   size_t stripped_len = 0;
   char *stripped_text = strip_ansi_codes(text, len, &stripped_len);
   if (!stripped_text || stripped_len == 0) {
+    bloom_log(LOG_DEBUG, "hooks",
+              "input-hook: stripped text empty (raw len=%zu)", len);
     return;
   }
 
   LispObject *hook = env_lookup(lisp_env, "telnet-input-hook");
   if (!hook || (hook->type != LISP_LAMBDA && hook->type != LISP_BUILTIN)) {
+    bloom_log(LOG_DEBUG, "hooks", "input-hook: hook not found or wrong type");
     return;
   }
 
-  LispObject *text_arg = lisp_make_string(stripped_text);
-  if (!text_arg || text_arg->type == LISP_ERROR) {
+  bloom_log(LOG_DEBUG, "hooks", "input-hook: calling with %zu bytes",
+            stripped_len);
+
+  volatile LispObject *text_arg = lisp_make_string(stripped_text);
+  if (!text_arg || ((LispObject *)text_arg)->type == LISP_ERROR) {
+    bloom_log(LOG_DEBUG, "hooks", "input-hook: failed to create string arg");
     return;
   }
 
-  LispObject *args = lisp_make_cons(text_arg, NIL);
-  LispObject *call_expr = lisp_make_cons(hook, args);
-  LispObject *result = lisp_eval(call_expr, lisp_env);
+  volatile LispObject *args = lisp_make_cons((LispObject *)text_arg, NIL);
+  volatile LispObject *call_expr = lisp_make_cons(hook, (LispObject *)args);
+  LispObject *result = lisp_eval((LispObject *)call_expr, lisp_env);
 
   if (result && result->type == LISP_ERROR) {
     char *err_str = lisp_print(result);
     if (err_str) {
-      fprintf(stderr, "Error in telnet-input-hook: %s\n", err_str);
+      bloom_log(LOG_ERROR, "hooks", "telnet-input-hook: %s", err_str);
     }
   }
 }
@@ -571,13 +658,13 @@ void lisp_x_run_timers(void) {
   if (!fn || (fn->type != LISP_LAMBDA && fn->type != LISP_BUILTIN))
     return;
 
-  LispObject *call = lisp_make_cons(fn, NIL);
-  LispObject *result = lisp_eval(call, lisp_env);
+  volatile LispObject *call = lisp_make_cons(fn, NIL);
+  LispObject *result = lisp_eval((LispObject *)call, lisp_env);
 
   if (result && result->type == LISP_ERROR) {
     char *err_str = lisp_print(result);
     if (err_str) {
-      fprintf(stderr, "Error in run-timers: %s\n", err_str);
+      bloom_log(LOG_ERROR, "hooks", "run-timers: %s", err_str);
     }
   }
 }
@@ -606,20 +693,20 @@ const char *lisp_x_call_telnet_input_filter_hook(const char *text, size_t len,
   memcpy(telnet_filter_temp_buffer, text, len);
   telnet_filter_temp_buffer[len] = '\0';
 
-  LispObject *arg = lisp_make_string(telnet_filter_temp_buffer);
-  if (!arg || arg->type == LISP_ERROR) {
+  volatile LispObject *arg = lisp_make_string(telnet_filter_temp_buffer);
+  if (!arg || ((LispObject *)arg)->type == LISP_ERROR) {
     *out_len = len;
     return text;
   }
 
-  LispObject *args = lisp_make_cons(arg, NIL);
-  LispObject *call_expr = lisp_make_cons(hook, args);
-  LispObject *result = lisp_eval(call_expr, lisp_env);
+  volatile LispObject *args = lisp_make_cons((LispObject *)arg, NIL);
+  volatile LispObject *call_expr = lisp_make_cons(hook, (LispObject *)args);
+  LispObject *result = lisp_eval((LispObject *)call_expr, lisp_env);
 
   if (!result || result->type == LISP_ERROR) {
     char *err_str = lisp_print(result);
     if (err_str) {
-      fprintf(stderr, "Error in telnet-input-filter-hook: %s\n", err_str);
+      bloom_log(LOG_ERROR, "hooks", "telnet-input-filter-hook: %s", err_str);
     }
     *out_len = len;
     return text;
@@ -657,24 +744,25 @@ const char *lisp_x_call_user_input_hook(const char *text, int cursor_pos) {
     return text;
   }
 
-  LispObject *text_arg = lisp_make_string(text);
-  if (!text_arg || text_arg->type == LISP_ERROR) {
+  volatile LispObject *text_arg = lisp_make_string(text);
+  if (!text_arg || ((LispObject *)text_arg)->type == LISP_ERROR) {
     return text;
   }
 
-  LispObject *cursor_arg = lisp_make_integer(cursor_pos);
-  if (!cursor_arg || cursor_arg->type == LISP_ERROR) {
+  volatile LispObject *cursor_arg = lisp_make_integer(cursor_pos);
+  if (!cursor_arg || ((LispObject *)cursor_arg)->type == LISP_ERROR) {
     return text;
   }
 
-  LispObject *args = lisp_make_cons(text_arg, lisp_make_cons(cursor_arg, NIL));
-  LispObject *call_expr = lisp_make_cons(hook, args);
-  LispObject *result = lisp_eval(call_expr, lisp_env);
+  volatile LispObject *args = lisp_make_cons(
+      (LispObject *)text_arg, lisp_make_cons((LispObject *)cursor_arg, NIL));
+  volatile LispObject *call_expr = lisp_make_cons(hook, (LispObject *)args);
+  LispObject *result = lisp_eval((LispObject *)call_expr, lisp_env);
 
   if (!result || result->type == LISP_ERROR) {
     char *err_str = lisp_print(result);
     if (err_str) {
-      fprintf(stderr, "Error in user-input-hook: %s\n", err_str);
+      bloom_log(LOG_ERROR, "hooks", "user-input-hook: %s", err_str);
     }
     if (text && text[0] == '#') {
       return "";
@@ -785,12 +873,14 @@ char **lisp_x_complete(const char *buffer, int cursor_pos, void *userdata) {
   (void)userdata;
 
   if (!lisp_env || !buffer) {
+    bloom_log(LOG_DEBUG, "completion", "no env or buffer");
     return NULL;
   }
 
   /* Look up completion-hook */
   LispObject *hook = env_lookup(lisp_env, "completion-hook");
   if (!hook || (hook->type != LISP_LAMBDA && hook->type != LISP_BUILTIN)) {
+    bloom_log(LOG_DEBUG, "completion", "hook not found or wrong type");
     return NULL;
   }
 
@@ -808,13 +898,21 @@ char **lisp_x_complete(const char *buffer, int cursor_pos, void *userdata) {
   memcpy(partial, buffer + start, partial_len);
   partial[partial_len] = '\0';
 
+  bloom_log(LOG_DEBUG, "completion", "partial=\"%s\"", partial);
+
   /* Call hook with partial text */
-  LispObject *arg = lisp_make_string(partial);
-  LispObject *args = lisp_make_cons(arg, NIL);
-  LispObject *call_expr = lisp_make_cons(hook, args);
-  LispObject *result = lisp_eval(call_expr, lisp_env);
+  volatile LispObject *arg = lisp_make_string(partial);
+  volatile LispObject *args = lisp_make_cons((LispObject *)arg, NIL);
+  volatile LispObject *call_expr = lisp_make_cons(hook, (LispObject *)args);
+  LispObject *result = lisp_eval((LispObject *)call_expr, lisp_env);
 
   if (!result || result->type == LISP_ERROR || result == NIL) {
+    if (!result)
+      bloom_log(LOG_DEBUG, "completion", "eval returned NULL");
+    else if (result->type == LISP_ERROR)
+      bloom_log(LOG_DEBUG, "completion", "eval error: %s", lisp_print(result));
+    else
+      bloom_log(LOG_DEBUG, "completion", "eval returned NIL");
     return NULL;
   }
 
@@ -827,8 +925,11 @@ char **lisp_x_complete(const char *buffer, int cursor_pos, void *userdata) {
   }
 
   if (count == 0) {
+    bloom_log(LOG_DEBUG, "completion", "result list empty");
     return NULL;
   }
+
+  bloom_log(LOG_DEBUG, "completion", "%d candidates", count);
 
   char **completions = malloc((count + 1) * sizeof(char *));
   if (!completions) {

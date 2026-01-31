@@ -36,30 +36,22 @@
 ;; ============================================================================
 ;; STARTUP MESSAGE
 ;; ============================================================================
-;; Display simple startup info with capability-aware colors
-;; Helper function to get appropriate color for startup message
-(defun startup-color () (termcap 'fg-color 100 149 237)) ; Cornflower blue
-
-(defun startup-reset () (termcap 'reset))
-
-;; Display startup message with adaptive coloring
-(terminal-echo (startup-color))
-(terminal-echo "Lisp scripting enabled.\r\n")
-(terminal-echo "  Tab completion from telnet output\r\n")
-(terminal-echo "  Hook system for extensibility\r\n")
-(terminal-echo "  Timer support for automation\r\n")
-
-;; Show terminal capability summary if color is supported
-(if (> (termcap 'color-level) 0)
-  (progn (terminal-echo "  Terminal: ") (terminal-echo (termcap 'type))
-    (terminal-echo " (")
-    (let ((level (termcap 'color-level)))
-      (cond
-        ((= level 4) (terminal-echo "truecolor"))
-        ((= level 3) (terminal-echo "256-color"))
-        ((= level 2) (terminal-echo "16-color"))
-        (t (terminal-echo "8-color"))))
-    (terminal-echo ")\r\n")))
-
-(terminal-echo (startup-reset))
+(let* ((sep (if (termcap 'unicode?) " · " ", "))
+       (term-type (termcap 'type))
+       (encoding (termcap 'encoding))
+       (color-name
+        (let ((level (termcap 'color-level)))
+          (cond
+            ((= level 4) "truecolor")
+            ((= level 3) "256-color")
+            ((= level 2) "16-color")
+            ((> level 0) "8-color")
+            (#t nil))))
+       (term-info
+        (concat term-type (if color-name (concat sep color-name) "")
+         (if (and (string? encoding) (not (string=? encoding "ASCII")))
+           (concat sep encoding)
+           ""))))
+  (script-echo (concat "bloom-telnet " *version*) ":help for commands"
+   term-info))
 

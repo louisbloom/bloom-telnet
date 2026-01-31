@@ -135,15 +135,22 @@
         (advance-order-index vec-size)
         1))))
 
+(defvar *collect-words-max-length* 65536
+  "Maximum text length for word collection. Texts longer than this are truncated.")
+
 (defun collect-words-from-text (text)
   "Extract words from text and add them to completion store."
-  (if (> (length text) 2000)
+  (if (not (string? text))
     ()
-    (let ((words (extract-words text)))
-      (if (null? words)
-        ()
-        (do ((remaining words (cdr remaining))) ((null? remaining))
-          (add-word-to-store (car remaining)))))))
+    (let ((input
+           (if (> (length text) *collect-words-max-length*)
+             (substring text 0 *collect-words-max-length*)
+             text)))
+      (let ((words (extract-words input)))
+        (if (null? words)
+          ()
+          (do ((remaining words (cdr remaining))) ((null? remaining))
+            (add-word-to-store (car remaining))))))))
 
 (defun compute-circular-index (pos vec-size)
   (if (< pos 0) (+ pos vec-size) pos))
@@ -392,6 +399,43 @@
   "Generate ANSI true color foreground escape sequence."
   (concat "\033[38;2;" (number->string r) ";" (number->string g) ";"
    (number->string b) "m"))
+
+;; ============================================================================
+;; COMPLETION DIAGNOSTICS
+;; ============================================================================
+(defun completion-debug-info ()
+  "Print completion word store diagnostics."
+  (let* ((vec *completion-word-order*)
+         (vec-size (length vec))
+         (store-count (length (hash-keys *completion-word-store*)))
+         (idx *completion-word-order-index*))
+    (terminal-echo
+     (concat "\r\nCompletion store: " (number->string store-count)
+      " unique words\r\n" "Circular buffer size: " (number->string vec-size)
+      "\r\n" "Buffer index: " (number->string idx) "\r\n"))))
+
+;; ============================================================================
+;; LOGGING CONVENIENCE WRAPPERS
+;; ============================================================================
+(defun report-error (message)
+  "Log an error message via the bloom logging system."
+  (bloom-log 'error "lisp" message))
+
+(defun report-warn (message)
+  "Log a warning message via the bloom logging system."
+  (bloom-log 'warn "lisp" message))
+
+;; ============================================================================
+;; SCRIPT STARTUP BANNERS
+;; ============================================================================
+(defun script-echo (title &rest detail-lines)
+  "Print a styled script startup banner. TITLE in accent, DETAIL-LINES in dim."
+  (let ((accent (termcap 'fg-color 125 86 244))
+        (dim (termcap 'fg-color 80 80 80))
+        (reset (termcap 'reset)))
+    (terminal-echo (concat accent title reset "\r\n"))
+    (do ((lines detail-lines (cdr lines))) ((null? lines))
+      (terminal-echo (concat dim "  " (car lines) reset "\r\n")))))
 
 ;; ============================================================================
 ;; GUI COMPATIBILITY STUBS

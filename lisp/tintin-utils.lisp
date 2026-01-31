@@ -68,21 +68,6 @@
               (substring str start (+ end 1)))))))))
 
 ;; ============================================================================
-;; OUTPUT UTILITIES
-;; ============================================================================
-;; Echo text to terminal if available
-;; Used to centralize terminal output across all command handlers
-(defun tintin-echo (text)
-  (if (symbol? 'terminal-echo) (terminal-echo text))
-  nil)
-
-;; Report syntax error for a command
-;; Returns empty string to maintain handler contract
-(defun tintin-syntax-error (syntax-help)
-  (tintin-echo (concat "Syntax error: " syntax-help "\r\n"))
-  "")
-
-;; ============================================================================
 ;; BRACE/STRING UTILITIES
 ;; ============================================================================
 ;; Strip outer braces from a string if present

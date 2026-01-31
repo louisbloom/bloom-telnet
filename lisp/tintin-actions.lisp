@@ -79,7 +79,7 @@
     ;; Check circular execution flag
     (if *tintin-action-executing*
       (progn
-        (tintin-echo
+        (terminal-echo
          "Warning: Action triggered during action execution (skipped)\r\n")
         nil)
       (progn (set! *tintin-action-executing* #t)
@@ -94,7 +94,7 @@
                       (if (and (string? cmd) (not (string=? cmd "")))
                         (condition-case send-err (telnet-send cmd)
                           (error
-                           (tintin-echo
+                           (terminal-echo
                             (concat "Action send failed: "
                              (error-message send-err) "\r\n"))))))))))
             ;; Clear flag after execution
@@ -102,7 +102,7 @@
           (error
            ;; Clear flag on error
            (set! *tintin-action-executing* #f)
-           (tintin-echo
+           (terminal-echo
             (concat "Action execution error: " (error-message err) "\r\n"))))))))
 
 ;; ============================================================================

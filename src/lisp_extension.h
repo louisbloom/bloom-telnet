@@ -6,6 +6,9 @@
 #include <bloom-boba/dynamic_buffer.h>
 #include <stddef.h>
 
+/* Version information */
+#define BLOOM_TELNET_VERSION "0.1.0"
+
 /* Initialize Lisp interpreter, environment, and load init file */
 int lisp_x_init(void);
 

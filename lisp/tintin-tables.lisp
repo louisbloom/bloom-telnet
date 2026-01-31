@@ -359,7 +359,7 @@
   ;; Default row-separators to #t if not provided
   (let ((row-sep (or row-separators #t)))
     (if (or (null? data) (= (length data) 0))
-      (tintin-echo "Error: Table data cannot be empty")
+      (terminal-echo "Error: Table data cannot be empty")
       (let* ((term-cols (termcap 'cols))
              (min-col-width 8)
              (headers (car data))
@@ -367,12 +367,12 @@
              (all-rows data))
         ;; Validate that we have at least headers
         (if (or (null? headers) (= (length headers) 0))
-          (tintin-echo "Error: Table must have at least header row")
+          (terminal-echo "Error: Table must have at least header row")
           (let ((widths
                  (tintin-calculate-optimal-widths all-rows term-cols
                   min-col-width)))
             ;; Draw top border
-            (tintin-echo (tintin-draw-border widths 'top))
+            (terminal-echo (tintin-draw-border widths 'top))
             ;; Draw header row (with bold formatting)
             (let ((bold-headers '()))
               ;; Add bold formatting to each header (truncate if too long for column)
@@ -391,21 +391,21 @@
               ;; Draw header lines
               (let ((header-lines (tintin-draw-row bold-headers widths)))
                 (do ((i 0 (+ i 1))) ((>= i (length header-lines)))
-                  (tintin-echo (list-ref header-lines i)))))
+                  (terminal-echo (list-ref header-lines i)))))
             ;; Draw middle border
-            (tintin-echo (tintin-draw-border widths 'middle))
+            (terminal-echo (tintin-draw-border widths 'middle))
             ;; Draw data rows (with wrapping if needed)
             (do ((row-idx 0 (+ row-idx 1))) ((>= row-idx (length rows)))
               (let* ((row (list-ref rows row-idx))
                      (row-lines (tintin-draw-row row widths)))
                 (do ((line-idx 0 (+ line-idx 1)))
                   ((>= line-idx (length row-lines)))
-                  (tintin-echo (list-ref row-lines line-idx))))
+                  (terminal-echo (list-ref row-lines line-idx))))
               ;; Draw separator after each row (except the last row)
               (if (and row-sep (< (+ row-idx 1) (length rows)))
-                (tintin-echo (tintin-draw-border widths 'middle))))
+                (terminal-echo (tintin-draw-border widths 'middle))))
             ;; Draw bottom border
-            (tintin-echo (tintin-draw-border widths 'bottom))))))))
+            (terminal-echo (tintin-draw-border widths 'bottom))))))))
 
 ;; ============================================================================
 ;; LIST COMMANDS
@@ -416,9 +416,9 @@
   (let ((alias-entries (hash-entries *tintin-aliases*))
         (count (hash-count *tintin-aliases*)))
     (if (= count 0)
-      (progn (tintin-echo "No aliases defined.\r\n") "")
+      (progn (terminal-echo "No aliases defined.\r\n") "")
       (progn
-        (tintin-echo (concat "Aliases (" (number->string count) "):\r\n"))
+        (terminal-echo (concat "Aliases (" (number->string count) "):\r\n"))
         ;; Sort aliases alphabetically
         (let ((sorted (tintin-sort-aliases-alphabetically alias-entries)))
           ;; Build data structure: headers + data rows
@@ -443,9 +443,9 @@
   (let ((var-entries (hash-entries *tintin-variables*))
         (count (hash-count *tintin-variables*)))
     (if (= count 0)
-      (progn (tintin-echo "No variables defined.\r\n") "")
+      (progn (terminal-echo "No variables defined.\r\n") "")
       (progn
-        (tintin-echo (concat "Variables (" (number->string count) "):\r\n"))
+        (terminal-echo (concat "Variables (" (number->string count) "):\r\n"))
         ;; Build data structure: headers + data rows
         (let ((data (list (list "Variable" "Value"))))
           ;; Add data rows
@@ -464,9 +464,9 @@
   (let ((highlight-entries (hash-entries *tintin-highlights*))
         (count (hash-count *tintin-highlights*)))
     (if (= count 0)
-      (progn (tintin-echo "No highlights defined.\r\n") "")
+      (progn (terminal-echo "No highlights defined.\r\n") "")
       (progn
-        (tintin-echo (concat "Highlights (" (number->string count) "):\r\n"))
+        (terminal-echo (concat "Highlights (" (number->string count) "):\r\n"))
         ;; Sort alphabetically before displaying
         (let ((sorted (tintin-sort-highlights-alphabetically highlight-entries)))
           ;; Build data structure: headers + data rows
@@ -496,9 +496,9 @@
   (let ((action-entries (hash-entries *tintin-actions*))
         (count (hash-count *tintin-actions*)))
     (if (= count 0)
-      (progn (tintin-echo "No actions defined.\r\n") "")
+      (progn (terminal-echo "No actions defined.\r\n") "")
       (progn
-        (tintin-echo (concat "Actions (" (number->string count) "):\r\n"))
+        (terminal-echo (concat "Actions (" (number->string count) "):\r\n"))
         ;; Sort alphabetically before displaying
         (let ((sorted (tintin-sort-actions-alphabetically action-entries)))
           ;; Build data structure: headers + data rows

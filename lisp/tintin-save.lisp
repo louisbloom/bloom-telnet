@@ -108,7 +108,7 @@
     ;; Expand ~/path if present
     (set! filename (expand-path filename))
     (tintin-save-state filename)
-    (tintin-echo (concat "State saved to '" filename "'\r\n"))
+    (terminal-echo (concat "State saved to '" filename "'\r\n"))
     ""))
 
 ;; Handle #load command
@@ -121,9 +121,11 @@
     ;; Try to load the file, catching errors
     (if (condition-case err (progn (load filename) #t) (error #f))
       ;; Success case
-      (progn (tintin-echo (concat "State loaded from '" filename "'\r\n")) "")
+      (progn (terminal-echo (concat "State loaded from '" filename "'\r\n"))
+        "")
       ;; Error case
       (progn
-        (tintin-echo
+        (terminal-echo
          (concat "Failed to load '" filename "': file not found or invalid\r\n"))
         ""))))
+

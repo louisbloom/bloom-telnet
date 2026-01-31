@@ -65,20 +65,20 @@
          (if alias-data
            (let ((commands (car alias-data))
                  (priority (cadr alias-data)))
-             (tintin-echo
+             (terminal-echo
               (concat "Alias '" name "': " name " → " commands
                (if (= priority 5)
                  ""
                  (concat " (priority: " (number->string priority) ")")) "\r\n"))
              "")
-           (progn (tintin-echo (concat "Alias '" name "' not found\r\n")) "")))))
+           (progn (terminal-echo (concat "Alias '" name "' not found\r\n")) "")))))
     ;; Two arguments - create alias
     (#t
      (let ((name (tintin-strip-braces (list-ref args 0)))
            (commands (tintin-strip-braces (list-ref args 1)))
            (priority 5))
        (hash-set! *tintin-aliases* name (list commands priority))
-       (tintin-echo
+       (terminal-echo
         (concat "Alias '" name "' created: " name " → " commands
          (if (= priority 5)
            ""
@@ -98,17 +98,17 @@
        (let ((value (hash-ref *tintin-variables* name)))
          (if value
            (progn
-             (tintin-echo
+             (terminal-echo
               (concat "Variable '" name "': " name " = " value "\r\n"))
              "")
-           (progn (tintin-echo (concat "Variable '" name "' not found\r\n"))
-             "")))))
+           (progn
+             (terminal-echo (concat "Variable '" name "' not found\r\n")) "")))))
     ;; Two arguments - create variable
     (#t
      (let ((name (tintin-strip-braces (list-ref args 0)))
            (value (tintin-strip-braces (list-ref args 1))))
        (hash-set! *tintin-variables* name value)
-       (tintin-echo (concat "Variable '" name "' set to '" value "'\r\n"))
+       (terminal-echo (concat "Variable '" name "' set to '" value "'\r\n"))
        ""))))
 
 ;; Handle #unalias command
@@ -118,9 +118,9 @@
   (let ((name (tintin-strip-braces (list-ref args 0))))
     (if (hash-ref *tintin-aliases* name)
       (progn (hash-remove! *tintin-aliases* name)
-        (tintin-echo (concat "Alias '" name "' removed\r\n"))
+        (terminal-echo (concat "Alias '" name "' removed\r\n"))
         "")
-      (progn (tintin-echo (concat "Alias '" name "' not found\r\n")) ""))))
+      (progn (terminal-echo (concat "Alias '" name "' not found\r\n")) ""))))
 
 ;; Handle #highlight command
 ;; args: (), (pattern), (pattern color), or (pattern color priority)
@@ -139,7 +139,7 @@
            (let ((fg-color (car highlight-data))
                  (bg-color (cadr highlight-data))
                  (priority (caddr highlight-data)))
-             (tintin-echo
+             (terminal-echo
               (concat "Highlight '" pattern "': " pattern " → "
                (if fg-color fg-color "") (if (and fg-color bg-color) ":" "")
                (if bg-color bg-color "")
@@ -148,7 +148,8 @@
                  (concat " (priority: " (number->string priority) ")")) "\r\n"))
              "")
            (progn
-             (tintin-echo (concat "Highlight '" pattern "' not found\r\n")) "")))))
+             (terminal-echo (concat "Highlight '" pattern "' not found\r\n"))
+             "")))))
     ;; Two or three arguments - create highlight
     (#t
      (let* ((pattern (tintin-strip-braces (list-ref args 0)))
@@ -166,7 +167,7 @@
             (list (if (string=? fg-part "") nil fg-part) bg-part priority))
            ;; Invalidate caches
            (set! *tintin-highlights-dirty* #t)
-           (tintin-echo
+           (terminal-echo
             (concat "Highlight '" pattern "' created: " pattern " → "
              color-spec
              (if (= priority 5)
@@ -183,9 +184,10 @@
         ;; Invalidate caches
         (hash-remove! *tintin-pattern-cache* pattern)
         (set! *tintin-highlights-dirty* #t)
-        (tintin-echo (concat "Highlight '" pattern "' removed\r\n"))
+        (terminal-echo (concat "Highlight '" pattern "' removed\r\n"))
         "")
-      (progn (tintin-echo (concat "Highlight '" pattern "' not found\r\n")) ""))))
+      (progn (terminal-echo (concat "Highlight '" pattern "' not found\r\n"))
+        ""))))
 
 ;; Handle #action command
 ;; args: (), (pattern), (pattern commands), or (pattern commands priority)
@@ -202,14 +204,14 @@
          (if action-data
            (let ((commands (car action-data))
                  (priority (cadr action-data)))
-             (tintin-echo
+             (terminal-echo
               (concat "Action '" pattern "': " pattern " → " commands
                (if (= priority 5)
                  ""
                  (concat " (priority: " (number->string priority) ")")) "\r\n"))
              "")
-           (progn (tintin-echo (concat "Action '" pattern "' not found\r\n"))
-             "")))))
+           (progn
+             (terminal-echo (concat "Action '" pattern "' not found\r\n")) "")))))
     ;; Two or three arguments - create action
     (#t
      (let* ((pattern (tintin-strip-braces (list-ref args 0)))
@@ -220,7 +222,7 @@
                5)))
        ;; Store as (commands-string priority)
        (hash-set! *tintin-actions* pattern (list commands priority))
-       (tintin-echo
+       (terminal-echo
         (concat "Action '" pattern "' created: " pattern " → " commands
          (if (= priority 5)
            ""
@@ -233,9 +235,9 @@
   (let ((pattern (tintin-strip-braces (list-ref args 0))))
     (if (hash-ref *tintin-actions* pattern)
       (progn (hash-remove! *tintin-actions* pattern)
-        (tintin-echo (concat "Action '" pattern "' removed\r\n"))
+        (terminal-echo (concat "Action '" pattern "' removed\r\n"))
         "")
-      (progn (tintin-echo (concat "Action '" pattern "' not found\r\n")) ""))))
+      (progn (terminal-echo (concat "Action '" pattern "' not found\r\n")) ""))))
 
 ;; ============================================================================
 ;; COMMAND REGISTRY
@@ -315,4 +317,9 @@
             (handler '())
             ;; Has arguments - try parsing with max count down to 1
             (let ((args (tintin-try-parse-arguments input arg-count)))
-              (if args (handler args) (tintin-syntax-error syntax-help)))))))))
+              (if args
+                (handler args)
+                (progn
+                  (terminal-echo (concat "Syntax error: " syntax-help "\r\n"))
+                  "")))))))))
+

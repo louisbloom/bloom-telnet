@@ -49,13 +49,13 @@
       (let ((cmd-name (tintin-extract-command-name cmd)))
         (if (not cmd-name)
           (progn
-            (tintin-echo
+            (terminal-echo
              (concat "Invalid TinTin++ command format: " cmd "\r\n"))
             "")
           (let ((matched (tintin-find-command cmd-name)))
             (if (not matched)
               (progn
-                (tintin-echo
+                (terminal-echo
                  (concat "Unknown TinTin++ command: #" cmd-name "\r\n"))
                 "")
               (tintin-dispatch-command matched cmd)))))
@@ -132,7 +132,7 @@
                   ;; Echo expanded command to terminal (if different from original)
                   (if
                     (and (string? cmd) (string? text) (not (string=? cmd text)))
-                    (tintin-echo (concat cmd "\r\n")))
+                    (terminal-echo (concat cmd "\r\n")))
                   ;; Send to telnet server with error handling
                   (condition-case err
                     (progn
@@ -149,10 +149,10 @@
                           ;; Send the command
                           (telnet-send cmd)
                           ;; Not connected
-                          (tintin-echo "\r\n*** Not connected ***\r\n"))))
+                          (terminal-echo "\r\n*** Not connected ***\r\n"))))
                     ;; Catch any send errors
                     (error
-                     (tintin-echo
+                     (terminal-echo
                       (concat "\r\n*** Send failed: " (error-message err)
                        " ***\r\n")))))))))
         ;; Mark as handled via hook system
@@ -165,20 +165,20 @@
 (defun tintin-toggle! ()
   "Toggle TinTin++ processing on or off."
   (set! *tintin-enabled* (not *tintin-enabled*))
-  (tintin-echo
+  (terminal-echo
    (concat "TinTin++ " (if *tintin-enabled* "enabled" "disabled") "\r\n"))
   *tintin-enabled*)
 
 (defun tintin-enable! ()
   "Enable TinTin++ processing."
   (set! *tintin-enabled* #t)
-  (tintin-echo "TinTin++ enabled\r\n")
+  (terminal-echo "TinTin++ enabled\r\n")
   #t)
 
 (defun tintin-disable! ()
   "Disable TinTin++ processing."
   (set! *tintin-enabled* #f)
-  (tintin-echo "TinTin++ disabled\r\n")
+  (terminal-echo "TinTin++ disabled\r\n")
   #f)
 
 ;; ============================================================================
@@ -222,5 +222,5 @@
 (add-hook 'telnet-input-hook 'tintin-telnet-input-hook)
 
 ;; Announce activation (terminal is ready when this file loads via -l)
-(tintin-echo "Mini TinTin++ emulator loaded and activated\r\n")
+(script-echo "TinTin++ emulation active")
 

@@ -102,7 +102,7 @@
   ;; Check depth limit (circular alias detection)
   (if (>= depth *tintin-max-alias-depth*)
     (progn
-      (tintin-echo
+      (terminal-echo
        (concat "Error: Circular alias detected or depth limit ("
         (number->string *tintin-max-alias-depth*) ") exceeded\r\n"))
       result) ; Return unexpanded to stop recursion

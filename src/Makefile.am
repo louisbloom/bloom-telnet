@@ -9,6 +9,8 @@ bloom_telnet_SOURCES = \
     path_utils.h \
     lisp_extension.c \
     lisp_extension.h \
+    logging.c \
+    logging.h \
     commands.c \
     commands.h \
     terminal_caps.c \

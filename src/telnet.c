@@ -2,6 +2,7 @@
 
 #include "../include/telnet.h"
 #include "lisp_extension.h"
+#include "logging.h"
 #include <bloom-boba/dynamic_buffer.h>
 #include <bloom-lisp/file_utils.h>
 #include <bloom-lisp/lisp.h>
@@ -148,8 +149,8 @@ static int telnet_open_log(Telnet *t, const char *log_dir) {
   /* Open log file in append mode */
   t->log_file = file_open(t->log_filename, "a");
   if (!t->log_file) {
-    fprintf(stderr, "Warning: Failed to open telnet log file: %s\n",
-            t->log_filename);
+    bloom_log(LOG_WARN, "telnet", "Failed to open telnet log file: %s",
+              t->log_filename);
     return -1;
   }
 
@@ -329,8 +330,9 @@ int telnet_connect(Telnet *t, const char *hostname, int port) {
       BOOL optval = TRUE;
       if (setsockopt(t->socket, SOL_SOCKET, SO_KEEPALIVE, (char *)&optval,
                      sizeof(optval)) < 0) {
-        fprintf(stderr, "Warning: Failed to enable TCP keepalive (error %d)\n",
-                WSAGetLastError());
+        bloom_log(LOG_WARN, "telnet",
+                  "Failed to enable TCP keepalive (error %d)",
+                  WSAGetLastError());
       } else {
         /* Set keepalive timing via WSAIoctl */
         struct tcp_keepalive ka;
@@ -342,9 +344,9 @@ int telnet_connect(Telnet *t, const char *hostname, int port) {
         DWORD bytes_returned;
         if (WSAIoctl(t->socket, SIO_KEEPALIVE_VALS, &ka, sizeof(ka), NULL, 0,
                      &bytes_returned, NULL, NULL) != 0) {
-          fprintf(stderr,
-                  "Warning: Failed to set TCP keepalive timing (error %d)\n",
-                  WSAGetLastError());
+          bloom_log(LOG_WARN, "telnet",
+                    "Failed to set TCP keepalive timing (error %d)",
+                    WSAGetLastError());
         }
       }
 #else
@@ -352,15 +354,15 @@ int telnet_connect(Telnet *t, const char *hostname, int port) {
       int optval = 1;
       if (setsockopt(t->socket, SOL_SOCKET, SO_KEEPALIVE, &optval,
                      sizeof(optval)) < 0) {
-        fprintf(stderr, "Warning: Failed to enable TCP keepalive: %s\n",
-                strerror(errno));
+        bloom_log(LOG_WARN, "telnet", "Failed to enable TCP keepalive: %s",
+                  strerror(errno));
       } else {
         /* Set keepalive timing (Linux/BSD) */
 #ifdef TCP_KEEPIDLE
         if (setsockopt(t->socket, IPPROTO_TCP, TCP_KEEPIDLE, &keepalive_time,
                        sizeof(keepalive_time)) < 0) {
-          fprintf(stderr, "Warning: Failed to set TCP_KEEPIDLE: %s\n",
-                  strerror(errno));
+          bloom_log(LOG_WARN, "telnet", "Failed to set TCP_KEEPIDLE: %s",
+                    strerror(errno));
         }
 #else
         (void)keepalive_time; /* Not available on this platform */
@@ -368,8 +370,8 @@ int telnet_connect(Telnet *t, const char *hostname, int port) {
 #ifdef TCP_KEEPINTVL
         if (setsockopt(t->socket, IPPROTO_TCP, TCP_KEEPINTVL,
                        &keepalive_interval, sizeof(keepalive_interval)) < 0) {
-          fprintf(stderr, "Warning: Failed to set TCP_KEEPINTVL: %s\n",
-                  strerror(errno));
+          bloom_log(LOG_WARN, "telnet", "Failed to set TCP_KEEPINTVL: %s",
+                    strerror(errno));
         }
 #else
         (void)keepalive_interval; /* Not available on this platform */
@@ -493,23 +495,23 @@ int telnet_receive(Telnet *t, char *buffer, size_t bufsize) {
       /* Would block or interrupted - no data available, not an error */
       return 0;
     }
-    fprintf(stderr, "telnet_receive: recv() returned -1, WSAGetLastError=%d\n",
-            error);
+    bloom_log(LOG_ERROR, "telnet", "recv() returned -1, WSAGetLastError=%d",
+              error);
 #else
     if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
       /* Would block or interrupted - no data available, not an error */
       return 0;
     }
-    fprintf(stderr, "telnet_receive: recv() returned -1, errno=%d (%s)\n",
-            errno, strerror(errno));
+    bloom_log(LOG_ERROR, "telnet", "recv() returned -1, errno=%d (%s)", errno,
+              strerror(errno));
 #endif
     /* Connection error */
     telnet_disconnect(t);
     return -1;
   } else if (received == 0) {
     /* recv() returning 0 means graceful close (peer sent FIN) */
-    fprintf(stderr,
-            "telnet_receive: recv() returned 0 (peer closed connection)\n");
+    bloom_log(LOG_ERROR, "telnet",
+              "recv() returned 0 (peer closed connection)");
     telnet_disconnect(t);
     return -1;
   }
