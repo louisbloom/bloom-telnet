@@ -52,6 +52,15 @@ setup_local_deps() {
 	fi
 
 	log_info "Using bloom-lisp: $(pkg-config --modversion bloom-lisp)"
+
+	# Verify bloom-boba is available
+	if ! pkg-config --exists bloom-boba 2>/dev/null; then
+		log_error "bloom-boba not found. Install it to ~/.local or system-wide."
+		log_error "Build it from: ../bloom-boba"
+		return 1
+	fi
+
+	log_info "Using bloom-boba: $(pkg-config --modversion bloom-boba)"
 	return 0
 }
 
@@ -274,12 +283,17 @@ main() {
 			format_sources
 			exit 0
 			;;
+		--test)
+			RUN_TESTS=true
+			shift
+			;;
 		--help)
 			echo "Usage: $0 [options]"
 			echo "Options:"
 			echo "  --install         Only install the project (skip build and run)"
 			echo "  --bear            Generate compile_commands.json using bear"
 			echo "  --no-debug        Disable debug build"
+			echo "  --test            Run tests after building (make check)"
 			echo "  --format          Format source files with clang-format, shfmt, black, and prettier"
 			echo "  --prefix=PATH     Set installation prefix (default: $HOME/.local)"
 			echo "  --help            Show this help message"
@@ -344,6 +358,19 @@ main() {
 				exit 1
 			fi
 		fi
+	fi
+
+	# Run tests if requested
+	if [ "${RUN_TESTS:-false}" = true ]; then
+		log_info "Running tests..."
+		cd "$BUILD_DIR"
+		if ! make check; then
+			log_error "Tests failed"
+			cd ..
+			exit 1
+		fi
+		cd ..
+		log_info "All tests passed"
 	fi
 
 	log_info "Build process completed successfully!"
