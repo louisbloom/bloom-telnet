@@ -251,5 +251,5 @@
 ;; ============================================================================
 ;; INITIALIZATION MESSAGE
 ;; ============================================================================
-(practice-echo "Loaded. Use /p <command> to start, /p stop to end.")
+(script-echo "Practice mode" "/p <command> to start, /p stop to end")
 
