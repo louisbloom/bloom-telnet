@@ -61,7 +61,7 @@ int process_command(const char *text, Telnet *telnet, int *connected_mode,
         "  :connect <server>:<port>      - Connect to a telnet server\n"
         "  :disconnect                   - Disconnect from current server\n"
         "  :load <filepath>              - Load and execute a Lisp file\n"
-        "  :repl <code>                  - Evaluate Lisp code and show "
+        "  :eval <code>                  - Evaluate Lisp code and show"
         "result\n"
         "  :quit, :q                     - Exit application\n"
         "\n");
@@ -136,8 +136,8 @@ int process_command(const char *text, Telnet *telnet, int *connected_mode,
     return 1;
   }
 
-  /* :repl <code> - Evaluate Lisp code and echo result */
-  if (strncmp(cmd, "repl ", 5) == 0) {
+  /* :eval <code> - Evaluate Lisp code and echo result */
+  if (strncmp(cmd, "eval ", 5) == 0) {
     const char *code = cmd + 5;
 
     /* Skip leading spaces */
@@ -145,7 +145,7 @@ int process_command(const char *text, Telnet *telnet, int *connected_mode,
       code++;
 
     if (*code == '\0') {
-      output_message("\n*** Usage: :repl <lisp-code> ***\n");
+      output_message("\n*** Usage: :eval <lisp-code> ***\n");
       return 1;
     }
 
