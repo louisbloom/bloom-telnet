@@ -6,8 +6,9 @@
 ;; system before TinTin++ processing, allowing clean separation of concerns.
 ;;
 ;; Usage:
-;;   :load practice.lisp  ; Load the script
+;;   :load practice.lisp       ; Load the script
 ;;   /p c lightb               ; Start practicing (or /practice, /pr, etc.)
+;;   /p c heal;c armor         ; Multiline: ';' separates commands (TinTin++ style)
 ;;   /p stop                   ; Stop practice mode
 ;;   /p                        ; Show current status
 ;;
@@ -69,12 +70,20 @@
   "Echo a practice status message to the terminal."
   (terminal-echo (concat "\r\n\033[36m[Practice]\033[0m " msg "\r\n")))
 
-(defun practice-send (cmd)
-  "Send a command to telnet with echo."
+(defun practice-send-one (cmd)
+  "Send a single command to telnet with echo."
   ;; Echo the command in cyan (same color as [Practice] tag)
   (terminal-echo (concat "\033[36m" cmd "\033[0m\r\n"))
   ;; Send to server
   (telnet-send cmd))
+
+(defun practice-send (cmd)
+  "Send command(s) to telnet. Splits on ';' (TinTin++ style) for multiline."
+  (let ((parts (string-split cmd ";")))
+    (for-each
+     (lambda (part)
+       (let ((trimmed (string-trim part)))
+         (when (> (length trimmed) 0) (practice-send-one trimmed)))) parts)))
 
 (defun practice-extract-mana (text)
   "Extract mana percentage from prompt text. Returns number or nil."
@@ -251,5 +260,13 @@
 ;; ============================================================================
 ;; INITIALIZATION MESSAGE
 ;; ============================================================================
-(script-echo "Practice mode" "/p <command> to start, /p stop to end")
+(script-echo "Practice mode"
+ (string-join
+  '("Usage: /p <command> | /p stop | /p (status)"
+    "  - Multiline: use ';' to separate commands (e.g., /p c heal;c armor)"
+    "  - Retries on failure (\"You failed.\", \"You lost your concentration.\")"
+    "  - Sleeps when mana low, wakes at 100%"
+    "  - Quits on hunger/thirst damage (no one watching)"
+    "  - Divider shows 🤹 when practicing, +💤 when sleeping"
+    "  - Add retry pattern: (practice-add-retry-pattern \"Your spell fizzles.\")") "\n"))
 
