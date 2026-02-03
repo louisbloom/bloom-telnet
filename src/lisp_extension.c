@@ -5,6 +5,7 @@
 #include "../include/terminal_caps.h"
 #include "logging.h"
 #include "path_utils.h"
+#include <bloom-boba/components/statusbar.h>
 #include <bloom-boba/dynamic_buffer.h>
 #include <bloom-lisp/file_utils.h>
 #include <bloom-lisp/lisp.h>
@@ -17,6 +18,9 @@ static Environment *lisp_env = NULL;
 
 /* Registered telnet pointer for telnet-send builtin */
 static Telnet *registered_telnet = NULL;
+
+/* Registered statusbar pointer for statusbar builtins */
+static TuiStatusBar *registered_statusbar = NULL;
 
 /* Terminal echo callback */
 static TerminalEchoCallback echo_callback = NULL;
@@ -450,6 +454,69 @@ static LispObject *builtin_set_log_filter(LispObject *args, Environment *env) {
   return NIL;
 }
 
+/* Builtin: statusbar-set-mode - Set the mode text in the statusbar (raw API) */
+static LispObject *builtin_statusbar_set_mode(LispObject *args,
+                                              Environment *env) {
+  (void)env;
+
+  if (!registered_statusbar) {
+    return NIL;
+  }
+
+  if (args == NIL) {
+    /* No argument = clear mode */
+    tui_statusbar_set_mode(registered_statusbar, NULL);
+    return NIL;
+  }
+
+  LispObject *text_obj = lisp_car(args);
+  if (text_obj->type != LISP_STRING) {
+    return lisp_make_error("statusbar-set-mode: argument must be a string");
+  }
+
+  const char *text = text_obj->value.string;
+  if (text[0] == '\0') {
+    tui_statusbar_set_mode(registered_statusbar, NULL);
+  } else {
+    tui_statusbar_set_mode(registered_statusbar, text);
+  }
+
+  return NIL;
+}
+
+/* Builtin: statusbar-notify - Show a notification in the statusbar */
+static LispObject *builtin_statusbar_notify(LispObject *args,
+                                            Environment *env) {
+  (void)env;
+
+  if (args == NIL) {
+    return lisp_make_error("statusbar-notify requires 1 argument");
+  }
+
+  LispObject *msg_obj = lisp_car(args);
+  if (msg_obj->type != LISP_STRING) {
+    return lisp_make_error("statusbar-notify: argument must be a string");
+  }
+
+  if (registered_statusbar) {
+    tui_statusbar_set_notification(registered_statusbar, msg_obj->value.string);
+  }
+
+  return NIL;
+}
+
+/* Builtin: statusbar-clear - Clear the notification from the statusbar */
+static LispObject *builtin_statusbar_clear(LispObject *args, Environment *env) {
+  (void)env;
+  (void)args;
+
+  if (registered_statusbar) {
+    tui_statusbar_clear_notification(registered_statusbar);
+  }
+
+  return NIL;
+}
+
 /* Initialize Lisp interpreter and environment */
 int lisp_x_init(void) {
   if (lisp_init() < 0) {
@@ -529,6 +596,33 @@ int lisp_x_init(void) {
   env_define(lisp_env, "set-log-filter",
              lisp_make_builtin(builtin_set_log_filter, "set-log-filter"));
 
+  /* Statusbar builtins (raw API - mode registry is in Lisp) */
+  lisp_set_docstring("statusbar-set-mode",
+                     "Set the mode text in the statusbar (left side).\n"
+                     "\n"
+                     "Usage: (statusbar-set-mode \"text\")\n"
+                     "       (statusbar-set-mode)  ; clear mode\n"
+                     "\n"
+                     "This is the raw API. Use statusbar-mode-set/remove\n"
+                     "for the higher-level mode registry.");
+  env_define(
+      lisp_env, "statusbar-set-mode",
+      lisp_make_builtin(builtin_statusbar_set_mode, "statusbar-set-mode"));
+
+  lisp_set_docstring("statusbar-notify",
+                     "Set the notification in the statusbar (right side).\n"
+                     "\n"
+                     "Usage: (statusbar-notify \"message\")");
+  env_define(lisp_env, "statusbar-notify",
+             lisp_make_builtin(builtin_statusbar_notify, "statusbar-notify"));
+
+  lisp_set_docstring("statusbar-clear",
+                     "Clear the notification from the statusbar.\n"
+                     "\n"
+                     "Usage: (statusbar-clear)");
+  env_define(lisp_env, "statusbar-clear",
+             lisp_make_builtin(builtin_statusbar_clear, "statusbar-clear"));
+
   /* Version string accessible from Lisp */
   env_define(lisp_env, "*version*", lisp_make_string(BLOOM_TELNET_VERSION));
 
@@ -599,6 +693,8 @@ void lisp_x_cleanup(void) {
     user_input_hook_buffer = NULL;
     user_input_hook_buffer_size = 0;
   }
+
+  registered_statusbar = NULL;
 
   if (lisp_env) {
     env_free(lisp_env);
@@ -806,6 +902,9 @@ int lisp_x_get_input_history_size(void) {
 
 /* Register telnet instance */
 void lisp_x_register_telnet(Telnet *t) { registered_telnet = t; }
+
+/* Register statusbar instance */
+void lisp_x_register_statusbar(TuiStatusBar *sb) { registered_statusbar = sb; }
 
 /* Get lisp environment */
 void *lisp_x_get_environment(void) { return lisp_env; }

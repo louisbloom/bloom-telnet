@@ -42,6 +42,12 @@ struct Telnet;
 /* Register telnet pointer for telnet-send builtin */
 void lisp_x_register_telnet(struct Telnet *t);
 
+/* Forward declaration for TuiStatusBar type */
+struct TuiStatusBar;
+
+/* Register statusbar pointer for statusbar builtins */
+void lisp_x_register_statusbar(struct TuiStatusBar *sb);
+
 /* Get lisp environment (for accessing Lisp variables from C) */
 void *lisp_x_get_environment(void);
 

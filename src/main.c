@@ -633,6 +633,9 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
+  /* Register statusbar with Lisp extension for statusbar builtins */
+  lisp_x_register_statusbar(telnet_app_get_statusbar(g_app));
+
   /* Now that viewport is available, route log messages there */
   bloom_log_set_echo(echo_to_viewport);
 

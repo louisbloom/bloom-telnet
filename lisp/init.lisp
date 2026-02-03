@@ -497,20 +497,76 @@ Colors: header=pale pink, desc=pale cyan, section=lavender, details=slate blue"
                 (terminal-echo (concat "  " c-detail sec-title reset "\r\n"))))))))))
 
 ;; ============================================================================
-;; GUI COMPATIBILITY STUBS
+;; STATUSBAR MODE REGISTRY
 ;; ============================================================================
-;; These functions provide no-op stubs for GUI features used by contrib scripts.
-;; In the GUI version, divider-mode shows status icons in the divider line.
-;; In TUI mode, we just ignore these calls silently.
-(defun divider-mode-set (mode-symbol icon priority)
-  "Stub: Set divider mode indicator (no-op in TUI)."
+;; Mode registry: list of (symbol text priority) entries
+(defvar *statusbar-mode-registry* '()
+  "Registry of active statusbar modes. Each entry is (symbol text priority).")
+
+(defun statusbar--insert-sorted (entry lst)
+  "Insert entry into list sorted by priority (descending)."
+  (cond
+    ((null? lst) (list entry))
+    ((> (list-ref entry 2) (list-ref (car lst) 2)) (cons entry lst))
+    (#t (cons (car lst) (statusbar--insert-sorted entry (cdr lst))))))
+
+(defun statusbar--compose-modes ()
+  "Compose all modes into a single string and update the statusbar."
+  (if (null? *statusbar-mode-registry*)
+    (statusbar-set-mode)
+    (let ((texts (map (lambda (e) (list-ref e 1)) *statusbar-mode-registry*)))
+      (statusbar-set-mode (string-join texts " · ")))))
+
+(defun statusbar-mode-set (mode-symbol text priority)
+  "Add or update a mode indicator in the statusbar.
+
+   Arguments:
+   - mode-symbol: A symbol identifying this mode (for later removal)
+   - text: The display text shown in the statusbar
+   - priority: Integer priority (higher = leftmost)
+
+   Multiple modes are composed together with \" · \" separator,
+   sorted by priority (highest first).
+
+   Example:
+     (statusbar-mode-set 'recording \"REC\" 100)
+     (statusbar-mode-set 'practice \"Practice\" 50)"
+  ;; Remove existing entry with same symbol
+  (set! *statusbar-mode-registry*
+   (filter (lambda (e) (not (eq? (car e) mode-symbol)))
+    *statusbar-mode-registry*))
+  ;; Insert new entry in sorted position
+  (set! *statusbar-mode-registry*
+   (statusbar--insert-sorted (list mode-symbol text priority)
+    *statusbar-mode-registry*))
+  (statusbar--compose-modes)
   nil)
 
-(defun divider-mode-remove (mode-symbol)
-  "Stub: Remove divider mode indicator (no-op in TUI)."
+(defun statusbar-mode-remove (mode-symbol)
+  "Remove a mode indicator from the statusbar.
+
+   The mode is identified by the symbol used when it was set.
+
+   Example:
+     (statusbar-mode-remove 'recording)"
+  (set! *statusbar-mode-registry*
+   (filter (lambda (e) (not (eq? (car e) mode-symbol)))
+    *statusbar-mode-registry*))
+  (statusbar--compose-modes)
   nil)
 
-(defun notify (message)
-  "Display a notification message. In TUI, echoes to terminal."
-  (terminal-echo (concat "\r\n" message "\r\n")))
+;; ============================================================================
+;; STATUSBAR NOTIFICATION WRAPPER
+;; ============================================================================
+(defvar *notify-timer* nil "Timer for auto-clearing notifications.")
+
+(defun notify (message &optional ttl)
+  "Display a notification in the statusbar.
+   Optional TTL (seconds) auto-clears the notification."
+  (when *notify-timer* (cancel-timer *notify-timer*) (set! *notify-timer* nil))
+  (statusbar-notify message)
+  (when ttl
+    (set! *notify-timer*
+     (run-at-time ttl nil
+      (lambda () (statusbar-clear) (set! *notify-timer* nil))))))
 
