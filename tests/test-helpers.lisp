@@ -22,6 +22,16 @@
     ((eq? capability 'rows) 24)
     ((eq? capability 'truecolor?) #t)
     (#t "")))
+
+;; App-level mocks for C builtins
+(defun terminal-echo (msg) nil)
+(defun telnet-send (msg) nil)
+(defun script-echo (title &rest args) nil)
+(defun add-hook (hook func &optional priority) nil)
+(defun run-at-time (delay repeat func) nil)
+(defun cancel-timer (timer) nil)
+(defun statusbar-mode-set (sym text prio) nil)
+(defun statusbar-mode-remove (sym) nil)
 ;; Assert that actual equals expected (handles numbers and structural equality)
 ;; Usage: (assert-equal actual expected "description")
 ;; Returns: nil on success, aborts test with error on failure

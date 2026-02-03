@@ -1,17 +1,7 @@
 ;; tests/practice.lisp - Tests for practice mode multiline commands
 (load "tests/test-helpers.lisp")
 
-;; ============================================================================
-;; Mock builtins needed by practice.lisp
-;; ============================================================================
 (defvar *sent-commands* '() "Commands sent via practice-send-one")
-
-(defun terminal-echo (msg) nil) ; No-op for tests
-(defun telnet-send (msg) nil)   ; No-op for tests
-(defun script-echo (title &rest args) nil)
-(defun add-hook (hook func &optional priority) nil)
-(defun run-at-time (delay repeat func) nil)
-(defun cancel-timer (timer) nil)
 
 ;; Load practice.lisp (will use our mocks)
 (load "lisp/contrib/practice.lisp")
