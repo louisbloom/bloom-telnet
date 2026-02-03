@@ -79,11 +79,9 @@
 
 (defun practice-send (cmd)
   "Send command(s) to telnet. Splits on ';' (TinTin++ style) for multiline."
-  (let ((parts (string-split cmd ";")))
-    (for-each
-     (lambda (part)
-       (let ((trimmed (string-trim part)))
-         (when (> (length trimmed) 0) (practice-send-one trimmed)))) parts)))
+  (do ((parts (string-split cmd ";") (cdr parts))) ((null? parts))
+    (let ((trimmed (string-trim (car parts))))
+      (when (> (length trimmed) 0) (practice-send-one trimmed)))))
 
 (defun practice-extract-mana (text)
   "Extract mana percentage from prompt text. Returns number or nil."
