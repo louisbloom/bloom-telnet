@@ -1,6 +1,27 @@
 ;; Test Assertion Macros for telnet-lisp Test Suite
 ;; Provides assertion macros for test files: assert-equal, assert-true, assert-false,
 ;; assert-error, and assert-nil. All macros abort tests via (error ...) on failure.
+;;
+;; Also provides common mock functions that tests can override if needed.
+
+;; ============================================================================
+;; Common Mock Functions
+;; ============================================================================
+(defun termcap (capability &rest args)
+  "Mock: return sensible defaults for terminal capabilities.
+   Tests can override this with their own version if needed."
+  (cond
+    ((eq? capability 'fg-color) "")
+    ((eq? capability 'bg-color) "")
+    ((eq? capability 'reset) "")
+    ((eq? capability 'unicode?) #t)
+    ((eq? capability 'type) "xterm-256color")
+    ((eq? capability 'encoding) "UTF-8")
+    ((eq? capability 'color-level) 4)
+    ((eq? capability 'cols) 80)
+    ((eq? capability 'rows) 24)
+    ((eq? capability 'truecolor?) #t)
+    (#t "")))
 ;; Assert that actual equals expected (handles numbers and structural equality)
 ;; Usage: (assert-equal actual expected "description")
 ;; Returns: nil on success, aborts test with error on failure

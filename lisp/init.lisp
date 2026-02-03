@@ -428,14 +428,73 @@
 ;; ============================================================================
 ;; SCRIPT STARTUP BANNERS
 ;; ============================================================================
-(defun script-echo (title &rest detail-lines)
-  "Print a styled script startup banner. TITLE in accent, DETAIL-LINES in dim."
-  (let ((accent (termcap 'fg-color 125 86 244))
-        (dim (termcap 'fg-color 80 80 80))
-        (reset (termcap 'reset)))
-    (terminal-echo (concat accent title reset "\r\n"))
-    (do ((lines detail-lines (cdr lines))) ((null? lines))
-      (terminal-echo (concat dim "  " (car lines) reset "\r\n")))))
+;; Bubbletea-inspired soft pastel color palette
+(defun script-echo (title &rest args)
+  "Print a styled script startup banner with optional description and sections.
+
+Usage:
+  (script-echo \"Title\")
+  (script-echo \"Title\" :desc \"short description\")
+  (script-echo \"Title\"
+    :desc \"description\"
+    :section \"Usage\" \"cmd1\" \"cmd2\"
+    :section \"Features\" \"feature1\" \"feature2\")
+
+Colors: header=pale pink, desc=pale cyan, section=lavender, details=slate blue"
+  (let ((c-header (termcap 'fg-color 255 177 182)) ; Pale pink
+        (c-desc (termcap 'fg-color 157 225 241)) ; Pale cyan
+        (c-section (termcap 'fg-color 189 147 249)) ; Lavender
+        (c-detail (termcap 'fg-color 100 100 156)) ; Slate blue
+        (c-mdash (termcap 'fg-color 98 98 98)) ; Soft gray
+        (reset (termcap 'reset))
+        (desc nil)
+        (sections nil)
+        (current-section nil))
+    ;; Parse args: extract :desc and :section markers
+    (do ((rest args (cdr rest))) ((null? rest))
+      (let ((item (car rest)))
+        (cond
+          ((eq? item :desc) (set! rest (cdr rest))
+           (when rest (set! desc (car rest))))
+          ((eq? item :section)
+           ;; Save previous section if any
+           (when current-section
+             (set! sections (cons (reverse current-section) sections)))
+           ;; Start new section with title
+           (set! rest (cdr rest))
+           (set! current-section (if rest (list (car rest)) nil)))
+          (current-section
+           ;; Add to current section's details
+           (set! current-section (cons item current-section)))
+          (#t
+           ;; Backward compat: plain strings become anonymous section details
+           (unless current-section (set! current-section '()))
+           (set! current-section (cons item current-section))))))
+    ;; Save final section
+    (when current-section
+      (set! sections (cons (reverse current-section) sections)))
+    (set! sections (reverse sections))
+    ;; Output header line
+    (terminal-echo (concat c-header title reset))
+    (when desc (terminal-echo (concat c-mdash " — " reset c-desc desc reset)))
+    (terminal-echo "\r\n")
+    ;; Output sections
+    (do ((slist sections (cdr slist))) ((null? slist))
+      (let ((section (car slist)))
+        (when section
+          (let ((sec-title (car section))
+                (details (cdr section)))
+            ;; Section title (if it looks like a title, not just a detail)
+            (when (and sec-title (or details (not (null? (cdr sections)))))
+              (terminal-echo (concat "  " c-section sec-title reset "\r\n")))
+            ;; Section details
+            (if details
+              (do ((dlist details (cdr dlist))) ((null? dlist))
+                (terminal-echo
+                 (concat "    " c-detail (car dlist) reset "\r\n")))
+              ;; Single item section (backward compat): treat title as detail
+              (when (and sec-title (null? details) (null? (cdr sections)))
+                (terminal-echo (concat "  " c-detail sec-title reset "\r\n"))))))))))
 
 ;; ============================================================================
 ;; GUI COMPATIBILITY STUBS

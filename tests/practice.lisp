@@ -8,7 +8,7 @@
 
 (defun terminal-echo (msg) nil) ; No-op for tests
 (defun telnet-send (msg) nil)   ; No-op for tests
-(defun script-echo (title msg) nil)
+(defun script-echo (title &rest args) nil)
 (defun add-hook (hook func &optional priority) nil)
 (defun run-at-time (delay repeat func) nil)
 (defun cancel-timer (timer) nil)

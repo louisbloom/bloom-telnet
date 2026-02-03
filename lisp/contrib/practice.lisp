@@ -250,12 +250,9 @@
 ;; ============================================================================
 ;; INITIALIZATION MESSAGE
 ;; ============================================================================
-(script-echo "Practice mode"
- (string-join
-  '("Usage: /p <command> | /p stop | /p (status)"
-    "  - Multiline: use ';' to separate commands (e.g., /p c heal;c armor)"
-    "  - Retries on failure (\"You failed.\", \"You lost your concentration.\")"
-    "  - Sleeps when mana low, wakes at 100%"
-    "  - Quits on hunger/thirst damage (no one watching)"
-    "  - Add retry pattern: (practice-add-retry-pattern \"Your spell fizzles.\")") "\n"))
+(script-echo "Practice mode" :section "Usage"
+ "/p <command> | /p stop | /p (status)" :section "Features"
+ "Multiline: use ';' to separate commands" "Retries on failure"
+ "Sleeps when mana low, wakes at 100%" "Quits on hunger/thirst damage" :section
+ "Config" "(practice-add-retry-pattern \"pattern\")")
 

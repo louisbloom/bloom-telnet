@@ -52,6 +52,6 @@
          (if (and (string? encoding) (not (string=? encoding "ASCII")))
            (concat sep encoding)
            ""))))
-  (script-echo (concat "bloom-telnet " *version*) ":help for commands"
-   term-info))
+  (script-echo (concat "bloom-telnet " *version*) :desc ":help for commands"
+   :section "Terminal" term-info))
 
