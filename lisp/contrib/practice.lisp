@@ -16,7 +16,7 @@
 ;; - Retries command on failure patterns ("You failed.", etc.)
 ;; - Enters sleep mode on "You don't have enough mana."
 ;; - Wakes and resumes when prompt shows 100% mana
-;; - Visual indicators on divider line: P when practicing, P+Z when sleeping
+;; - Use /p to check current status
 ;; - Quits game on hunger/thirst damage (indicates no one is watching)
 ;;
 ;; Configuration (via eval mode, Shift+Tab):
@@ -114,7 +114,6 @@
     (progn (set! *practice-mode* #t) (set! *practice-command* command)
       (set! *practice-sleep-mode* nil)
       (set! *practice-sleep-timer* nil)
-      (divider-mode-set 'practice "🤹" 20)
       (practice-send command))))
 
 (defun practice-stop ()
@@ -130,9 +129,6 @@
       (set! *practice-mode* nil)
       (set! *practice-command* nil)
       (set! *practice-sleep-mode* nil)
-      ;; Remove indicators
-      (divider-mode-remove 'practice)
-      (divider-mode-remove 'practice-sleep)
       (practice-echo "Stopped"))))
 
 (defun practice-send-empty ()
@@ -143,8 +139,6 @@
   "Enter sleep sub-mode when out of mana."
   (if (not *practice-sleep-mode*)
     (progn (set! *practice-sleep-mode* #t)
-      ;; Add sleep indicator (P remains, Z added)
-      (divider-mode-set 'practice-sleep "💤" 21)
       (practice-echo "Sleeping (low mana)...")
       (practice-send "sleep")
       ;; Start timer for periodic prompt refresh
@@ -162,8 +156,6 @@
           (set! *practice-sleep-timer* nil)))
       ;; Clear sleep mode
       (set! *practice-sleep-mode* nil)
-      ;; Remove sleep indicator (P remains)
-      (divider-mode-remove 'practice-sleep)
       (practice-echo "Waking up (mana restored)...")
       ;; Stand up and resume practicing
       (practice-send "stand")
@@ -265,6 +257,5 @@
     "  - Retries on failure (\"You failed.\", \"You lost your concentration.\")"
     "  - Sleeps when mana low, wakes at 100%"
     "  - Quits on hunger/thirst damage (no one watching)"
-    "  - Divider shows 🤹 when practicing, +💤 when sleeping"
     "  - Add retry pattern: (practice-add-retry-pattern \"Your spell fizzles.\")") "\n"))
 

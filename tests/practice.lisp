@@ -8,8 +8,6 @@
 
 (defun terminal-echo (msg) nil) ; No-op for tests
 (defun telnet-send (msg) nil)   ; No-op for tests
-(defun divider-mode-set (name icon priority) nil)
-(defun divider-mode-remove (name) nil)
 (defun script-echo (title msg) nil)
 (defun add-hook (hook func &optional priority) nil)
 (defun run-at-time (delay repeat func) nil)
