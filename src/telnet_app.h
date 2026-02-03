@@ -14,6 +14,7 @@
 #include <stddef.h>
 
 #include <bloom-boba/component.h>
+#include <bloom-boba/components/statusbar.h>
 #include <bloom-boba/components/textinput.h>
 #include <bloom-boba/components/viewport.h>
 
@@ -28,12 +29,13 @@ typedef struct {
   void *completer_data;            /* Data for completer */
 } TelnetAppConfig;
 
-/* TelnetApp model - composes viewport and textinput */
+/* TelnetApp model - composes viewport, textinput, and statusbar */
 typedef struct {
   TuiModel base; /* Component base type */
 
   TuiViewport *viewport; /* Child: server output display (software scrolling) */
   TuiTextInput *textinput; /* Child: user input */
+  TuiStatusBar *statusbar; /* Child: status line at bottom */
 
   int terminal_width;
   int terminal_height;
@@ -78,6 +80,9 @@ TuiTextInput *telnet_app_get_textinput(TelnetAppModel *app);
 
 /* Get the viewport component (for direct access) */
 TuiViewport *telnet_app_get_viewport(TelnetAppModel *app);
+
+/* Get the statusbar component (for direct access) */
+TuiStatusBar *telnet_app_get_statusbar(TelnetAppModel *app);
 
 /* Set the prompt string */
 void telnet_app_set_prompt(TelnetAppModel *app, const char *prompt);

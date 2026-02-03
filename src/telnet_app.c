@@ -16,9 +16,6 @@
 
 #define TELNET_APP_TYPE_ID (TUI_COMPONENT_TYPE_BASE + 10)
 
-/* Input area height: top divider + input line + bottom divider */
-#define INPUT_AREA_HEIGHT 3
-
 /* Create a new TelnetApp component */
 TelnetAppModel *telnet_app_create(const TelnetAppConfig *config) {
   TelnetAppModel *app = (TelnetAppModel *)malloc(sizeof(TelnetAppModel));
@@ -41,13 +38,6 @@ TelnetAppModel *telnet_app_create(const TelnetAppConfig *config) {
     return NULL;
   }
 
-  /* Configure viewport size and position */
-  int viewport_height = app->terminal_height - INPUT_AREA_HEIGHT;
-  if (viewport_height < 1)
-    viewport_height = 1;
-  tui_viewport_set_size(app->viewport, app->terminal_width, viewport_height);
-  tui_viewport_set_render_position(app->viewport, 1, 1); /* Start at row 1 */
-
   /* Create textinput child (user input) */
   app->textinput = tui_textinput_create(NULL);
   if (!app->textinput) {
@@ -55,13 +45,19 @@ TelnetAppModel *telnet_app_create(const TelnetAppConfig *config) {
     free(app);
     return NULL;
   }
-
-  /* Configure textinput with absolute positioning */
-  tui_textinput_set_terminal_width(app->textinput, app->terminal_width);
   tui_textinput_set_show_dividers(app->textinput, 1);
-  /* Input row is terminal_height - 1 (middle of the 3-line input area) */
-  int input_row = app->terminal_height - 1;
-  tui_textinput_set_terminal_row(app->textinput, input_row);
+
+  /* Create statusbar child */
+  app->statusbar = tui_statusbar_create();
+  if (!app->statusbar) {
+    tui_textinput_free(app->textinput);
+    tui_viewport_free(app->viewport);
+    free(app);
+    return NULL;
+  }
+
+  /* Configure layout using dynamic height queries */
+  telnet_app_set_terminal_size(app, app->terminal_width, app->terminal_height);
 
   if (config) {
     if (config->prompt) {
@@ -90,6 +86,9 @@ void telnet_app_free(TelnetAppModel *app) {
   }
   if (app->textinput) {
     tui_textinput_free(app->textinput);
+  }
+  if (app->statusbar) {
+    tui_statusbar_free(app->statusbar);
   }
   free(app);
 }
@@ -125,10 +124,13 @@ void telnet_app_view(const TelnetAppModel *app, DynamicBuffer *out) {
   if (!app || !out)
     return;
 
-  /* Render viewport (rows 1 to terminal_height - INPUT_AREA_HEIGHT) */
+  /* Render viewport (fills top of screen) */
   tui_viewport_view(app->viewport, out);
 
-  /* Render textinput (uses absolute positioning via terminal_row) */
+  /* Render statusbar (bottom row) */
+  tui_statusbar_view(app->statusbar, out);
+
+  /* Render textinput last so cursor is left at prompt */
   tui_textinput_view(app->textinput, out);
 }
 
@@ -149,21 +151,36 @@ void telnet_app_set_terminal_size(TelnetAppModel *app, int width, int height) {
   app->terminal_width = width;
   app->terminal_height = height;
 
-  /* Update viewport size and position */
+  /* Query fixed-height components */
+  int textinput_h =
+      tui_textinput_get_height(app->textinput); /* 3 with dividers */
+  int statusbar_h = tui_statusbar_get_height(app->statusbar); /* 1 */
+
+  /* Viewport fills remaining space */
+  int viewport_h = height - textinput_h - statusbar_h;
+  if (viewport_h < 1)
+    viewport_h = 1;
+
+  /* Position components bottom-up.
+   * textinput_row is the input line (middle of 3 rows with dividers).
+   * Bottom divider is at textinput_row + 1, which must be above statusbar. */
+  int statusbar_row = height;                          /* Bottom row */
+  int textinput_row = statusbar_row - statusbar_h - 1; /* Input line */
+
+  /* Apply positions */
   if (app->viewport) {
-    int viewport_height = height - INPUT_AREA_HEIGHT;
-    if (viewport_height < 1)
-      viewport_height = 1;
-    tui_viewport_set_size(app->viewport, width, viewport_height);
+    tui_viewport_set_size(app->viewport, width, viewport_h);
     tui_viewport_set_render_position(app->viewport, 1, 1);
   }
 
-  /* Update textinput */
   if (app->textinput) {
     tui_textinput_set_terminal_width(app->textinput, width);
-    /* Input row is height - 1 (middle of 3-line area) */
-    int input_row = height - 1;
-    tui_textinput_set_terminal_row(app->textinput, input_row);
+    tui_textinput_set_terminal_row(app->textinput, textinput_row);
+  }
+
+  if (app->statusbar) {
+    tui_statusbar_set_terminal_width(app->statusbar, width);
+    tui_statusbar_set_terminal_row(app->statusbar, statusbar_row);
   }
 }
 
@@ -175,6 +192,11 @@ TuiTextInput *telnet_app_get_textinput(TelnetAppModel *app) {
 /* Get the viewport component */
 TuiViewport *telnet_app_get_viewport(TelnetAppModel *app) {
   return app ? app->viewport : NULL;
+}
+
+/* Get the statusbar component */
+TuiStatusBar *telnet_app_get_statusbar(TelnetAppModel *app) {
+  return app ? app->statusbar : NULL;
 }
 
 /* Set the prompt string */
