@@ -93,7 +93,12 @@ int termcaps_rgb_to_8(int r, int g, int b);
 
 /* Capability-aware color formatting.
  * These functions return escape sequences appropriate for the detected
- * terminal capabilities. Returns pointer to static buffer.
+ * terminal capabilities.
+ *
+ * WARNING: Each function returns a pointer to its own static buffer.
+ * The buffer is overwritten on subsequent calls to the SAME function.
+ * Copy the result if you need to preserve it across multiple calls.
+ * Note: fg and bg use separate buffers, so interleaving those is safe.
  *
  * For foreground colors:
  *   - Truecolor: \033[38;2;R;G;Bm
@@ -116,7 +121,7 @@ const char *termcaps_format_bg_color(int r, int g, int b);
 const char *termcaps_format_reset(void);
 
 /* Human-readable description of detected capabilities.
- * Returns pointer to static buffer.
+ * WARNING: Returns pointer to static buffer, overwritten on each call.
  */
 const char *termcaps_describe(void);
 

@@ -316,8 +316,12 @@ static void process_line(const char *line, const char **prompt) {
     process_command(line, g_telnet, &g_connected, &g_quit_requested,
                     g_term_cols, g_term_rows, echo_to_viewport);
   } else if (g_connected) {
-    /* Echo user input to viewport */
+    /* Echo user input to viewport in gold */
+    const char *gold = termcaps_format_fg_color(255, 215, 0);
+    const char *reset = termcaps_format_reset();
+    echo_to_viewport(gold, strlen(gold));
     echo_to_viewport(line, strlen(line));
+    echo_to_viewport(reset, strlen(reset));
     echo_to_viewport("\n", 1);
 
     /* Process through user input hook (sends empty lines too) */
