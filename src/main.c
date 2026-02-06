@@ -25,6 +25,7 @@
 
 #include "../include/telnet.h"
 #include "../include/terminal_caps.h"
+#include "colors.h"
 #include "commands.h"
 #include "lisp_extension.h"
 #include "logging.h"
@@ -166,14 +167,22 @@ static void update_terminal_size(void) {
 static void update_divider_color(void) {
   if (!g_app)
     return;
+  int r, g, b;
   char color_buf[32];
   if (g_connected) {
-    /* Charm green (#25A065) */
-    ansi_format_fg_color_rgb(color_buf, sizeof(color_buf), 37, 160, 101);
+    if (lisp_x_get_color("*color-divider-connected*", &r, &g, &b) < 0) {
+      r = COLOR_DIVIDER_CONNECTED_R;
+      g = COLOR_DIVIDER_CONNECTED_G;
+      b = COLOR_DIVIDER_CONNECTED_B;
+    }
   } else {
-    /* Charm gray (xterm 240 / #585858) */
-    ansi_format_fg_color_rgb(color_buf, sizeof(color_buf), 88, 88, 88);
+    if (lisp_x_get_color("*color-divider-disconnected*", &r, &g, &b) < 0) {
+      r = COLOR_DIVIDER_DISCONNECTED_R;
+      g = COLOR_DIVIDER_DISCONNECTED_G;
+      b = COLOR_DIVIDER_DISCONNECTED_B;
+    }
   }
+  ansi_format_fg_color_rgb(color_buf, sizeof(color_buf), r, g, b);
   tui_textinput_set_divider_color(g_textinput, color_buf);
 }
 
@@ -335,8 +344,14 @@ static void process_line(const char *line, const char **prompt) {
       update_divider_color();
     }
   } else if (g_connected) {
-    /* Echo user input to viewport in gold */
-    const char *gold = termcaps_format_fg_color(255, 215, 0);
+    /* Echo user input to viewport in configurable color */
+    int ur, ug, ub;
+    if (lisp_x_get_color("*color-user-input*", &ur, &ug, &ub) < 0) {
+      ur = COLOR_USER_INPUT_R;
+      ug = COLOR_USER_INPUT_G;
+      ub = COLOR_USER_INPUT_B;
+    }
+    const char *gold = termcaps_format_fg_color(ur, ug, ub);
     const char *reset = termcaps_format_reset();
     echo_to_viewport(gold, strlen(gold));
     echo_to_viewport(line, strlen(line));

@@ -55,6 +55,50 @@
 (defvar *prompt* "❯ " "Input prompt string.")
 
 ;; ============================================================================
+;; COLOR CONFIGURATION
+;; ============================================================================
+;; UI colors — each is an (R G B) list. Override in your config to customize.
+(defvar *color-user-input* '(255 215 0)
+  "Color for echoed user input. RGB list.")
+
+(defvar *color-divider-connected* '(37 160 101)
+  "Divider color when connected. RGB list.")
+
+(defvar *color-divider-disconnected* '(88 88 88)
+  "Divider color when disconnected. RGB list.")
+
+(defvar *color-log-debug* '(128 128 128)
+  "Color for debug log messages. RGB list.")
+
+(defvar *color-log-info* '(128 128 128)
+  "Color for info log messages. RGB list.")
+
+(defvar *color-log-warn* '(255 200 0)
+  "Color for warning log messages. RGB list.")
+
+(defvar *color-log-error* '(255 80 80)
+  "Color for error log messages. RGB list.")
+
+(defvar *color-script-header* '(255 177 182)
+  "Color for script-echo header text. RGB list.")
+
+(defvar *color-script-desc* '(157 225 241)
+  "Color for script-echo description text. RGB list.")
+
+(defvar *color-script-section* '(189 147 249)
+  "Color for script-echo section titles. RGB list.")
+
+(defvar *color-script-detail* '(100 100 156)
+  "Color for script-echo detail text. RGB list.")
+
+(defvar *color-script-mdash* '(98 98 98)
+  "Color for script-echo mdash separator. RGB list.")
+
+(defun color->fg (rgb)
+  "Convert an RGB list to a foreground ANSI escape sequence."
+  (termcap 'fg-color (car rgb) (car (cdr rgb)) (car (cdr (cdr rgb)))))
+
+;; ============================================================================
 ;; WORD STORE HELPER FUNCTIONS
 ;; ============================================================================
 (define *trim-punctuation-string* ".,!?;:()[]{}'\"-")
@@ -441,11 +485,11 @@ Usage:
     :section \"Features\" \"feature1\" \"feature2\")
 
 Colors: header=pale pink, desc=pale cyan, section=lavender, details=slate blue"
-  (let ((c-header (termcap 'fg-color 255 177 182)) ; Pale pink
-        (c-desc (termcap 'fg-color 157 225 241)) ; Pale cyan
-        (c-section (termcap 'fg-color 189 147 249)) ; Lavender
-        (c-detail (termcap 'fg-color 100 100 156)) ; Slate blue
-        (c-mdash (termcap 'fg-color 98 98 98)) ; Soft gray
+  (let ((c-header (color->fg *color-script-header*))
+        (c-desc (color->fg *color-script-desc*))
+        (c-section (color->fg *color-script-section*))
+        (c-detail (color->fg *color-script-detail*))
+        (c-mdash (color->fg *color-script-mdash*))
         (reset (termcap 'reset))
         (desc nil)
         (sections nil)

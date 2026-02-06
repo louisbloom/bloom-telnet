@@ -2,6 +2,8 @@
 
 #include "logging.h"
 #include "../include/terminal_caps.h"
+#include "colors.h"
+#include "lisp_extension.h"
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
@@ -136,20 +138,41 @@ void bloom_log(LogLevel level, const char *tag, const char *fmt, ...) {
 
   /* Send to viewport only if filter allows */
   if (show_in_viewport && g_echo_fn) {
+    int cr, cg, cb;
     const char *color;
     const char *reset = termcaps_format_reset();
     switch (level) {
     case LOG_DEBUG:
-      color = termcaps_format_fg_color(128, 128, 128);
+      if (lisp_x_get_color("*color-log-debug*", &cr, &cg, &cb) < 0) {
+        cr = COLOR_LOG_DEBUG_R;
+        cg = COLOR_LOG_DEBUG_G;
+        cb = COLOR_LOG_DEBUG_B;
+      }
+      color = termcaps_format_fg_color(cr, cg, cb);
       break;
     case LOG_INFO:
-      color = termcaps_format_fg_color(128, 128, 128);
+      if (lisp_x_get_color("*color-log-info*", &cr, &cg, &cb) < 0) {
+        cr = COLOR_LOG_INFO_R;
+        cg = COLOR_LOG_INFO_G;
+        cb = COLOR_LOG_INFO_B;
+      }
+      color = termcaps_format_fg_color(cr, cg, cb);
       break;
     case LOG_WARN:
-      color = termcaps_format_fg_color(255, 200, 0);
+      if (lisp_x_get_color("*color-log-warn*", &cr, &cg, &cb) < 0) {
+        cr = COLOR_LOG_WARN_R;
+        cg = COLOR_LOG_WARN_G;
+        cb = COLOR_LOG_WARN_B;
+      }
+      color = termcaps_format_fg_color(cr, cg, cb);
       break;
     case LOG_ERROR:
-      color = termcaps_format_fg_color(255, 80, 80);
+      if (lisp_x_get_color("*color-log-error*", &cr, &cg, &cb) < 0) {
+        cr = COLOR_LOG_ERROR_R;
+        cg = COLOR_LOG_ERROR_G;
+        cb = COLOR_LOG_ERROR_B;
+      }
+      color = termcaps_format_fg_color(cr, cg, cb);
       break;
     default:
       color = "";

@@ -967,6 +967,35 @@ const char *lisp_x_get_prompt(void) {
   return "> ";
 }
 
+/* Extract RGB from a Lisp '(r g b) defvar */
+int lisp_x_get_color(const char *var_name, int *r, int *g, int *b) {
+  if (!lisp_env || !var_name || !r || !g || !b)
+    return -1;
+
+  LispObject *val = env_lookup(lisp_env, var_name);
+  if (!val || val->type != LISP_CONS)
+    return -1;
+
+  LispObject *r_obj = lisp_car(val);
+  LispObject *rest = lisp_cdr(val);
+  if (!r_obj || r_obj->type != LISP_INTEGER || !rest || rest->type != LISP_CONS)
+    return -1;
+
+  LispObject *g_obj = lisp_car(rest);
+  rest = lisp_cdr(rest);
+  if (!g_obj || g_obj->type != LISP_INTEGER || !rest || rest->type != LISP_CONS)
+    return -1;
+
+  LispObject *b_obj = lisp_car(rest);
+  if (!b_obj || b_obj->type != LISP_INTEGER)
+    return -1;
+
+  *r = (int)r_obj->value.integer;
+  *g = (int)g_obj->value.integer;
+  *b = (int)b_obj->value.integer;
+  return 0;
+}
+
 /* Completion callback for bloom-boba textinput */
 char **lisp_x_complete(const char *buffer, int cursor_pos, void *userdata) {
   (void)userdata;

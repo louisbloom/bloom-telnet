@@ -68,6 +68,11 @@ const char *lisp_x_get_prompt(void);
  * of completions */
 char **lisp_x_complete(const char *buffer, int cursor_pos, void *userdata);
 
+/* Extract RGB from a Lisp '(r g b) defvar.
+ * Returns 0 on success, -1 on failure (variable missing or wrong shape).
+ * Callers should fall back to colors.h defaults on failure. */
+int lisp_x_get_color(const char *var_name, int *r, int *g, int *b);
+
 /* Terminal echo callback type - called by terminal-echo builtin */
 typedef void (*TerminalEchoCallback)(const char *text, size_t len);
 
