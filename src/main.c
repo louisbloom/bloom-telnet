@@ -66,6 +66,7 @@ static void handle_sigwinch(int sig);
 static int enable_raw_mode(void);
 static void disable_raw_mode(void);
 static void update_terminal_size(void);
+static void update_divider_color(void);
 static void print_usage(const char *progname);
 static void print_version(void);
 static EventReadiness wait_for_events(int socket_fd);
@@ -159,6 +160,21 @@ static void update_terminal_size(void) {
       g_term_rows = ws.ws_row;
   }
 #endif
+}
+
+/* Update divider color based on connection status */
+static void update_divider_color(void) {
+  if (!g_app)
+    return;
+  char color_buf[32];
+  if (g_connected) {
+    /* Charm green (#25A065) */
+    ansi_format_fg_color_rgb(color_buf, sizeof(color_buf), 37, 160, 101);
+  } else {
+    /* Charm gray (xterm 240 / #585858) */
+    ansi_format_fg_color_rgb(color_buf, sizeof(color_buf), 88, 88, 88);
+  }
+  tui_textinput_set_divider_color(g_textinput, color_buf);
 }
 
 /* Cleanup function called at exit */
@@ -315,6 +331,9 @@ static void process_line(const char *line, const char **prompt) {
     echo_to_viewport("\n", 1);
     process_command(line, g_telnet, &g_connected, &g_quit_requested,
                     g_term_cols, g_term_rows, echo_to_viewport);
+    if (g_connected != was_connected) {
+      update_divider_color();
+    }
   } else if (g_connected) {
     /* Echo user input to viewport in gold */
     const char *gold = termcaps_format_fg_color(255, 215, 0);
@@ -457,6 +476,7 @@ static int handle_telnet_data(char *recv_buffer, size_t buffer_size,
 
   if (received < 0) {
     g_connected = 0;
+    update_divider_color();
     echo_to_viewport("\n*** Connection lost ***\n", 25);
     return -1;
   }
@@ -637,6 +657,9 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
+  /* Set initial divider color (gray = disconnected) */
+  update_divider_color();
+
   /* Register statusbar with Lisp extension for statusbar builtins */
   lisp_x_register_statusbar(telnet_app_get_statusbar(g_app));
 
@@ -672,6 +695,7 @@ int main(int argc, char *argv[]) {
       telnet_app_echo(g_app, msg, strlen(msg));
     } else {
       g_connected = 1;
+      update_divider_color();
       telnet_set_terminal_size(g_telnet, g_term_cols, g_term_rows);
       telnet_app_echo(g_app, "Connected.\n", 11);
     }
