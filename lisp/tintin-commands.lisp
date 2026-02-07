@@ -38,15 +38,19 @@
 ;; Returns the full command name or nil if no match
 ;; Example: "al" → "alias", "var" → "variable"
 (defun tintin-find-command (prefix)
-  "Find TinTin++ command by partial prefix match (case-insensitive)."
+  "Find TinTin++ command by exact match first, then partial prefix (case-insensitive)."
   (if (not (string? prefix))
     nil
-    (let ((prefix-lower (string-downcase prefix))
-          (commands (hash-keys *tintin-commands*))
-          (result nil))
-      (do ((i 0 (+ i 1))) ((or (>= i (length commands)) result) result)
-        (let ((cmd (list-ref commands i)))
-          (if (string-prefix? prefix-lower cmd) (set! result cmd)))))))
+    (let ((prefix-lower (string-downcase prefix)))
+      ;; First: exact match (O(1) hash lookup)
+      (if (hash-ref *tintin-commands* prefix-lower)
+        prefix-lower
+        ;; Then: prefix match (linear scan)
+        (let ((commands (hash-keys *tintin-commands*))
+              (result nil))
+          (do ((i 0 (+ i 1))) ((or (>= i (length commands)) result) result)
+            (let ((cmd (list-ref commands i)))
+              (if (string-prefix? prefix-lower cmd) (set! result cmd)))))))))
 
 ;; ============================================================================
 ;; COMMAND HANDLERS

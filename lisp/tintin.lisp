@@ -18,6 +18,8 @@
 ;; 10. tintin-tables.lisp  - Table formatting (depends on state, utils)
 ;; 11. tintin-save.lisp    - Save/load (depends on state, utils)
 ;; 12. tintin-commands.lisp - Command handlers (depends on all above)
+;; 13. tintin-conditional.lisp - #if/#else/#elseif (depends on commands, parsing)
+;; 14. tintin-read.lisp     - #read config file loader (depends on commands, parsing)
 ;;
 ;; ============================================================================
 ;; LOAD MODULES
@@ -35,6 +37,8 @@
 (load-system-file "tintin-tables.lisp")
 (load-system-file "tintin-save.lisp")
 (load-system-file "tintin-commands.lisp")
+(load-system-file "tintin-conditional.lisp")
+(load-system-file "tintin-read.lisp")
 
 ;; ============================================================================
 ;; INPUT PROCESSING
