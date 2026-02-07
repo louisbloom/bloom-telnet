@@ -45,7 +45,22 @@ The only reliable way to know what a terminal does is to ask it:
 
 Lisp is the scripting environment. Each connection has a Lisp environment that holds all session state — aliases, actions, highlights, variables, and triggers are all stored in Lisp hash tables. This is the source of truth, and everything saved to disk is Lisp code.
 
-TinTin++ commands (`#act`, `#alias`, `#var`, `#highlight`, etc.) are prompt-level sugar. They exist because typing `(hash-set! *aliases* "go" "north")` at a MUD prompt is hostile, but `#alias go north` is natural. Under the hood, every TinTin++ command just populates the same Lisp data structures.
+TinTin++ commands (`#act`, `#alias`, `#var`, `#highlight`, etc.) are prompt-level sugar. They exist because `#alias go north` is quick to type at a MUD prompt. But Lisp equivalents don't have to be verbose — e.g. `(alias "go" "north")`. And Lisp shines when things get conditional:
+
+```lisp
+(action "* arrives from the *."
+  (lambda (mob dir)
+    (when (string=? mob "goblin")
+      "kill goblin")))
+```
+
+Compare the TinTin++ equivalent:
+
+```
+#act {%0 arrives from the %1.} {#if {"%0" == "goblin"} {kill goblin}}
+```
+
+The `#if` with string-based conditionals is its own mini-language duplicating what Lisp does natively. So the TinTin++ layer is mainly about familiarity. The underlying data structures are Lisp — currently hash tables, though the exact representation hasn't been deeply considered and may evolve.
 
 This split is intentional:
 
