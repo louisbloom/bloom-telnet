@@ -40,3 +40,22 @@ The only reliable way to know what a terminal does is to ask it:
 - Probing adds ~10-50ms of startup latency (one round-trip per probe).
 - Some terminals (kitty) support extended width query protocols that could be detected via existing `terminal_caps.c` DA2/XTVERSION responses.
 - The viewport's `calc_display_width()` would need to consult a width lookup rather than the current byte-level check. This could be a function pointer or a lookup table populated from probe results + `wcwidth()` baseline.
+
+## Scripting architecture
+
+Lisp is the scripting environment. Each connection has a Lisp environment that holds all session state — aliases, actions, highlights, variables, and triggers are all stored in Lisp hash tables. This is the source of truth, and everything saved to disk is Lisp code.
+
+TinTin++ commands (`#act`, `#alias`, `#var`, `#highlight`, etc.) are prompt-level sugar. They exist because typing `(hash-set! *aliases* "go" "north")` at a MUD prompt is hostile, but `#alias go north` is natural. Under the hood, every TinTin++ command just populates the same Lisp data structures.
+
+This split is intentional:
+
+- **`#save`** writes Lisp. The output is a `.lisp` file of `hash-set!` calls that reconstructs the session state. There is no TinTin++ config format.
+- **`#load`** evaluates Lisp. Loading a saved session just evaluates the Lisp file, which populates the hash tables.
+- **`#read`** bridges TinTin++ config files into the Lisp environment. It parses TinTin++ command syntax and translates each line into the equivalent Lisp operation. This lets users bring existing TinTin++ configs without rewriting them by hand.
+
+### Future directions
+
+- Better Lisp integration at the prompt — make it easy to drop into Lisp expressions without needing the TinTin++ layer.
+- Reduce reliance on TinTin++ string interpretation. The current TinTin++ parser does its own variable substitution, pattern matching, and flow control (`#if`/`#else`), all of which duplicate what Lisp already does natively. Over time, make Lisp the natural choice for anything beyond simple one-liners.
+- Per-connection Lisp environments, so multiple simultaneous connections each have isolated state.
+- TinTin++ config transpiler — a tool that reads a full TinTin++ config file and emits equivalent Lisp code, so users can migrate from TinTin++ to bloom-telnet without manually rewriting their setup. `#read` handles this at runtime already; the transpiler would be an offline batch version that produces clean, idiomatic Lisp output. Could later expand to support importing from zMUD, CMUD, and Mudlet config formats as well.
