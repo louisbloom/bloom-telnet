@@ -72,5 +72,4 @@ This split is intentional:
 
 - Better Lisp integration at the prompt — make it easy to drop into Lisp expressions without needing the TinTin++ layer.
 - Reduce reliance on TinTin++ string interpretation. The current TinTin++ parser does its own variable substitution, pattern matching, and flow control (`#if`/`#else`), all of which duplicate what Lisp already does natively. Over time, make Lisp the natural choice for anything beyond simple one-liners.
-- Per-connection Lisp environments, so multiple simultaneous connections each have isolated state.
-- TinTin++ config transpiler — a tool that reads a full TinTin++ config file and emits equivalent Lisp code, so users can migrate from TinTin++ to bloom-telnet without manually rewriting their setup. `#read` handles this at runtime already; the transpiler would be an offline batch version that produces clean, idiomatic Lisp output. Could later expand to support importing from zMUD, CMUD, and Mudlet config formats as well.
+- TinTin++ config transpiler — an offline batch tool that reads a full TinTin++ config file and emits equivalent Lisp code, producing clean, idiomatic output. `#read` handles this at runtime already; the transpiler would be a standalone version for migration. Could later expand to support importing from zMUD, CMUD, and Mudlet config formats as well.
