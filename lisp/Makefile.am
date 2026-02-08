@@ -4,7 +4,6 @@ lispdir = $(pkgdatadir)/lisp
 
 dist_lisp_DATA = \
     init.lisp \
-    init-post.lisp \
     tintin.lisp \
     tintin-state.lisp \
     tintin-utils.lisp \
@@ -17,6 +16,8 @@ dist_lisp_DATA = \
     tintin-aliases.lisp \
     tintin-tables.lisp \
     tintin-commands.lisp \
+    tintin-conditional.lisp \
+    tintin-read.lisp \
     tintin-save.lisp
 
 contribdir = $(pkgdatadir)/lisp/contrib

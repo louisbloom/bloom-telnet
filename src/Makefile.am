@@ -7,6 +7,8 @@ bloom_telnet_SOURCES = \
     telnet.c \
     path_utils.c \
     path_utils.h \
+    session.c \
+    session.h \
     lisp_extension.c \
     lisp_extension.h \
     logging.c \

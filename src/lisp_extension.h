@@ -39,7 +39,7 @@ int lisp_x_get_input_history_size(void);
 /* Forward declaration for Telnet type (defined in telnet.h) */
 struct Telnet;
 
-/* Register telnet pointer for telnet-send builtin */
+/* Register telnet pointer on the current session */
 void lisp_x_register_telnet(struct Telnet *t);
 
 /* Forward declaration for TuiStatusBar type */
@@ -58,8 +58,9 @@ void *lisp_x_get_environment(void);
  */
 int lisp_x_eval_and_echo(const char *code, DynamicBuffer *buf);
 
-/* Load init-post.lisp after initialization is complete */
-void lisp_x_load_init_post(void);
+/* Load init.lisp into base env. Called after TUI is initialized so that
+ * terminal-echo, script-echo, termcap etc. work during loading. */
+void lisp_x_load_init(void);
 
 /* Get prompt string from Lisp config (default: "> ") */
 const char *lisp_x_get_prompt(void);

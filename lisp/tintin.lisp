@@ -115,10 +115,9 @@
 ;; This hook processes TinTin++ commands and sends each one separately.
 ;; For example, "s;s" becomes two separate telnet sends: "s" and "s"
 (defun tintin-user-input-hook (text cursor-pos)
-  ;; Process with TinTin++ if enabled
-  ;; Note: Slash commands are handled by higher-priority hooks (e.g., practice.lisp)
-  (if (not *tintin-enabled*)
-    () ;; TinTin++ disabled, don't handle
+  ;; Process with TinTin++ if enabled and not already handled by a higher-priority hook
+  (if (or (not *tintin-enabled*) *user-input-handled*)
+    () ;; TinTin++ disabled or already handled
     ;; Empty input - don't handle, let C send blank line to server
     (if (or (not (string? text)) (string=? text ""))
       ()
@@ -218,12 +217,10 @@
 ;; ============================================================================
 ;; AUTO-ACTIVATION
 ;; ============================================================================
-;; Register TinTin++ user input hook via the extensible hook system
-(add-hook 'user-input-hook 'tintin-user-input-hook)
-;; Install telnet-input-filter-hook (use add-hook to chain with other filters)
-(add-hook 'telnet-input-filter-hook 'tintin-telnet-input-filter)
-;; Install telnet-input-hook (use add-hook to chain with other hooks)
-(add-hook 'telnet-input-hook 'tintin-telnet-input-hook)
+;; Register TinTin++ hooks — pass function values (not quoted symbols)
+(add-hook 'user-input-hook tintin-user-input-hook)
+(add-hook 'telnet-input-filter-hook tintin-telnet-input-filter)
+(add-hook 'telnet-input-hook tintin-telnet-input-hook)
 
 ;; Announce activation (terminal is ready when this file loads via -l)
 (script-echo "TinTin++ emulation active")

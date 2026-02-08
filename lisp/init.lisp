@@ -1,6 +1,6 @@
 ;; Bootstrap Lisp file for bloom-telnet
-;; This file is always loaded on startup before any user-provided Lisp file
-;; All variables defined here can be overridden in your custom Lisp configuration file
+;; Loaded into base_env on startup after the TUI is initialized.
+;; All variables defined here can be overridden in your custom Lisp configuration file.
 ;; ============================================================================
 ;; COMPLETION PATTERN CONFIGURATION
 ;; ============================================================================
@@ -251,78 +251,12 @@
          *completion-max-results*)))))
 
 ;; ============================================================================
-;; EXTENSIBLE HOOK SYSTEM
+;; HOOK WRAPPER FUNCTIONS
 ;; ============================================================================
-(defun memq (item lst)
-  "Return sublist starting at first eq? match, or nil if not found."
-  (cond
-    ((null? lst) nil)
-    ((eq? item (car lst)) lst)
-    (#t (memq item (cdr lst)))))
+;; Hook dispatch is implemented in C (add-hook, remove-hook, run-hook,
+;; run-filter-hook are C builtins). These wrappers are called from C
+;; via lisp_x_call_* functions and delegate to the C hook system.
 
-(defvar *hooks* '() "Global registry of hooks.")
-
-(defun add-hook (hook-name fn-symbol &optional priority)
-  "Add a function to a hook by symbol name with optional priority."
-  (let ((prio (if priority priority 50)))
-    (let ((entry (assoc hook-name *hooks*)))
-      (if entry
-        (unless
-          (assoc fn-symbol
-           (map (lambda (p) (cons (cdr p) (car p))) (cdr entry)))
-          (let ((new-pair (cons prio fn-symbol))
-                (inserted #f)
-                (new-list '()))
-            (do ((pairs (cdr entry) (cdr pairs))) ((null? pairs))
-              (let ((cur (car pairs)))
-                (when (and (not inserted) (< prio (car cur)))
-                  (set! new-list (cons new-pair new-list))
-                  (set! inserted #t))
-                (set! new-list (cons cur new-list))))
-            (unless inserted (set! new-list (cons new-pair new-list)))
-            (set! *hooks*
-             (map
-              (lambda (e)
-                (if (eq? (car e) hook-name)
-                  (cons hook-name (reverse new-list))
-                  e)) *hooks*))))
-        (set! *hooks*
-         (cons (cons hook-name (list (cons prio fn-symbol))) *hooks*)))))
-  nil)
-
-(defun remove-hook (hook-name fn-symbol)
-  "Remove a function from a hook by symbol name."
-  (let ((entry (assoc hook-name *hooks*)))
-    (when entry
-      (set! *hooks*
-       (map
-        (lambda (e)
-          (if (eq? (car e) hook-name)
-            (cons hook-name
-             (filter (lambda (pair) (not (eq? (cdr pair) fn-symbol))) (cdr e)))
-            e)) *hooks*))))
-  nil)
-
-(defun run-hook (hook-name &rest args)
-  "Run all functions in a hook with given arguments."
-  (let ((entry (assoc hook-name *hooks*)))
-    (when entry
-      (do ((pairs (cdr entry) (cdr pairs))) ((null? pairs))
-        (apply (eval (cdar pairs)) args))))
-  nil)
-
-(defun run-filter-hook (hook-name initial-value)
-  "Run all functions in a filter hook, chaining return values."
-  (let ((entry (assoc hook-name *hooks*)))
-    (if entry
-      (do ((pairs (cdr entry) (cdr pairs)) (result initial-value))
-        ((null? pairs) result)
-        (set! result ((eval (cdar pairs)) result)))
-      initial-value)))
-
-;; ============================================================================
-;; HOOK IMPLEMENTATIONS
-;; ============================================================================
 (defun telnet-input-hook (text)
   "Process telnet server output through registered hooks."
   (run-hook 'telnet-input-hook text)
@@ -332,18 +266,11 @@
 
 (defvar *user-input-result* nil)
 
-(defun run-user-input-hooks (text cursor-pos)
-  (let ((entry (assoc 'user-input-hook *hooks*)))
-    (when entry
-      (do ((pairs (cdr entry) (cdr pairs)))
-        ((or (null? pairs) *user-input-handled*))
-        ((eval (cdar pairs)) text cursor-pos)))))
-
 (defun user-input-hook (text cursor-pos)
   "Transform user input before sending to telnet server."
   (set! *user-input-handled* nil)
   (set! *user-input-result* nil)
-  (run-user-input-hooks text cursor-pos)
+  (run-hook 'user-input-hook text cursor-pos)
   (if *user-input-handled* *user-input-result* text))
 
 ;; ============================================================================
@@ -362,7 +289,7 @@
   "Default telnet-input-hook handler that collects words for tab completion."
   (collect-words-from-text text))
 
-(add-hook 'telnet-input-hook 'default-word-collector)
+(add-hook 'telnet-input-hook default-word-collector)
 
 ;; ============================================================================
 ;; TELNET INPUT FILTER HOOK
@@ -613,4 +540,56 @@ Colors: header=pale pink, desc=pale cyan, section=lavender, details=slate blue"
     (set! *notify-timer*
      (run-at-time ttl nil
       (lambda () (statusbar-clear) (set! *notify-timer* nil))))))
+
+;; ============================================================================
+;; DISPLAY UTILITY FUNCTIONS
+;; ============================================================================
+(defun visual-length (str)
+  "Calculate display length of string, excluding ANSI escape codes."
+  (if (not (string? str))
+    0
+    (let ((ansi-pattern "\\033\\[[0-9;]*m"))
+      (length (regex-replace-all ansi-pattern str "")))))
+
+(defun pad-string (str width)
+  "Pad string to specified width with trailing spaces."
+  (if (not (string? str))
+    ""
+    (let ((visual-len (visual-length str)))
+      (let ((padding-needed (- width visual-len)))
+        (if (<= padding-needed 0)
+          str
+          (let ((result str))
+            (do ((i 0 (+ i 1))) ((>= i padding-needed) result)
+              (set! result (concat result " ")))))))))
+
+(defun repeat-string (str count)
+  "Repeat a string N times."
+  (if (<= count 0)
+    ""
+    (let ((result ""))
+      (do ((i 0 (+ i 1))) ((>= i count) result)
+        (set! result (concat result str))))))
+
+;; ============================================================================
+;; STARTUP MESSAGE
+;; ============================================================================
+(let* ((sep (if (termcap 'unicode?) " · " ", "))
+       (term-type (termcap 'type))
+       (encoding (termcap 'encoding))
+       (color-name
+        (let ((level (termcap 'color-level)))
+          (cond
+            ((= level 4) "truecolor")
+            ((= level 3) "256-color")
+            ((= level 2) "16-color")
+            ((> level 0) "8-color")
+            (#t nil))))
+       (term-info
+        (concat term-type (if color-name (concat sep color-name) "")
+         (if (and (string? encoding) (not (string=? encoding "ASCII")))
+           (concat sep encoding)
+           ""))))
+  (script-echo (concat "bloom-telnet " *version*) :desc ":help for commands"
+   :section "Terminal" term-info))
 

@@ -229,7 +229,7 @@
 ;;; Hook Registration
 ;;; ============================================================================
 ;; Register the filter hook
-(add-hook 'telnet-input-filter-hook 'spell-translator-filter)
+(add-hook 'telnet-input-filter-hook spell-translator-filter)
 
 ;; Startup message
 (script-echo "Spell translator active" :section "Commands"

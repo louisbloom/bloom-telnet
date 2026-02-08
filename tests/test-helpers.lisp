@@ -27,11 +27,85 @@
 (defun terminal-echo (msg) nil)
 (defun telnet-send (msg) nil)
 (defun script-echo (title &rest args) nil)
-(defun add-hook (hook func &optional priority) nil)
+(defun add-hook (hook fn &optional priority) nil)
+(defun remove-hook (hook fn) nil)
+(defun run-hook (hook &rest args) nil)
+(defun run-filter-hook (hook initial-value) initial-value)
 (defun run-at-time (delay repeat func) nil)
 (defun cancel-timer (timer) nil)
 (defun statusbar-mode-set (sym text prio) nil)
 (defun statusbar-mode-remove (sym) nil)
+
+;; ============================================================================
+;; Session Mock System
+;; ============================================================================
+;; Simulates session isolation using hash tables as per-session variable stores.
+;; Each session has its own hash table; session-switch changes the active one.
+
+(define *mock-sessions* (make-hash-table))    ; "id" -> (name . vars-hash)
+(define *mock-current-session* 1)
+(define *mock-next-session-id* 2)
+
+;; Helper: convert session id to hash key string
+(defun mock-session-key (id) (format nil "~A" id))
+
+;; Initialize default session
+(hash-set! *mock-sessions* (mock-session-key 1) (cons "default" (make-hash-table)))
+
+(defun session-create (name)
+  "Mock: create a new session, returns its id."
+  (let ((id *mock-next-session-id*))
+    (set! *mock-next-session-id* (+ *mock-next-session-id* 1))
+    (hash-set! *mock-sessions* (mock-session-key id)
+               (cons name (make-hash-table)))
+    id))
+
+(defun session-list ()
+  "Mock: return list of (id . name) pairs."
+  (let ((result nil)
+        (keys (hash-keys *mock-sessions*)))
+    (do ((remaining keys (cdr remaining)))
+        ((null? remaining) result)
+      (let ((k (car remaining)))
+        (let ((v (hash-ref *mock-sessions* k)))
+          (set! result (cons (cons (string->number k) (car v)) result)))))))
+
+(defun session-current ()
+  "Mock: return current session id."
+  *mock-current-session*)
+
+(defun session-switch (id)
+  "Mock: switch to session by id."
+  (if (hash-ref *mock-sessions* (mock-session-key id))
+    (progn (set! *mock-current-session* id) #t)
+    (error "session-switch: no session with that id")))
+
+(defun session-name (&rest args)
+  "Mock: get session name. No args = current, one arg = by id."
+  (let ((id (if (null? args) *mock-current-session* (car args))))
+    (let ((entry (hash-ref *mock-sessions* (mock-session-key id))))
+      (if entry (car entry) nil))))
+
+(defun session-destroy (id)
+  "Mock: destroy a session by id."
+  (cond
+    ((= id *mock-current-session*)
+     (error "session-destroy: failed (not found or current session)"))
+    ((hash-ref *mock-sessions* (mock-session-key id))
+     (hash-remove! *mock-sessions* (mock-session-key id))
+     #t)
+    (#t (error "session-destroy: failed (not found or current session)"))))
+
+;; Per-session variable helpers for testing isolation
+(defun session-var-set (key value)
+  "Set a variable in the current mock session's variable store."
+  (let ((entry (hash-ref *mock-sessions* (mock-session-key *mock-current-session*))))
+    (hash-set! (cdr entry) key value)))
+
+(defun session-var-get (key)
+  "Get a variable from the current mock session's variable store."
+  (let ((entry (hash-ref *mock-sessions* (mock-session-key *mock-current-session*))))
+    (hash-ref (cdr entry) key)))
 ;; Assert that actual equals expected (handles numbers and structural equality)
 ;; Usage: (assert-equal actual expected "description")
 ;; Returns: nil on success, aborts test with error on failure

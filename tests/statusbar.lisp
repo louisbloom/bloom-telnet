@@ -30,6 +30,7 @@
 ;; ============================================================================
 ;; Load init.lisp to get Lisp-side statusbar functions
 ;; ============================================================================
+(defvar *version* "1.0.0-test")
 (load "lisp/init.lisp")
 
 ;; Helper to reset registry state between tests

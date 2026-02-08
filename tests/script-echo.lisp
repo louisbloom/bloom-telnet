@@ -17,11 +17,17 @@
    ((eq? capability 'fg-color)
     (format nil "[fg:~A,~A,~A]" (car args) (cadr args) (caddr args)))
    ((eq? capability 'reset) "[reset]")
+   ((eq? capability 'color-level) 4)
+   ((eq? capability 'unicode?) #t)
+   ((eq? capability 'type) "xterm-256color")
+   ((eq? capability 'encoding) "UTF-8")
    (#t "")))
 
 (defun telnet-send (msg) nil)
 
 (defun bloom-log (level category message) nil)
+
+(defvar *version* "1.0.0-test")
 
 ;; ============================================================================
 ;; Load actual init.lisp to test the real script-echo implementation

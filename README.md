@@ -51,7 +51,7 @@ Once connected, use these commands (prefixed with `:`):
 
 bloom-telnet uses bloom-lisp for scripting. See the `lisp/` directory for examples:
 
-- `init.lisp` - Main initialization script
+- `init.lisp` - Main initialization (hooks, timers, completion, config, startup banner)
 - `tintin.lisp` - TinTin++ compatible macros
 - `contrib/` - Additional utility scripts
 

@@ -681,8 +681,11 @@ int main(int argc, char *argv[]) {
   /* Now that viewport is available, route log messages there */
   bloom_log_set_echo(echo_to_viewport);
 
-  /* Load additional scripts if specified (after viewport so logs are visible)
-   */
+  /* Load init.lisp now that TUI is ready (needs terminal-echo, termcap) */
+  lisp_x_load_init();
+
+  /* Load additional scripts if specified (after init.lisp so script-echo etc.
+   * are available, and after viewport so logs are visible) */
   for (int i = 0; i < load_file_count; i++) {
     if (lisp_x_load_file(load_files[i]) < 0) {
       bloom_log(LOG_ERROR, "lisp", "Failed to load: %s", load_files[i]);
@@ -695,9 +698,6 @@ int main(int argc, char *argv[]) {
     fprintf(stderr, "Failed to create render buffer\n");
     return 1;
   }
-
-  /* Load init-post.lisp (prints banner via script-echo) */
-  lisp_x_load_init_post();
 
   /* Connect if hostname provided */
   if (hostname) {
