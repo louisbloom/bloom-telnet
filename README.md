@@ -4,11 +4,14 @@ A terminal-based telnet client with Lisp scripting support, designed for MUD gam
 
 ## Features
 
-- RFC 854 compliant telnet client
-- TUI interface with readline-style input (history, tab completion)
+- RFC 854 compliant telnet client with NAWS and I/O logging
+- TUI interface with readline-style input, history, and tab completion
 - Lisp scripting via bloom-lisp integration
-- TinTin++ compatible MUD scripting macros
-- ANSI color support
+- TinTin++ compatible MUD scripting (`#alias`, `#action`, `#highlight`, `#var`, `#if`/`#else`)
+- Multi-session support with per-session Lisp environments
+- ANSI color support with truecolor detection
+- Statusbar with mode display and notifications
+- Speedwalk shorthand (e.g., `3n2e` expands to `n;n;n;e;e`)
 
 ## Dependencies
 
@@ -30,8 +33,8 @@ make
 # Connect to a MUD server
 ./src/bloom-telnet mud.example.com 4000
 
-# With custom init script
-./src/bloom-telnet --load myconfig.lisp mud.example.com 4000
+# Load TinTin++ macros on connect
+./src/bloom-telnet --load tintin.lisp mud.example.com 4000
 
 # Help
 ./src/bloom-telnet --help
@@ -48,17 +51,49 @@ Once connected, use these commands (prefixed with `:`):
 - `:quit` or `:q` - Exit the client
 - `:help` - Show command help
 
+## TinTin++ Scripting
+
+When loaded with `--load tintin.lisp`, you get TinTin++ style commands at the prompt:
+
+```
+#alias {k} {kill %0}           Create an alias ("k goblin" sends "kill goblin")
+#action {%0 arrives.} {look}   Trigger on server text
+#highlight {bold red} {dragon}  Color-highlight matching text
+#var {target} {goblin}          Set a variable ($target expands in commands)
+#save {mysession}               Save session state to a Lisp file
+#load {mysession}               Restore a saved session
+#read {config.tin}              Import a TinTin++ config file
+#if {$hp < 100} {flee}          Conditional execution
+```
+
 ## Lisp Scripting
 
-bloom-telnet uses bloom-lisp for scripting. See the `lisp/` directory for examples:
+Under the hood, everything is Lisp. TinTin++ commands are sugar over Lisp data structures — aliases, actions, highlights, and variables all live in hash tables in the Lisp environment. You can script directly in Lisp for more power:
 
-- `init.lisp` - Main initialization (hooks, timers, completion, colors, logging, TCP keepalive, startup banner)
-- `tintin.lisp` - TinTin++ compatible macros
-- `contrib/` - Additional utility scripts
+```lisp
+;; React to server text with pattern matching
+(action "^(\\w+) attacks you"
+  (lambda (mob)
+    (if (string=? mob "dragon")
+      "flee"
+      (string-append "kill " mob))))
+
+;; Custom tab completion
+(add-hook 'completion-hook
+  (lambda (prefix)
+    (filter (lambda (w) (string-prefix? prefix w))
+            '("north" "south" "east" "west"))))
+```
+
+See the `lisp/` directory for examples:
+
+- `init.lisp` - Startup config (completion, timers, hooks, colors, logging, TCP keepalive)
+- `tintin.lisp` - TinTin++ command layer
+- `contrib/` - Additional utility scripts (practice mode, trackers)
 
 ## License
 
-MIT License - see COPYING for details.
+MIT License - see [LICENSE](LICENSE) for details.
 
 ## Author
 
