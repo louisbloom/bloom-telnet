@@ -44,6 +44,7 @@ Once connected, use these commands (prefixed with `:`):
 - `:connect <host> <port>` - Connect to a server
 - `:disconnect` - Disconnect from current server
 - `:load <file>` - Load a Lisp script
+- `:eval <code>` - Evaluate Lisp code and show result
 - `:quit` or `:q` - Exit the client
 - `:help` - Show command help
 
@@ -51,7 +52,7 @@ Once connected, use these commands (prefixed with `:`):
 
 bloom-telnet uses bloom-lisp for scripting. See the `lisp/` directory for examples:
 
-- `init.lisp` - Main initialization (hooks, timers, completion, config, startup banner)
+- `init.lisp` - Main initialization (hooks, timers, completion, colors, logging, TCP keepalive, startup banner)
 - `tintin.lisp` - TinTin++ compatible macros
 - `contrib/` - Additional utility scripts
 

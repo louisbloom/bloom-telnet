@@ -24,19 +24,19 @@ static TerminalEchoCallback echo_callback = NULL;
 /* Default hooks — registered before any session exists (e.g. during init.lisp),
  * applied to every new session */
 typedef struct DefaultHook {
-    char *name;
-    LispObject *fn;
-    int priority;
-    struct DefaultHook *next;
+  char *name;
+  LispObject *fn;
+  int priority;
+  struct DefaultHook *next;
 } DefaultHook;
 
 static DefaultHook *default_hooks = NULL;
 
 /* Apply all default hooks to a session */
 static void apply_default_hooks(Session *s) {
-    for (DefaultHook *dh = default_hooks; dh; dh = dh->next) {
-        session_add_hook(s, dh->name, dh->fn, dh->priority);
-    }
+  for (DefaultHook *dh = default_hooks; dh; dh = dh->next) {
+    session_add_hook(s, dh->name, dh->fn, dh->priority);
+  }
 }
 
 /* Static buffers for hook processing */
@@ -870,8 +870,7 @@ static void register_builtins(Environment *env) {
       "- `(termcap 'reset)` - SGR reset escape sequence\n"
       "- `(termcap 'fg-color r g b)` - foreground color escape sequence\n"
       "- `(termcap 'bg-color r g b)` - background color escape sequence");
-  env_define(env, "termcap",
-             lisp_make_builtin(builtin_termcap, "termcap"));
+  env_define(env, "termcap", lisp_make_builtin(builtin_termcap, "termcap"));
 
   /* System file loader (uses standard search paths) */
   env_define(env, "load-system-file",
@@ -931,12 +930,10 @@ static void register_builtins(Environment *env) {
              lisp_make_builtin(builtin_session_destroy, "session-destroy"));
 
   /* Hook system builtins */
-  env_define(env, "add-hook",
-             lisp_make_builtin(builtin_add_hook, "add-hook"));
+  env_define(env, "add-hook", lisp_make_builtin(builtin_add_hook, "add-hook"));
   env_define(env, "remove-hook",
              lisp_make_builtin(builtin_remove_hook, "remove-hook"));
-  env_define(env, "run-hook",
-             lisp_make_builtin(builtin_run_hook, "run-hook"));
+  env_define(env, "run-hook", lisp_make_builtin(builtin_run_hook, "run-hook"));
   env_define(env, "run-filter-hook",
              lisp_make_builtin(builtin_run_filter_hook, "run-filter-hook"));
 }

@@ -12,24 +12,24 @@
 #include <bloom-lisp/lisp.h>
 
 typedef struct HookEntry {
-    LispObject *fn;          /* Function value (LISP_LAMBDA or LISP_BUILTIN) */
-    int priority;            /* Lower = runs first, default 50 */
-    struct HookEntry *next;  /* Sorted linked list */
+  LispObject *fn;         /* Function value (LISP_LAMBDA or LISP_BUILTIN) */
+  int priority;           /* Lower = runs first, default 50 */
+  struct HookEntry *next; /* Sorted linked list */
 } HookEntry;
 
 typedef struct HookList {
-    char *name;              /* Hook name (e.g. "telnet-input-hook") */
-    HookEntry *entries;      /* Sorted by priority */
-    struct HookList *next;   /* Next hook in session's hook list */
+  char *name;            /* Hook name (e.g. "telnet-input-hook") */
+  HookEntry *entries;    /* Sorted by priority */
+  struct HookList *next; /* Next hook in session's hook list */
 } HookList;
 
 typedef struct Session {
-    int id;
-    char *name;
-    Environment *env;  /* Child of base_env — user state lives here */
-    Telnet *telnet;    /* Telnet connection (can be NULL) */
-    int connected;
-    HookList *hooks;   /* Per-session hook registry */
+  int id;
+  char *name;
+  Environment *env; /* Child of base_env — user state lives here */
+  Telnet *telnet;   /* Telnet connection (can be NULL) */
+  int connected;
+  HookList *hooks; /* Per-session hook registry */
 } Session;
 
 /* Initialize the session manager: create base env, register builtins,
