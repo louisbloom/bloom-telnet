@@ -10,7 +10,7 @@
 ;; ============================================================================
 ;; WORD STORE CONFIGURATION
 ;; ============================================================================
-(defvar *completion-word-store-size* 10000
+(defvar *completion-word-store-size* 50000
   "Maximum number of words to store for completions.")
 
 (defvar *completion-max-results* 64
@@ -150,17 +150,9 @@
     (set! *completion-word-order-index* 0)))
 
 (defun insert-word-into-slot! (vec store slot old-word new-word)
-  (if (and (string? old-word) (string? new-word) (string=? old-word new-word))
-    ()
-    (progn
-      (if (string? old-word)
-        (let ((count (hash-ref store old-word)))
-          (if (and count (> count 1))
-            (hash-set! store old-word (- count 1))
-            (hash-remove! store old-word))))
-      (vector-set! vec slot new-word)
-      (let ((count (hash-ref store new-word)))
-        (hash-set! store new-word (if count (+ count 1) 1))))))
+  (if (string? old-word) (hash-remove! store old-word))
+  (vector-set! vec slot new-word)
+  (if (string? new-word) (hash-set! store new-word slot)))
 
 (defun word-valid-for-store? (word) (and (string? word) (>= (length word) 3)))
 
@@ -169,7 +161,9 @@
   (if (not (word-valid-for-store? word))
     0
     (let* ((vec *completion-word-order*)
-           (vec-size (length vec)))
+           (vec-size (length vec))
+           (existing-slot (hash-ref *completion-word-store* word)))
+      (if existing-slot (vector-set! vec existing-slot nil))
       (if (>= *completion-word-order-index* vec-size)
         (set! *completion-word-order-index* 0))
       (let* ((slot
