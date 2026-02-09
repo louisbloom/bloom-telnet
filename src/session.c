@@ -14,9 +14,6 @@ static int session_count_val = 0;
 static Session *current_session = NULL;
 static int next_session_id = 1;
 
-/* Clear hook list pointers for a session (GC handles deallocation) */
-static void session_clear_hooks(Session *s) { s->hooks = NULL; }
-
 int session_manager_init(void) {
   if (base_env) {
     return 0; /* Already initialized */
@@ -43,7 +40,6 @@ void session_manager_cleanup(void) {
       if (sessions[i]->telnet && sessions[i]->connected) {
         telnet_disconnect(sessions[i]->telnet);
       }
-      session_clear_hooks(sessions[i]);
       sessions[i] = NULL;
     }
   }
@@ -77,10 +73,9 @@ Session *session_create(const char *name) {
 
   s->id = next_session_id++;
   s->name = GC_strdup(name ? name : "unnamed");
-  s->env = env_create(base_env);
+  s->env = env_create_session(base_env);
   s->telnet = NULL;
   s->connected = 0;
-  s->hooks = NULL;
 
   if (!s->env) {
     return NULL;
@@ -106,8 +101,6 @@ int session_destroy(int id) {
       if (s->telnet && s->connected) {
         telnet_disconnect(s->telnet);
       }
-      session_clear_hooks(s);
-
       bloom_log(LOG_INFO, "session", "Destroyed session %d: \"%s\"", s->id,
                 s->name);
 
@@ -156,83 +149,4 @@ Session **session_get_all(int *out_count) {
     *out_count = session_count_val;
   }
   return sessions;
-}
-
-HookList *session_get_hook_list(Session *session, const char *name) {
-  if (!session || !name) {
-    return NULL;
-  }
-
-  /* Search for existing hook list */
-  for (HookList *hl = session->hooks; hl; hl = hl->next) {
-    if (strcmp(hl->name, name) == 0) {
-      return hl;
-    }
-  }
-
-  /* Create new hook list */
-  HookList *hl = GC_malloc(sizeof(HookList));
-  if (!hl) {
-    return NULL;
-  }
-  hl->name = GC_strdup(name);
-  hl->entries = NULL;
-  hl->next = session->hooks;
-  session->hooks = hl;
-  return hl;
-}
-
-int session_add_hook(Session *session, const char *name, LispObject *fn,
-                     int priority) {
-  HookList *hl = session_get_hook_list(session, name);
-  if (!hl) {
-    return -1;
-  }
-
-  /* Check for duplicate by pointer identity */
-  for (HookEntry *he = hl->entries; he; he = he->next) {
-    if (he->fn == fn) {
-      return 0; /* Already registered */
-    }
-  }
-
-  /* Create new entry */
-  HookEntry *entry = GC_malloc(sizeof(HookEntry));
-  if (!entry) {
-    return -1;
-  }
-  entry->fn = fn;
-  entry->priority = priority;
-
-  /* Insert sorted by priority (lower first) */
-  HookEntry **pp = &hl->entries;
-  while (*pp && (*pp)->priority <= priority) {
-    pp = &(*pp)->next;
-  }
-  entry->next = *pp;
-  *pp = entry;
-  return 0;
-}
-
-int session_remove_hook(Session *session, const char *name, LispObject *fn) {
-  if (!session || !name) {
-    return -1;
-  }
-
-  /* Find the hook list */
-  for (HookList *hl = session->hooks; hl; hl = hl->next) {
-    if (strcmp(hl->name, name) == 0) {
-      HookEntry **pp = &hl->entries;
-      while (*pp) {
-        if ((*pp)->fn == fn) {
-          /* Just unlink — GC handles deallocation */
-          *pp = (*pp)->next;
-          return 0;
-        }
-        pp = &(*pp)->next;
-      }
-      return -1; /* fn not found */
-    }
-  }
-  return -1; /* hook list not found */
 }

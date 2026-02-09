@@ -646,9 +646,6 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  /* Register telnet with Lisp extension */
-  lisp_x_register_telnet(g_telnet);
-
   /* Create input parser */
   g_input_parser = tui_input_parser_create();
   if (!g_input_parser) {
@@ -681,8 +678,13 @@ int main(int argc, char *argv[]) {
   /* Now that viewport is available, route log messages there */
   bloom_log_set_echo(echo_to_viewport);
 
-  /* Load init.lisp now that TUI is ready (needs terminal-echo, termcap) */
+  /* Create default session and load init.lisp now that TUI is ready
+   * (needs terminal-echo, termcap, etc.) */
   lisp_x_load_init();
+
+  /* Register telnet with the default session (must be after session creation)
+   */
+  lisp_x_register_telnet(g_telnet);
 
   /* Load additional scripts if specified (after init.lisp so script-echo etc.
    * are available, and after viewport so logs are visible) */

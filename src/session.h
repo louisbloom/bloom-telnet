@@ -11,25 +11,12 @@
 #include "../include/telnet.h"
 #include <bloom-lisp/lisp.h>
 
-typedef struct HookEntry {
-  LispObject *fn;         /* Function value (LISP_LAMBDA or LISP_BUILTIN) */
-  int priority;           /* Lower = runs first, default 50 */
-  struct HookEntry *next; /* Sorted linked list */
-} HookEntry;
-
-typedef struct HookList {
-  char *name;            /* Hook name (e.g. "telnet-input-hook") */
-  HookEntry *entries;    /* Sorted by priority */
-  struct HookList *next; /* Next hook in session's hook list */
-} HookList;
-
 typedef struct Session {
   int id;
   char *name;
   Environment *env; /* Child of base_env — user state lives here */
   Telnet *telnet;   /* Telnet connection (can be NULL) */
   int connected;
-  HookList *hooks; /* Per-session hook registry */
 } Session;
 
 /* Initialize the session manager: create base env, register builtins,
@@ -62,11 +49,5 @@ Session *session_find_by_name(const char *name);
 /* Get session count and array of all sessions */
 int session_count(void);
 Session **session_get_all(int *out_count);
-
-/* Hook management */
-HookList *session_get_hook_list(Session *session, const char *name);
-int session_add_hook(Session *session, const char *name, LispObject *fn,
-                     int priority);
-int session_remove_hook(Session *session, const char *name, LispObject *fn);
 
 #endif /* SESSION_H */

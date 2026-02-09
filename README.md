@@ -66,6 +66,56 @@ When loaded with `--load tintin.lisp`, you get TinTin++ style commands at the pr
 #if {$hp < 100} {flee}          Conditional execution
 ```
 
+## Sessions
+
+bloom-telnet supports multiple sessions, each with its own Lisp environment and telnet connection. A default session is created on startup. Manage sessions via `:eval` or from Lisp scripts:
+
+```lisp
+;; Create a new session
+(session-create "alt-char")   ; => session id
+
+;; List all sessions as (id . "name") pairs
+(session-list)                ; => ((1 . "default") (2 . "alt-char"))
+
+;; Check which session is active
+(session-current)             ; => 1
+
+;; Switch to another session
+(session-switch 2)
+
+;; Get a session's name (no args = current session)
+(session-name)                ; => "alt-char"
+(session-name 1)              ; => "default"
+
+;; Destroy a session (cannot destroy the current session)
+(session-switch 1)
+(session-destroy 2)
+```
+
+Each session has an isolated Lisp environment — variables, aliases, actions, and hooks defined in one session do not affect others. The base environment (builtins and `init.lisp` definitions) is shared across all sessions.
+
+### Saving and Restoring Sessions
+
+There are two ways to save session state, depending on what you want to preserve:
+
+**TinTin++ state** (`#save` / `#load`) — saves aliases, actions, highlights, variables, and settings. This is the right choice for most MUD players:
+
+```
+#save {~/my-mud}              Save TinTin++ state to ~/my-mud
+#load {~/my-mud}              Restore it later
+```
+
+The saved file contains `hash-set!` calls that repopulate the alias, action, highlight, and variable tables. Settings like speedwalk mode are also included. Loading merges into the current session — existing entries with the same keys are overwritten, but other entries are kept.
+
+**Full Lisp environment** (`save-session`) — saves every user-defined binding in the current session's Lisp environment (variables, functions, macros, hooks) as a loadable Lisp file:
+
+```lisp
+(save-session "~/my-session.lisp")   ; Save current session bindings
+(load "~/my-session.lisp")           ; Restore into any session
+```
+
+The saved file contains `define` and `defmacro` forms for each binding. Non-serializable values like file handles are skipped. This captures more than `#save` — all Lisp-level state including hooks (which are stored in the per-session `*hooks*` hash table), not just TinTin++ tables. Telnet connection state is not included.
+
 ## Lisp Scripting
 
 Under the hood, everything is Lisp. TinTin++ commands are sugar over Lisp data structures — aliases, actions, highlights, and variables all live in hash tables in the Lisp environment. You can script directly in Lisp for more power:

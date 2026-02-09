@@ -27,14 +27,81 @@
 (defun terminal-echo (msg) nil)
 (defun telnet-send (msg) nil)
 (defun script-echo (title &rest args) nil)
-(defun add-hook (hook fn &optional priority) nil)
-(defun remove-hook (hook fn) nil)
-(defun run-hook (hook &rest args) nil)
-(defun run-filter-hook (hook initial-value) initial-value)
 (defun run-at-time (delay repeat func) nil)
 (defun cancel-timer (timer) nil)
 (defun statusbar-mode-set (sym text prio) nil)
 (defun statusbar-mode-remove (sym) nil)
+
+;; ============================================================================
+;; Hook System Mock (backed by *hooks* hash table, matches C implementation)
+;; ============================================================================
+(define *hooks* (make-hash-table))
+(define *default-hooks* nil)
+
+;; Check if fn already exists in a hook entry list (by eq? identity)
+(defun hooks--has-fn? (lst fn)
+  (cond
+    ((null? lst) #f)
+    ((eq? (car (car lst)) fn) #t)
+    (#t (hooks--has-fn? (cdr lst) fn))))
+
+;; Insert (fn . priority) into a sorted list, return new list
+(defun hooks--insert-sorted (fn priority lst)
+  (let ((entry (cons fn priority)))
+    (cond
+      ((null? lst) (list entry))
+      ((< priority (cdr (car lst)))
+       (cons entry lst))
+      (#t (cons (car lst) (hooks--insert-sorted fn priority (cdr lst)))))))
+
+;; Remove fn from hook entry list by eq? identity, return new list
+(defun hooks--remove-fn (lst fn)
+  (cond
+    ((null? lst) nil)
+    ((eq? (car (car lst)) fn) (cdr lst))
+    (#t (cons (car lst) (hooks--remove-fn (cdr lst) fn)))))
+
+(defun add-hook (hook fn &rest rest-args)
+  "Mock: add a hook function with optional priority."
+  (let ((priority (if (null? rest-args) 50 (car rest-args)))
+        (name (symbol->string hook)))
+    (let ((hook-list (hash-ref *hooks* name)))
+      (if (null? hook-list) (set! hook-list nil))
+      (if (hooks--has-fn? hook-list fn)
+        nil
+        (hash-set! *hooks* name
+                   (hooks--insert-sorted fn priority hook-list))))))
+
+(defun remove-hook (hook fn)
+  "Mock: remove a hook function."
+  (let ((name (symbol->string hook)))
+    (let ((hook-list (hash-ref *hooks* name)))
+      (if hook-list
+        (hash-set! *hooks* name (hooks--remove-fn hook-list fn))))))
+
+(defun run-hook (hook &rest args)
+  "Mock: run all functions registered on a hook."
+  (let ((name (symbol->string hook)))
+    (let ((hook-list (hash-ref *hooks* name)))
+      (if hook-list
+        (do ((remaining hook-list (cdr remaining)))
+            ((null? remaining) nil)
+          (apply (car (car remaining)) args))))))
+
+(defun run-filter-hook--loop (entries val)
+  "Helper: thread value through remaining hook entries."
+  (if (null? entries)
+    val
+    (let ((fn (car (car entries))))
+      (run-filter-hook--loop (cdr entries) (fn val)))))
+
+(defun run-filter-hook (hook initial-value)
+  "Mock: thread a value through all functions registered on a hook."
+  (let ((name (symbol->string hook)))
+    (let ((hook-list (hash-ref *hooks* name)))
+      (if hook-list
+        (run-filter-hook--loop hook-list initial-value)
+        initial-value))))
 
 ;; ============================================================================
 ;; Session Mock System

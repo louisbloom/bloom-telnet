@@ -15,27 +15,154 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* Check if a Lisp object is callable (lambda, macro, or builtin) */
+static inline int lisp_is_callable(LispObject *obj) {
+  return obj && (obj->type == LISP_LAMBDA || obj->type == LISP_MACRO ||
+                 obj->type == LISP_BUILTIN);
+}
+
 /* Registered statusbar pointer for statusbar builtins */
 static TuiStatusBar *registered_statusbar = NULL;
 
 /* Terminal echo callback */
 static TerminalEchoCallback echo_callback = NULL;
 
-/* Default hooks — registered before any session exists (e.g. during init.lisp),
- * applied to every new session */
-typedef struct DefaultHook {
-  char *name;
-  LispObject *fn;
-  int priority;
-  struct DefaultHook *next;
-} DefaultHook;
+/* ========================================================================
+ * Hook storage helpers — hooks are stored in a *hooks* hash table
+ * in each session's Lisp env.  Key = hook name string,
+ * Value = sorted list of (fn . priority) cons cells.
+ * ======================================================================== */
 
-static DefaultHook *default_hooks = NULL;
+/* Get the *hooks* hash table from the current session's env, or NULL */
+static LispObject *get_session_hooks(void) {
+  Session *s = session_get_current();
+  if (!s || !s->env) {
+    return NULL;
+  }
+  LispObject *hooks = env_lookup(s->env, "*hooks*");
+  if (!hooks || hooks->type != LISP_HASH_TABLE) {
+    return NULL;
+  }
+  return hooks;
+}
 
-/* Apply all default hooks to a session */
-static void apply_default_hooks(Session *s) {
-  for (DefaultHook *dh = default_hooks; dh; dh = dh->next) {
-    session_add_hook(s, dh->name, dh->fn, dh->priority);
+/* Check if fn already exists in a hook entry list (by pointer identity) */
+static int hooks_has_fn(LispObject *list, LispObject *fn) {
+  while (list != NIL && list->type == LISP_CONS) {
+    LispObject *entry = lisp_car(list);
+    if (entry && entry->type == LISP_CONS && lisp_car(entry) == fn) {
+      return 1;
+    }
+    list = lisp_cdr(list);
+  }
+  return 0;
+}
+
+/* Insert (fn . priority) into a sorted list, return new list head */
+static LispObject *hooks_insert_sorted(LispObject *fn, int priority,
+                                       LispObject *list) {
+  LispObject *entry = lisp_make_cons(fn, lisp_make_integer(priority));
+
+  /* Empty list or insert before first element */
+  if (list == NIL || list->type != LISP_CONS) {
+    return lisp_make_cons(entry, NIL);
+  }
+
+  /* Check if we should insert before the head */
+  LispObject *head_entry = lisp_car(list);
+  int head_prio = (int)lisp_cdr(head_entry)->value.integer;
+  if (priority < head_prio) {
+    return lisp_make_cons(entry, list);
+  }
+
+  /* Walk the list to find insertion point — rebuild as we go since
+   * Lisp cons cells are immutable-ish (we build a new spine) */
+  LispObject *result = NIL;
+  LispObject **tail = &result;
+  int inserted = 0;
+
+  while (list != NIL && list->type == LISP_CONS) {
+    LispObject *cur = lisp_car(list);
+    int cur_prio = (int)lisp_cdr(cur)->value.integer;
+
+    if (!inserted && priority < cur_prio) {
+      *tail = lisp_make_cons(entry, NIL);
+      tail = &((*tail)->value.cons.cdr);
+      inserted = 1;
+    }
+
+    *tail = lisp_make_cons(cur, NIL);
+    tail = &((*tail)->value.cons.cdr);
+    list = lisp_cdr(list);
+  }
+
+  if (!inserted) {
+    *tail = lisp_make_cons(entry, NIL);
+  }
+
+  return result;
+}
+
+/* Remove fn from hook entry list (by pointer identity), return new list */
+static LispObject *hooks_remove_fn(LispObject *list, LispObject *fn) {
+  LispObject *result = NIL;
+  LispObject **tail = &result;
+
+  while (list != NIL && list->type == LISP_CONS) {
+    LispObject *entry = lisp_car(list);
+    if (entry && entry->type == LISP_CONS && lisp_car(entry) == fn) {
+      /* Skip this entry — append rest and return */
+      *tail = lisp_cdr(list);
+      return result;
+    }
+    *tail = lisp_make_cons(entry, NIL);
+    tail = &((*tail)->value.cons.cdr);
+    list = lisp_cdr(list);
+  }
+
+  return result;
+}
+
+/* Apply *default-hooks* entries into a hooks hash table */
+static void apply_default_hooks_to_table(LispObject *hooks_table) {
+  if (!hooks_table || hooks_table->type != LISP_HASH_TABLE) {
+    return;
+  }
+  Environment *base = session_get_base_env();
+  if (!base) {
+    return;
+  }
+  LispObject *defaults = env_lookup(base, "*default-hooks*");
+  if (!defaults || defaults == NIL) {
+    return;
+  }
+
+  /* Walk list of (name-string fn . priority) triples */
+  while (defaults != NIL && defaults->type == LISP_CONS) {
+    LispObject *triple = lisp_car(defaults);
+    if (triple && triple->type == LISP_CONS) {
+      LispObject *name_obj = lisp_car(triple);
+      LispObject *fn_and_prio = lisp_cdr(triple);
+      if (name_obj && name_obj->type == LISP_STRING && fn_and_prio &&
+          fn_and_prio->type == LISP_CONS) {
+        LispObject *fn = lisp_car(fn_and_prio);
+        LispObject *prio_obj = lisp_cdr(fn_and_prio);
+        int priority = 50;
+        if (prio_obj && prio_obj->type == LISP_INTEGER) {
+          priority = (int)prio_obj->value.integer;
+        }
+
+        const char *name = name_obj->value.string;
+        struct HashEntry *he = hash_table_get_entry(hooks_table, name);
+        LispObject *hook_list = (he && he->value) ? he->value : NIL;
+
+        if (!hooks_has_fn(hook_list, fn)) {
+          hook_list = hooks_insert_sorted(fn, priority, hook_list);
+          hash_table_set_entry(hooks_table, name, hook_list);
+        }
+      }
+    }
+    defaults = lisp_cdr(defaults);
   }
 }
 
@@ -574,8 +701,17 @@ static LispObject *builtin_session_create(LispObject *args, Environment *env) {
     return lisp_make_error("session-create: failed to create session");
   }
 
-  /* Apply default hooks (registered during init.lisp) */
-  apply_default_hooks(s);
+  /* Give new session its own *hooks* table and populate from defaults */
+  LispObject *hooks_table = lisp_make_hash_table();
+  env_define(s->env, "*hooks*", hooks_table);
+  apply_default_hooks_to_table(hooks_table);
+
+  /* Echo creation message to terminal */
+  char msg[256];
+  snprintf(msg, sizeof(msg), "Created session %d: \"%s\"\r\n", s->id, s->name);
+  if (echo_callback) {
+    echo_callback(msg, strlen(msg));
+  }
 
   return lisp_make_integer(s->id);
 }
@@ -671,10 +807,21 @@ static LispObject *builtin_session_destroy(LispObject *args, Environment *env) {
   }
 
   int id = (int)id_obj->value.integer;
+
+  /* Capture name before destroy removes the session */
+  Session *target = session_find_by_id(id);
+  const char *name = target ? target->name : "unknown";
+  char msg[256];
+  snprintf(msg, sizeof(msg), "Destroyed session %d: \"%s\"\r\n", id, name);
+
   int result = session_destroy(id);
   if (result < 0) {
     return lisp_make_error(
         "session-destroy: failed (not found or current session)");
+  }
+
+  if (echo_callback) {
+    echo_callback(msg, strlen(msg));
   }
 
   return LISP_TRUE;
@@ -704,7 +851,7 @@ static LispObject *builtin_add_hook(LispObject *args, Environment *env) {
   if (name_obj->type != LISP_SYMBOL) {
     return lisp_make_error("add-hook: first argument must be a symbol");
   }
-  if (fn_obj->type != LISP_LAMBDA && fn_obj->type != LISP_BUILTIN) {
+  if (!lisp_is_callable(fn_obj)) {
     return lisp_make_error("add-hook: second argument must be a function");
   }
 
@@ -717,23 +864,37 @@ static LispObject *builtin_add_hook(LispObject *args, Environment *env) {
     priority = (int)prio_obj->value.integer;
   }
 
-  Session *s = session_get_current();
-  if (!s) {
-    /* No session yet (e.g. during init.lisp loading) — store as default
-     * hook that will be applied to every new session */
-    DefaultHook *dh = GC_malloc(sizeof(DefaultHook));
-    if (!dh) {
-      return lisp_make_error("add-hook: allocation failed");
+  LispObject *hooks_table = get_session_hooks();
+  if (!hooks_table) {
+    /* No session yet (e.g. during init.lisp loading) — prepend to
+     * *default-hooks* in base_env as (name-string fn . priority) */
+    Environment *base = session_get_base_env();
+    if (!base) {
+      return lisp_make_error("add-hook: no base environment");
     }
-    dh->name = GC_strdup(name_obj->value.symbol->name);
-    dh->fn = fn_obj;
-    dh->priority = priority;
-    dh->next = default_hooks;
-    default_hooks = dh;
+    LispObject *defaults = env_lookup(base, "*default-hooks*");
+    if (!defaults) {
+      defaults = NIL;
+    }
+    LispObject *name_str = lisp_make_string(name_obj->value.symbol->name);
+    LispObject *fn_and_prio =
+        lisp_make_cons(fn_obj, lisp_make_integer(priority));
+    LispObject *triple = lisp_make_cons(name_str, fn_and_prio);
+    defaults = lisp_make_cons(triple, defaults);
+    env_set(base, "*default-hooks*", defaults);
     return NIL;
   }
 
-  session_add_hook(s, name_obj->value.symbol->name, fn_obj, priority);
+  const char *name = name_obj->value.symbol->name;
+  struct HashEntry *he = hash_table_get_entry(hooks_table, name);
+  LispObject *hook_list = (he && he->value) ? he->value : NIL;
+
+  if (hooks_has_fn(hook_list, fn_obj)) {
+    return NIL; /* Already registered */
+  }
+
+  hook_list = hooks_insert_sorted(fn_obj, priority, hook_list);
+  hash_table_set_entry(hooks_table, name, hook_list);
   return NIL;
 }
 
@@ -756,16 +917,23 @@ static LispObject *builtin_remove_hook(LispObject *args, Environment *env) {
   if (name_obj->type != LISP_SYMBOL) {
     return lisp_make_error("remove-hook: first argument must be a symbol");
   }
-  if (fn_obj->type != LISP_LAMBDA && fn_obj->type != LISP_BUILTIN) {
+  if (!lisp_is_callable(fn_obj)) {
     return lisp_make_error("remove-hook: second argument must be a function");
   }
 
-  Session *s = session_get_current();
-  if (!s) {
+  LispObject *hooks_table = get_session_hooks();
+  if (!hooks_table) {
     return lisp_make_error("remove-hook: no current session");
   }
 
-  session_remove_hook(s, name_obj->value.symbol->name, fn_obj);
+  const char *name = name_obj->value.symbol->name;
+  struct HashEntry *he = hash_table_get_entry(hooks_table, name);
+  if (!he || !he->value || he->value == NIL) {
+    return NIL;
+  }
+
+  LispObject *new_list = hooks_remove_fn(he->value, fn_obj);
+  hash_table_set_entry(hooks_table, name, new_list);
   return NIL;
 }
 
@@ -782,27 +950,33 @@ static LispObject *builtin_run_hook(LispObject *args, Environment *env) {
     return lisp_make_error("run-hook: first argument must be a symbol");
   }
 
-  Session *s = session_get_current();
-  if (!s) {
+  LispObject *hooks_table = get_session_hooks();
+  if (!hooks_table) {
     return NIL;
   }
 
-  HookList *hl = session_get_hook_list(s, name_obj->value.symbol->name);
-  if (!hl) {
+  const char *name = name_obj->value.symbol->name;
+  struct HashEntry *he = hash_table_get_entry(hooks_table, name);
+  if (!he || !he->value || he->value == NIL) {
     return NIL;
   }
 
-  for (HookEntry *he = hl->entries; he; he = he->next) {
+  LispObject *hook_list = he->value;
+  while (hook_list != NIL && hook_list->type == LISP_CONS) {
+    LispObject *entry = lisp_car(hook_list);
+    LispObject *fn = lisp_car(entry);
+
     /* Build call: (fn arg1 arg2 ...) */
-    LispObject *call = lisp_make_cons(he->fn, hook_args);
+    LispObject *call = lisp_make_cons(fn, hook_args);
     LispObject *result = lisp_eval(call, env);
     if (result && result->type == LISP_ERROR) {
       char *err_str = lisp_print(result);
       if (err_str) {
-        bloom_log(LOG_ERROR, "hooks", "run-hook %s: %s",
-                  name_obj->value.symbol->name, err_str);
+        bloom_log(LOG_ERROR, "hooks", "run-hook %s: %s", name, err_str);
       }
     }
+
+    hook_list = lisp_cdr(hook_list);
   }
 
   return NIL;
@@ -826,31 +1000,37 @@ static LispObject *builtin_run_filter_hook(LispObject *args, Environment *env) {
     return lisp_make_error("run-filter-hook: first argument must be a symbol");
   }
 
-  Session *s = session_get_current();
-  if (!s) {
+  LispObject *hooks_table = get_session_hooks();
+  if (!hooks_table) {
     return value;
   }
 
-  HookList *hl = session_get_hook_list(s, name_obj->value.symbol->name);
-  if (!hl) {
+  const char *name = name_obj->value.symbol->name;
+  struct HashEntry *he = hash_table_get_entry(hooks_table, name);
+  if (!he || !he->value || he->value == NIL) {
     return value;
   }
 
-  for (HookEntry *he = hl->entries; he; he = he->next) {
+  LispObject *hook_list = he->value;
+  while (hook_list != NIL && hook_list->type == LISP_CONS) {
+    LispObject *entry = lisp_car(hook_list);
+    LispObject *fn = lisp_car(entry);
+
     /* Build call: (fn value) */
     LispObject *call_args = lisp_make_cons(value, NIL);
-    LispObject *call = lisp_make_cons(he->fn, call_args);
+    LispObject *call = lisp_make_cons(fn, call_args);
     LispObject *result = lisp_eval(call, env);
     if (result && result->type == LISP_ERROR) {
       char *err_str = lisp_print(result);
       if (err_str) {
-        bloom_log(LOG_ERROR, "hooks", "run-filter-hook %s: %s",
-                  name_obj->value.symbol->name, err_str);
+        bloom_log(LOG_ERROR, "hooks", "run-filter-hook %s: %s", name, err_str);
       }
       /* On error, keep previous value */
     } else {
       value = result;
     }
+
+    hook_list = lisp_cdr(hook_list);
   }
 
   return value;
@@ -1007,15 +1187,12 @@ int lisp_x_init(void) {
   /* Version string accessible from Lisp */
   env_define(base_env, "*version*", lisp_make_string(BLOOM_TELNET_VERSION));
 
-  /* Create the default session — init.lisp is loaded later via
-   * lisp_x_load_init() once the TUI is ready for terminal output */
-  Session *default_session = session_create("default");
-  if (!default_session) {
-    bloom_log(LOG_ERROR, "lisp", "Failed to create default session");
-    lisp_x_cleanup();
-    return -1;
-  }
-  session_set_current(default_session);
+  /* Initialize *default-hooks* in base env (collects hooks registered
+   * during init.lisp before any session exists) */
+  env_define(base_env, "*default-hooks*", NIL);
+
+  /* Default session is created later in lisp_x_load_init() once the
+   * TUI is ready, so echo_callback can display the creation message */
 
   return 0;
 }
@@ -1070,9 +1247,6 @@ void lisp_x_cleanup(void) {
 
   registered_statusbar = NULL;
 
-  /* Clear default hooks list — GC handles deallocation */
-  default_hooks = NULL;
-
   /* Cleanup all sessions and base environment */
   session_manager_cleanup();
 
@@ -1095,7 +1269,7 @@ void lisp_x_call_telnet_input_hook(const char *text, size_t len) {
   }
 
   LispObject *hook = env_lookup(env, "telnet-input-hook");
-  if (!hook || (hook->type != LISP_LAMBDA && hook->type != LISP_BUILTIN)) {
+  if (!lisp_is_callable(hook)) {
     bloom_log(LOG_DEBUG, "hooks", "input-hook: hook not found or wrong type");
     return;
   }
@@ -1128,7 +1302,7 @@ void lisp_x_run_timers(void) {
     return;
 
   LispObject *fn = env_lookup(env, "run-timers");
-  if (!fn || (fn->type != LISP_LAMBDA && fn->type != LISP_BUILTIN))
+  if (!lisp_is_callable(fn))
     return;
 
   volatile LispObject *call = lisp_make_cons(fn, NIL);
@@ -1153,7 +1327,7 @@ const char *lisp_x_call_telnet_input_filter_hook(const char *text, size_t len,
   }
 
   LispObject *hook = env_lookup(env, "telnet-input-filter-hook");
-  if (!hook || (hook->type != LISP_LAMBDA && hook->type != LISP_BUILTIN)) {
+  if (!lisp_is_callable(hook)) {
     *out_len = len;
     return text;
   }
@@ -1215,7 +1389,7 @@ const char *lisp_x_call_user_input_hook(const char *text, int cursor_pos) {
   }
 
   LispObject *hook = env_lookup(env, "user-input-hook");
-  if (!hook || (hook->type != LISP_LAMBDA && hook->type != LISP_BUILTIN)) {
+  if (!lisp_is_callable(hook)) {
     return text;
   }
 
@@ -1337,17 +1511,35 @@ int lisp_x_eval_and_echo(const char *code, DynamicBuffer *buf) {
   return 0;
 }
 
-/* Load init.lisp into base env and apply default hooks to the current session.
+/* Create default session, load init.lisp, and apply default hooks.
  * Called from main() after the TUI is initialized so that terminal-echo,
  * script-echo, termcap etc. work during loading. */
 void lisp_x_load_init(void) {
+  /* Create the default session now that echo_callback is available */
+  Session *s = session_create("default");
+  if (!s) {
+    bloom_log(LOG_ERROR, "lisp", "Failed to create default session");
+    return;
+  }
+  session_set_current(s);
+
+  /* Give the default session its own *hooks* table */
+  LispObject *hooks_table = lisp_make_hash_table();
+  env_define(s->env, "*hooks*", hooks_table);
+
+  /* Echo creation message to terminal */
+  char msg[256];
+  snprintf(msg, sizeof(msg), "Created session %d: \"%s\"\r\n", s->id, s->name);
+  if (echo_callback) {
+    echo_callback(msg, strlen(msg));
+  }
+
+  /* Load init.lisp into base env (shared across all sessions) */
   Environment *base_env = session_get_base_env();
   load_lisp_system_file("init.lisp", base_env);
 
-  Session *s = session_get_current();
-  if (s) {
-    apply_default_hooks(s);
-  }
+  /* Apply default hooks (registered during init.lisp) to current session */
+  apply_default_hooks_to_table(hooks_table);
 }
 
 /* Get prompt string from Lisp config */
@@ -1406,7 +1598,7 @@ char **lisp_x_complete(const char *buffer, int cursor_pos, void *userdata) {
 
   /* Look up completion-hook */
   LispObject *hook = env_lookup(env, "completion-hook");
-  if (!hook || (hook->type != LISP_LAMBDA && hook->type != LISP_BUILTIN)) {
+  if (!lisp_is_callable(hook)) {
     bloom_log(LOG_DEBUG, "completion", "hook not found or wrong type");
     return NULL;
   }

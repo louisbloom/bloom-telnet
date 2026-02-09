@@ -247,9 +247,10 @@
 ;; ============================================================================
 ;; HOOK WRAPPER FUNCTIONS
 ;; ============================================================================
-;; Hook dispatch is implemented in C (add-hook, remove-hook, run-hook,
-;; run-filter-hook are C builtins). These wrappers are called from C
-;; via lisp_x_call_* functions and delegate to the C hook system.
+;; Hook dispatch uses a per-session *hooks* hash table (key = hook name,
+;; value = sorted list of (fn . priority) pairs). add-hook, remove-hook,
+;; run-hook, run-filter-hook are C builtins that operate on this table.
+;; These wrappers are called from C via lisp_x_call_* functions.
 (defun telnet-input-hook (text)
   "Process telnet server output through registered hooks."
   (run-hook 'telnet-input-hook text)
