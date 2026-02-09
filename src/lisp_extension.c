@@ -249,6 +249,20 @@ static LispObject *builtin_telnet_send(LispObject *args, Environment *env) {
   return NIL;
 }
 
+/* Interned termcap symbols for pointer comparison */
+static LispObject *sym_tc_cols = NULL;
+static LispObject *sym_tc_rows = NULL;
+static LispObject *sym_tc_type = NULL;
+static LispObject *sym_tc_encoding = NULL;
+static LispObject *sym_tc_color_level = NULL;
+static LispObject *sym_tc_truecolor = NULL;
+static LispObject *sym_tc_256color = NULL;
+static LispObject *sym_tc_unicode = NULL;
+static LispObject *sym_tc_describe = NULL;
+static LispObject *sym_tc_reset = NULL;
+static LispObject *sym_tc_fg_color = NULL;
+static LispObject *sym_tc_bg_color = NULL;
+
 /* Builtin: termcap - Unified terminal capability query */
 static LispObject *builtin_termcap(LispObject *args, Environment *env) {
   (void)env;
@@ -264,41 +278,40 @@ static LispObject *builtin_termcap(LispObject *args, Environment *env) {
     return lisp_make_error("termcap: first argument must be a symbol");
   }
 
-  const char *name = key->value.symbol->name;
   args = lisp_cdr(args);
 
   /* Simple queries */
-  if (strcmp(name, "cols") == 0)
+  if (key == sym_tc_cols)
     return lisp_make_integer(g_term_cols);
-  if (strcmp(name, "rows") == 0)
+  if (key == sym_tc_rows)
     return lisp_make_integer(g_term_rows);
-  if (strcmp(name, "type") == 0) {
+  if (key == sym_tc_type) {
     const char *t = termcaps_get_term_type();
     return lisp_make_string(t ? t : "");
   }
-  if (strcmp(name, "encoding") == 0) {
+  if (key == sym_tc_encoding) {
     const char *e = termcaps_get_encoding();
     return lisp_make_string(e ? e : "ASCII");
   }
-  if (strcmp(name, "color-level") == 0)
+  if (key == sym_tc_color_level)
     return lisp_make_integer(termcaps_get_color_level());
-  if (strcmp(name, "truecolor?") == 0)
+  if (key == sym_tc_truecolor)
     return termcaps_supports_truecolor() ? LISP_TRUE : NIL;
-  if (strcmp(name, "256color?") == 0)
+  if (key == sym_tc_256color)
     return termcaps_supports_256color() ? LISP_TRUE : NIL;
-  if (strcmp(name, "unicode?") == 0)
+  if (key == sym_tc_unicode)
     return termcaps_supports_unicode() ? LISP_TRUE : NIL;
-  if (strcmp(name, "describe") == 0) {
+  if (key == sym_tc_describe) {
     const char *d = termcaps_describe();
     return lisp_make_string(d ? d : "");
   }
-  if (strcmp(name, "reset") == 0) {
+  if (key == sym_tc_reset) {
     const char *s = termcaps_format_reset();
     return lisp_make_string(s ? s : "");
   }
 
   /* Color queries with RGB args */
-  if (strcmp(name, "fg-color") == 0 || strcmp(name, "bg-color") == 0) {
+  if (key == sym_tc_fg_color || key == sym_tc_bg_color) {
     if (args == NIL)
       return lisp_make_error("termcap: fg-color/bg-color need r g b");
     LispObject *r_obj = lisp_car(args);
@@ -320,7 +333,7 @@ static LispObject *builtin_termcap(LispObject *args, Environment *env) {
     int g = (int)g_obj->value.integer;
     int b = (int)b_obj->value.integer;
 
-    const char *seq = (strcmp(name, "fg-color") == 0)
+    const char *seq = (key == sym_tc_fg_color)
                           ? termcaps_format_fg_color(r, g, b)
                           : termcaps_format_bg_color(r, g, b);
     return lisp_make_string(seq ? seq : "");
@@ -875,6 +888,20 @@ static void register_builtins(Environment *env) {
   /* System file loader (uses standard search paths) */
   env_define(env, "load-system-file",
              lisp_make_builtin(builtin_load_system_file, "load-system-file"));
+
+  /* Intern termcap symbols for pointer comparison */
+  sym_tc_cols = lisp_intern("cols");
+  sym_tc_rows = lisp_intern("rows");
+  sym_tc_type = lisp_intern("type");
+  sym_tc_encoding = lisp_intern("encoding");
+  sym_tc_color_level = lisp_intern("color-level");
+  sym_tc_truecolor = lisp_intern("truecolor?");
+  sym_tc_256color = lisp_intern("256color?");
+  sym_tc_unicode = lisp_intern("unicode?");
+  sym_tc_describe = lisp_intern("describe");
+  sym_tc_reset = lisp_intern("reset");
+  sym_tc_fg_color = lisp_intern("fg-color");
+  sym_tc_bg_color = lisp_intern("bg-color");
 
   /* Intern log level symbols for pointer comparison in bloom-log */
   sym_log_debug = lisp_intern("debug");
