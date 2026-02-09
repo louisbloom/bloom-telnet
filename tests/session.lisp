@@ -6,11 +6,11 @@
 ;; ============================================================================
 ;; Test 1: Default session exists
 ;; ============================================================================
-(assert-equal (session-current) 1 "Default session id is 1")
-(assert-equal (session-name) "default" "Default session name is 'default'")
+(assert-equal (telnet-session-current) 1 "Default session id is 1")
+(assert-equal (telnet-session-name) "default" "Default session name is 'default'")
 
-;; session-list should contain exactly the default session
-(let ((sessions (session-list)))
+;; telnet-session-list should contain exactly the default session
+(let ((sessions (telnet-session-list)))
   (assert-true (pair? sessions) "Session list is non-empty")
   (assert-equal (length sessions) 1 "Session list has 1 entry")
   (let ((first (car sessions)))
@@ -22,18 +22,18 @@
 ;; ============================================================================
 ;; Test 2: Create a second session
 ;; ============================================================================
-(define second-id (session-create "test-session"))
+(define second-id (telnet-session-create "test-session"))
 (assert-true (> second-id 1) "Second session id > 1")
 
 ;; Verify it appears in the list
-(let ((sessions (session-list)))
+(let ((sessions (telnet-session-list)))
   (assert-equal (length sessions) 2 "Session list has 2 entries after create"))
 
 ;; Current session should still be default
-(assert-equal (session-current) 1 "Current session unchanged after create")
+(assert-equal (telnet-session-current) 1 "Current session unchanged after create")
 
 ;; Check name of new session
-(assert-equal (session-name second-id) "test-session"
+(assert-equal (telnet-session-name second-id) "test-session"
   "New session name matches")
 
 (print "Test 2 passed: Create second session")
@@ -48,8 +48,8 @@
   "Variable set in default session")
 
 ;; Switch to second session
-(session-switch second-id)
-(assert-equal (session-current) second-id "Switched to second session")
+(telnet-session-switch second-id)
+(assert-equal (telnet-session-current) second-id "Switched to second session")
 
 ;; Variable should not exist in the second session
 (assert-nil (session-var-get "my-var")
@@ -61,8 +61,8 @@
   "Variable set in second session")
 
 ;; Switch back to default and verify original value
-(session-switch 1)
-(assert-equal (session-current) 1 "Switched back to default session")
+(telnet-session-switch 1)
+(assert-equal (telnet-session-current) 1 "Switched back to default session")
 (assert-equal (session-var-get "my-var") "default-value"
   "Default session variable unchanged after switching")
 
@@ -71,11 +71,11 @@
 ;; ============================================================================
 ;; Test 4: Session names
 ;; ============================================================================
-(assert-equal (session-name) "default" "session-name with no args = current")
-(assert-equal (session-name 1) "default" "session-name for id 1")
-(assert-equal (session-name second-id) "test-session"
-  "session-name for second session")
-(assert-nil (session-name 999) "session-name for nonexistent id returns nil")
+(assert-equal (telnet-session-name) "default" "telnet-session-name with no args = current")
+(assert-equal (telnet-session-name 1) "default" "telnet-session-name for id 1")
+(assert-equal (telnet-session-name second-id) "test-session"
+  "telnet-session-name for second session")
+(assert-nil (telnet-session-name 999) "telnet-session-name for nonexistent id returns nil")
 
 (print "Test 4 passed: Session names work")
 
@@ -84,22 +84,22 @@
 ;; ============================================================================
 
 ;; Cannot destroy current session
-(assert-error (session-destroy 1)
+(assert-error (telnet-session-destroy 1)
   "Cannot destroy current session")
 
 ;; Can destroy other session
-(assert-true (session-destroy second-id) "Destroy second session succeeds")
+(assert-true (telnet-session-destroy second-id) "Destroy second session succeeds")
 
 ;; Verify it's gone from the list
-(let ((sessions (session-list)))
+(let ((sessions (telnet-session-list)))
   (assert-equal (length sessions) 1 "Session list has 1 entry after destroy"))
 
 ;; Cannot destroy already-destroyed session
-(assert-error (session-destroy second-id)
+(assert-error (telnet-session-destroy second-id)
   "Cannot destroy already-destroyed session")
 
 ;; Cannot switch to destroyed session
-(assert-error (session-switch second-id)
+(assert-error (telnet-session-switch second-id)
   "Cannot switch to destroyed session")
 
 (print "Test 5 passed: Session destroy works")
@@ -107,20 +107,20 @@
 ;; ============================================================================
 ;; Test 6: Create multiple sessions
 ;; ============================================================================
-(define s1 (session-create "alpha"))
-(define s2 (session-create "beta"))
-(define s3 (session-create "gamma"))
+(define s1 (telnet-session-create "alpha"))
+(define s2 (telnet-session-create "beta"))
+(define s3 (telnet-session-create "gamma"))
 
-(let ((sessions (session-list)))
+(let ((sessions (telnet-session-list)))
   (assert-equal (length sessions) 4
     "4 sessions total (default + 3 new)"))
 
 ;; Clean up
-(session-destroy s1)
-(session-destroy s2)
-(session-destroy s3)
+(telnet-session-destroy s1)
+(telnet-session-destroy s2)
+(telnet-session-destroy s3)
 
-(let ((sessions (session-list)))
+(let ((sessions (telnet-session-list)))
   (assert-equal (length sessions) 1 "Back to 1 session after cleanup"))
 
 (print "Test 6 passed: Multiple session lifecycle")

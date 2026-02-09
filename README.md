@@ -72,24 +72,24 @@ bloom-telnet supports multiple sessions, each with its own Lisp environment and 
 
 ```lisp
 ;; Create a new session
-(session-create "alt-char")   ; => session id
+(telnet-session-create "alt-char")   ; => session id
 
 ;; List all sessions as (id . "name") pairs
-(session-list)                ; => ((1 . "default") (2 . "alt-char"))
+(telnet-session-list)                ; => ((1 . "default") (2 . "alt-char"))
 
 ;; Check which session is active
-(session-current)             ; => 1
+(telnet-session-current)             ; => 1
 
 ;; Switch to another session
-(session-switch 2)
+(telnet-session-switch 2)
 
 ;; Get a session's name (no args = current session)
-(session-name)                ; => "alt-char"
-(session-name 1)              ; => "default"
+(telnet-session-name)                ; => "alt-char"
+(telnet-session-name 1)              ; => "default"
 
 ;; Destroy a session (cannot destroy the current session)
-(session-switch 1)
-(session-destroy 2)
+(telnet-session-switch 1)
+(telnet-session-destroy 2)
 ```
 
 Each session has an isolated Lisp environment — variables, aliases, actions, and hooks defined in one session do not affect others. The base environment (builtins and `init.lisp` definitions) is shared across all sessions.
@@ -107,10 +107,10 @@ There are two ways to save session state, depending on what you want to preserve
 
 The saved file contains `hash-set!` calls that repopulate the alias, action, highlight, and variable tables. Settings like speedwalk mode are also included. Loading merges into the current session — existing entries with the same keys are overwritten, but other entries are kept.
 
-**Full Lisp environment** (`save-session`) — saves every user-defined binding in the current session's Lisp environment (variables, functions, macros, hooks) as a loadable Lisp file:
+**Full Lisp environment** (`session-save`) — saves every user-defined binding in the current session's Lisp environment (variables, functions, macros, hooks) as a loadable Lisp file:
 
 ```lisp
-(save-session "~/my-session.lisp")   ; Save current session bindings
+(session-save "~/my-session.lisp")   ; Save current session bindings
 (load "~/my-session.lisp")           ; Restore into any session
 ```
 

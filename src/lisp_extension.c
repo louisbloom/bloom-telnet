@@ -683,22 +683,22 @@ static LispObject *builtin_statusbar_clear(LispObject *args, Environment *env) {
  * Session management Lisp builtins
  * ======================================================================== */
 
-/* Builtin: (session-create "name") -> session id */
+/* Builtin: (telnet-session-create "name") -> session id */
 static LispObject *builtin_session_create(LispObject *args, Environment *env) {
   (void)env;
 
   if (args == NIL) {
-    return lisp_make_error("session-create requires 1 argument");
+    return lisp_make_error("telnet-session-create requires 1 argument");
   }
 
   LispObject *name_obj = lisp_car(args);
   if (name_obj->type != LISP_STRING) {
-    return lisp_make_error("session-create: argument must be a string");
+    return lisp_make_error("telnet-session-create: argument must be a string");
   }
 
   Session *s = session_create(name_obj->value.string);
   if (!s) {
-    return lisp_make_error("session-create: failed to create session");
+    return lisp_make_error("telnet-session-create: failed to create session");
   }
 
   /* Give new session its own *hooks* table and populate from defaults */
@@ -716,7 +716,7 @@ static LispObject *builtin_session_create(LispObject *args, Environment *env) {
   return lisp_make_integer(s->id);
 }
 
-/* Builtin: (session-list) -> list of (id . "name") pairs */
+/* Builtin: (telnet-session-list) -> list of (id . "name") pairs */
 static LispObject *builtin_session_list(LispObject *args, Environment *env) {
   (void)args;
   (void)env;
@@ -737,7 +737,7 @@ static LispObject *builtin_session_list(LispObject *args, Environment *env) {
   return result;
 }
 
-/* Builtin: (session-current) -> current session id */
+/* Builtin: (telnet-session-current) -> current session id */
 static LispObject *builtin_session_current(LispObject *args, Environment *env) {
   (void)args;
   (void)env;
@@ -749,30 +749,31 @@ static LispObject *builtin_session_current(LispObject *args, Environment *env) {
   return lisp_make_integer(s->id);
 }
 
-/* Builtin: (session-switch id) -> t or error */
+/* Builtin: (telnet-session-switch id) -> t or error */
 static LispObject *builtin_session_switch(LispObject *args, Environment *env) {
   (void)env;
 
   if (args == NIL) {
-    return lisp_make_error("session-switch requires 1 argument");
+    return lisp_make_error("telnet-session-switch requires 1 argument");
   }
 
   LispObject *id_obj = lisp_car(args);
   if (id_obj->type != LISP_INTEGER) {
-    return lisp_make_error("session-switch: argument must be an integer");
+    return lisp_make_error(
+        "telnet-session-switch: argument must be an integer");
   }
 
   int id = (int)id_obj->value.integer;
   Session *s = session_find_by_id(id);
   if (!s) {
-    return lisp_make_error("session-switch: no session with that id");
+    return lisp_make_error("telnet-session-switch: no session with that id");
   }
 
   session_set_current(s);
   return LISP_TRUE;
 }
 
-/* Builtin: (session-name) or (session-name id) -> name string */
+/* Builtin: (telnet-session-name) or (telnet-session-name id) -> name string */
 static LispObject *builtin_session_name(LispObject *args, Environment *env) {
   (void)env;
 
@@ -782,7 +783,8 @@ static LispObject *builtin_session_name(LispObject *args, Environment *env) {
   } else {
     LispObject *id_obj = lisp_car(args);
     if (id_obj->type != LISP_INTEGER) {
-      return lisp_make_error("session-name: argument must be an integer");
+      return lisp_make_error(
+          "telnet-session-name: argument must be an integer");
     }
     s = session_find_by_id((int)id_obj->value.integer);
   }
@@ -793,17 +795,18 @@ static LispObject *builtin_session_name(LispObject *args, Environment *env) {
   return lisp_make_string(s->name);
 }
 
-/* Builtin: (session-destroy id) -> t or error */
+/* Builtin: (telnet-session-destroy id) -> t or error */
 static LispObject *builtin_session_destroy(LispObject *args, Environment *env) {
   (void)env;
 
   if (args == NIL) {
-    return lisp_make_error("session-destroy requires 1 argument");
+    return lisp_make_error("telnet-session-destroy requires 1 argument");
   }
 
   LispObject *id_obj = lisp_car(args);
   if (id_obj->type != LISP_INTEGER) {
-    return lisp_make_error("session-destroy: argument must be an integer");
+    return lisp_make_error(
+        "telnet-session-destroy: argument must be an integer");
   }
 
   int id = (int)id_obj->value.integer;
@@ -817,7 +820,7 @@ static LispObject *builtin_session_destroy(LispObject *args, Environment *env) {
   int result = session_destroy(id);
   if (result < 0) {
     return lisp_make_error(
-        "session-destroy: failed (not found or current session)");
+        "telnet-session-destroy: failed (not found or current session)");
   }
 
   if (echo_callback) {
@@ -1123,18 +1126,22 @@ static void register_builtins(Environment *env) {
              lisp_make_builtin(builtin_statusbar_clear, "statusbar-clear"));
 
   /* Session management builtins */
-  env_define(env, "session-create",
-             lisp_make_builtin(builtin_session_create, "session-create"));
-  env_define(env, "session-list",
-             lisp_make_builtin(builtin_session_list, "session-list"));
-  env_define(env, "session-current",
-             lisp_make_builtin(builtin_session_current, "session-current"));
-  env_define(env, "session-switch",
-             lisp_make_builtin(builtin_session_switch, "session-switch"));
-  env_define(env, "session-name",
-             lisp_make_builtin(builtin_session_name, "session-name"));
-  env_define(env, "session-destroy",
-             lisp_make_builtin(builtin_session_destroy, "session-destroy"));
+  env_define(
+      env, "telnet-session-create",
+      lisp_make_builtin(builtin_session_create, "telnet-session-create"));
+  env_define(env, "telnet-session-list",
+             lisp_make_builtin(builtin_session_list, "telnet-session-list"));
+  env_define(
+      env, "telnet-session-current",
+      lisp_make_builtin(builtin_session_current, "telnet-session-current"));
+  env_define(
+      env, "telnet-session-switch",
+      lisp_make_builtin(builtin_session_switch, "telnet-session-switch"));
+  env_define(env, "telnet-session-name",
+             lisp_make_builtin(builtin_session_name, "telnet-session-name"));
+  env_define(
+      env, "telnet-session-destroy",
+      lisp_make_builtin(builtin_session_destroy, "telnet-session-destroy"));
 
   /* Hook system builtins */
   env_define(env, "add-hook", lisp_make_builtin(builtin_add_hook, "add-hook"));

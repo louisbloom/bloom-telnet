@@ -107,7 +107,7 @@
 ;; Session Mock System
 ;; ============================================================================
 ;; Simulates session isolation using hash tables as per-session variable stores.
-;; Each session has its own hash table; session-switch changes the active one.
+;; Each session has its own hash table; telnet-session-switch changes the active one.
 
 (define *mock-sessions* (make-hash-table))    ; "id" -> (name . vars-hash)
 (define *mock-current-session* 1)
@@ -119,7 +119,7 @@
 ;; Initialize default session
 (hash-set! *mock-sessions* (mock-session-key 1) (cons "default" (make-hash-table)))
 
-(defun session-create (name)
+(defun telnet-session-create (name)
   "Mock: create a new session, returns its id."
   (let ((id *mock-next-session-id*))
     (set! *mock-next-session-id* (+ *mock-next-session-id* 1))
@@ -127,7 +127,7 @@
                (cons name (make-hash-table)))
     id))
 
-(defun session-list ()
+(defun telnet-session-list ()
   "Mock: return list of (id . name) pairs."
   (let ((result nil)
         (keys (hash-keys *mock-sessions*)))
@@ -137,31 +137,31 @@
         (let ((v (hash-ref *mock-sessions* k)))
           (set! result (cons (cons (string->number k) (car v)) result)))))))
 
-(defun session-current ()
+(defun telnet-session-current ()
   "Mock: return current session id."
   *mock-current-session*)
 
-(defun session-switch (id)
+(defun telnet-session-switch (id)
   "Mock: switch to session by id."
   (if (hash-ref *mock-sessions* (mock-session-key id))
     (progn (set! *mock-current-session* id) #t)
-    (error "session-switch: no session with that id")))
+    (error "telnet-session-switch: no session with that id")))
 
-(defun session-name (&rest args)
+(defun telnet-session-name (&rest args)
   "Mock: get session name. No args = current, one arg = by id."
   (let ((id (if (null? args) *mock-current-session* (car args))))
     (let ((entry (hash-ref *mock-sessions* (mock-session-key id))))
       (if entry (car entry) nil))))
 
-(defun session-destroy (id)
+(defun telnet-session-destroy (id)
   "Mock: destroy a session by id."
   (cond
     ((= id *mock-current-session*)
-     (error "session-destroy: failed (not found or current session)"))
+     (error "telnet-session-destroy: failed (not found or current session)"))
     ((hash-ref *mock-sessions* (mock-session-key id))
      (hash-remove! *mock-sessions* (mock-session-key id))
      #t)
-    (#t (error "session-destroy: failed (not found or current session)"))))
+    (#t (error "telnet-session-destroy: failed (not found or current session)"))))
 
 ;; Per-session variable helpers for testing isolation
 (defun session-var-set (key value)
