@@ -190,6 +190,8 @@ static void update_divider_color(void) {
 static void cleanup(void) {
   disable_raw_mode();
 
+  /* Disable kitty keyboard protocol */
+  printf(CSI "<u");
   /* Disable mouse mode */
   printf(CSI "?1006l" CSI "?1000l");
   /* Exit alternate screen buffer (restores original terminal content) */
@@ -466,8 +468,19 @@ static int handle_user_input(const char **prompt) {
       /* Check for commands from textinput */
       if (result.cmd) {
         if (result.cmd->type == TUI_CMD_LINE_SUBMIT) {
-          const char *line = result.cmd->payload.line;
-          process_line(line, prompt);
+          char *text = result.cmd->payload.line;
+          /* Split multiline input and process each line individually */
+          char *saveptr = NULL;
+          char *line = strtok_r(text, "\n", &saveptr);
+          if (line) {
+            while (line) {
+              process_line(line, prompt);
+              line = strtok_r(NULL, "\n", &saveptr);
+            }
+          } else {
+            /* Empty submit */
+            process_line("", prompt);
+          }
           tui_cmd_free(result.cmd);
           render_full_screen();
         } else {
@@ -524,6 +537,9 @@ static int run_event_loop(void) {
   printf(CSI "?1049h" CSI "2J" CSI "H");
   /* Enable SGR extended mouse mode for scroll wheel support */
   printf(CSI "?1000h" CSI "?1006h");
+  /* Enable kitty keyboard protocol (progressive enhancement level 1)
+   * for distinguishing Shift+Enter from Enter */
+  printf(CSI ">1u");
   fflush(stdout);
   render_full_screen();
 

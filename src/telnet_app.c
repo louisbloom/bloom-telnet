@@ -38,8 +38,9 @@ TelnetAppModel *telnet_app_create(const TelnetAppConfig *config) {
     return NULL;
   }
 
-  /* Create textinput child (user input) */
-  app->textinput = tui_textinput_create(NULL);
+  /* Create textinput child (user input) with multiline support */
+  TuiTextInputConfig textinput_cfg = {.multiline = 1};
+  app->textinput = tui_textinput_create(&textinput_cfg);
   if (!app->textinput) {
     tui_viewport_free(app->viewport);
     free(app);
@@ -109,7 +110,11 @@ TuiUpdateResult telnet_app_update(TelnetAppModel *app, TuiMsg msg) {
    */
   if (msg.type == TUI_MSG_KEY_PRESS) {
     tui_viewport_scroll_to_bottom(app->viewport);
-    return tui_textinput_update(app->textinput, msg);
+    TuiUpdateResult result = tui_textinput_update(app->textinput, msg);
+    /* Recalculate layout in case textinput height changed (multiline) */
+    telnet_app_set_terminal_size(app, app->terminal_width,
+                                 app->terminal_height);
+    return result;
   }
 
   return tui_update_result_none();
@@ -162,10 +167,14 @@ void telnet_app_set_terminal_size(TelnetAppModel *app, int width, int height) {
     viewport_h = 1;
 
   /* Position components bottom-up.
-   * textinput_row is the input line (middle of 3 rows with dividers).
-   * Bottom divider is at textinput_row + 1, which must be above statusbar. */
-  int statusbar_row = height;                          /* Bottom row */
-  int textinput_row = statusbar_row - statusbar_h - 1; /* Input line */
+   * textinput_row is the first content line of the input area.
+   * With dividers, top divider is at textinput_row - 1,
+   * bottom divider after last content line, then statusbar at bottom. */
+  int statusbar_row = height;
+  int content_lines = textinput_h - (app->textinput->show_dividers ? 2 : 0);
+  int textinput_row = statusbar_row - statusbar_h -
+                      (app->textinput->show_dividers ? 1 : 0) - content_lines +
+                      1;
 
   /* Apply positions */
   if (app->viewport) {
