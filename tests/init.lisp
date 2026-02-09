@@ -1,5 +1,5 @@
-;; tests/init-post.lisp - Tests for init.lisp helper functions
-;; Tests visual-length, pad-string, repeat-string from init.lisp.
+;; tests/init.lisp - Tests for init.lisp helper functions
+;; Tests visual-length, pad-string, repeat-string, and completion word store.
 (load "tests/test-helpers.lisp")
 
 ;; ============================================================================
@@ -43,6 +43,48 @@
 (assert-equal (repeat-string "x" -1) ""
  "repeat-string with negative count returns empty")
 (assert-equal (repeat-string "" 5) "" "repeat-string of empty string")
+
+;; ============================================================================
+;; Test: trim-punctuation
+;; ============================================================================
+(assert-equal (trim-punctuation "hello") "hello"
+ "trim-punctuation no-op on clean word")
+(assert-equal (trim-punctuation "hello!") "hello"
+ "trim-punctuation strips trailing !")
+(assert-equal (trim-punctuation "\"hello\"") "hello"
+ "trim-punctuation strips surrounding quotes")
+(assert-equal (trim-punctuation "(hello)") "hello"
+ "trim-punctuation strips surrounding parens")
+(assert-equal (trim-punctuation "...") ""
+ "trim-punctuation on all-punctuation returns empty")
+(assert-equal (trim-punctuation "") "" "trim-punctuation on empty string")
+(assert-equal (trim-punctuation nil) "" "trim-punctuation on nil")
+
+;; ============================================================================
+;; Test: extract-words
+;; ============================================================================
+(assert-equal (extract-words "hello world") '("hello" "world")
+ "extract-words splits on whitespace")
+(assert-equal (extract-words "hello, world!") '("hello" "world")
+ "extract-words trims punctuation from words")
+(assert-equal (extract-words "") '() "extract-words on empty string")
+(assert-equal (extract-words nil) '() "extract-words on nil")
+
+;; ============================================================================
+;; Test: obj-to-string
+;; ============================================================================
+(assert-equal (obj-to-string 'foo) "foo" "obj-to-string symbol")
+(assert-equal (obj-to-string "bar") "bar" "obj-to-string string")
+(assert-equal (obj-to-string #t) "#t" "obj-to-string true")
+(assert-equal (obj-to-string #f) "#f" "obj-to-string false")
+(assert-equal (obj-to-string 42) "42" "obj-to-string number")
+
+;; ============================================================================
+;; Test: build-indent
+;; ============================================================================
+(assert-equal (build-indent 0) "" "build-indent level 0")
+(assert-equal (build-indent 1) "  " "build-indent level 1")
+(assert-equal (build-indent 3) "      " "build-indent level 3")
 
 ;; ============================================================================
 ;; Test: completion word store
@@ -111,4 +153,4 @@
 ;; Restore defaults
 (set! *completion-word-store-size* 50000)
 
-(print "All init-post.lisp tests passed!")
+(print "All init.lisp tests passed!")
