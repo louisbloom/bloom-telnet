@@ -361,7 +361,7 @@ static LispObject *builtin_load_system_file(LispObject *args,
   int result = load_lisp_system_file(filename, env);
 
   if (result) {
-    return lisp_make_symbol("t");
+    return LISP_TRUE;
   } else {
     return NIL;
   }
