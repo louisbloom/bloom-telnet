@@ -65,9 +65,9 @@ void lisp_x_load_init(void);
 /* Get prompt string from Lisp config (default: "> ") */
 const char *lisp_x_get_prompt(void);
 
-/* Completion callback for bloom-boba textinput - returns NULL-terminated array
- * of completions */
-char **lisp_x_complete(const char *buffer, int cursor_pos, void *userdata);
+/* Get completions for a prefix string.
+ * Returns NULL-terminated array of strings (caller must free each + array). */
+char **lisp_x_complete_prefix(const char *prefix);
 
 /* Extract RGB from a Lisp '(r g b) defvar.
  * Returns 0 on success, -1 on failure (variable missing or wrong shape).

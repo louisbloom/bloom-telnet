@@ -48,6 +48,24 @@ int g_term_cols = 80;
 /* Convenience accessor for textinput component */
 #define g_textinput (telnet_app_get_textinput(g_app))
 
+/* Tab completion cycling state */
+static char **g_tab_completions = NULL;
+static int g_tab_count = 0;
+static int g_tab_index = 0;
+static int g_tab_word_start = -1;
+
+static void free_tab_completions(void) {
+  if (g_tab_completions) {
+    for (int i = 0; i < g_tab_count; i++)
+      free(g_tab_completions[i]);
+    free(g_tab_completions);
+    g_tab_completions = NULL;
+  }
+  g_tab_count = 0;
+  g_tab_index = 0;
+  g_tab_word_start = -1;
+}
+
 #ifndef _WIN32
 static struct termios g_orig_termios;
 static int g_raw_mode = 0;
@@ -188,6 +206,7 @@ static void update_divider_color(void) {
 
 /* Cleanup function called at exit */
 static void cleanup(void) {
+  free_tab_completions();
   disable_raw_mode();
 
   /* Disable kitty keyboard protocol */
@@ -468,6 +487,7 @@ static int handle_user_input(const char **prompt) {
       /* Check for commands from textinput */
       if (result.cmd) {
         if (result.cmd->type == TUI_CMD_LINE_SUBMIT) {
+          free_tab_completions();
           char *text = result.cmd->payload.line;
           /* Split multiline input and process each line individually */
           char *saveptr = NULL;
@@ -483,11 +503,44 @@ static int handle_user_input(const char **prompt) {
           }
           tui_cmd_free(result.cmd);
           render_full_screen();
+        } else if (result.cmd->type == TUI_CMD_TAB_COMPLETE) {
+          int word_start = result.cmd->payload.tab_complete.word_start;
+
+          if (g_tab_completions && g_tab_word_start == word_start) {
+            /* Cycling: advance to next completion */
+            g_tab_index = (g_tab_index + 1) % g_tab_count;
+            tui_textinput_insert_completion(g_textinput, word_start,
+                                            g_tab_completions[g_tab_index]);
+          } else {
+            /* First Tab at this position: fetch completions */
+            free_tab_completions();
+            char *prefix = result.cmd->payload.tab_complete.prefix;
+            char **completions = lisp_x_complete_prefix(prefix);
+
+            if (completions && completions[0]) {
+              int count = 0;
+              while (completions[count])
+                count++;
+
+              g_tab_completions = completions;
+              g_tab_count = count;
+              g_tab_index = 0;
+              g_tab_word_start = word_start;
+
+              tui_textinput_insert_completion(g_textinput, word_start,
+                                              completions[0]);
+            }
+          }
+
+          tui_cmd_free(result.cmd);
+          render_full_screen();
         } else {
+          free_tab_completions();
           tui_cmd_free(result.cmd);
         }
       } else {
-        /* No command, just re-render */
+        /* No command = regular keystroke; invalidate completions */
+        free_tab_completions();
         render_full_screen();
       }
     }
@@ -676,8 +729,6 @@ int main(int argc, char *argv[]) {
       .prompt = lisp_x_get_prompt(),
       .show_prompt = 1,
       .history_size = lisp_x_get_input_history_size(),
-      .completer = lisp_x_complete,
-      .completer_data = NULL,
   };
   g_app = telnet_app_create(&app_config);
   if (!g_app) {

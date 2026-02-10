@@ -68,10 +68,7 @@ TelnetAppModel *telnet_app_create(const TelnetAppConfig *config) {
     if (config->history_size > 0) {
       tui_textinput_set_history_size(app->textinput, config->history_size);
     }
-    if (config->completer) {
-      tui_textinput_set_completer(app->textinput, config->completer,
-                                  config->completer_data);
-    }
+    tui_textinput_set_word_delimiters(app->textinput, " \t()'`");
   }
 
   return app;

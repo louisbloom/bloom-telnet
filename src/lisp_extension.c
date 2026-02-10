@@ -1593,13 +1593,11 @@ int lisp_x_get_color(const char *var_name, int *r, int *g, int *b) {
   return 0;
 }
 
-/* Completion callback for bloom-boba textinput */
-char **lisp_x_complete(const char *buffer, int cursor_pos, void *userdata) {
-  (void)userdata;
-
+/* Get completions for a prefix string */
+char **lisp_x_complete_prefix(const char *prefix) {
   Environment *env = get_current_env();
-  if (!env || !buffer) {
-    bloom_log(LOG_DEBUG, "completion", "no env or buffer");
+  if (!env || !prefix) {
+    bloom_log(LOG_DEBUG, "completion", "no env or prefix");
     return NULL;
   }
 
@@ -1610,24 +1608,10 @@ char **lisp_x_complete(const char *buffer, int cursor_pos, void *userdata) {
     return NULL;
   }
 
-  /* Extract partial text (word before cursor) */
-  int start = cursor_pos;
-  while (start > 0 && buffer[start - 1] != ' ' && buffer[start - 1] != '\t') {
-    start--;
-  }
+  bloom_log(LOG_DEBUG, "completion", "prefix=\"%s\"", prefix);
 
-  char partial[256];
-  int partial_len = cursor_pos - start;
-  if (partial_len >= (int)sizeof(partial)) {
-    partial_len = sizeof(partial) - 1;
-  }
-  memcpy(partial, buffer + start, partial_len);
-  partial[partial_len] = '\0';
-
-  bloom_log(LOG_DEBUG, "completion", "partial=\"%s\"", partial);
-
-  /* Call hook with partial text */
-  volatile LispObject *arg = lisp_make_string(partial);
+  /* Call hook with prefix text */
+  volatile LispObject *arg = lisp_make_string(prefix);
   volatile LispObject *args = lisp_make_cons((LispObject *)arg, NIL);
   volatile LispObject *call_expr = lisp_make_cons(hook, (LispObject *)args);
   LispObject *result = lisp_eval((LispObject *)call_expr, env);

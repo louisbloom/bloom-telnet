@@ -22,11 +22,9 @@
 typedef struct {
   int terminal_width;
   int terminal_height;
-  const char *prompt;              /* Initial prompt string */
-  int show_prompt;                 /* Show prompt (default: 1) */
-  int history_size;                /* Input history size */
-  TuiCompletionCallback completer; /* Tab completion callback */
-  void *completer_data;            /* Data for completer */
+  const char *prompt; /* Initial prompt string */
+  int show_prompt;    /* Show prompt (default: 1) */
+  int history_size;   /* Input history size */
 } TelnetAppConfig;
 
 /* TelnetApp model - composes viewport, textinput, and statusbar */
