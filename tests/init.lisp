@@ -90,33 +90,36 @@
 ;; Test: completion word store
 ;; ============================================================================
 
+;; Helper to reset trie store for testing
+(defun reset-completion-store (capacity)
+  (set! *completion-trie* (make-hash-table))
+  (set! *completion-seq* 0)
+  (set! *completion-word-store-size* capacity)
+  (set! *completion-word-order* (make-vector capacity nil))
+  (set! *completion-word-order-index* 0)
+  (set! *completion-word-count* 0))
+
 ;; Reset store for testing
-(set! *completion-word-store* (make-hash-table))
-(set! *completion-word-store-size* 10)
-(set! *completion-word-order* (make-vector 10 nil))
-(set! *completion-word-order-index* 0)
-(set! *completion-word-count* 0)
+(reset-completion-store 10)
 
 ;; Basic insertion
 (add-word-to-store "hello")
 (add-word-to-store "world")
-(assert-equal (hash-ref *completion-word-store* "hello") 0
- "hello stored at slot 0")
-(assert-equal (hash-ref *completion-word-store* "world") 1
- "world stored at slot 1")
+(let ((leaf (trie-lookup *completion-trie* "hello")))
+  (assert-true (not (null? leaf)) "hello present in trie")
+  (assert-equal (list-ref leaf 2) 0 "hello stored at slot 0"))
+(let ((leaf (trie-lookup *completion-trie* "world")))
+  (assert-equal (list-ref leaf 2) 1 "world stored at slot 1"))
 
 ;; Duplicate moves to front (most recent position)
 (add-word-to-store "hello")
-(assert-equal (hash-ref *completion-word-store* "hello") 2
- "duplicate hello moved to slot 2")
+(let ((leaf (trie-lookup *completion-trie* "hello")))
+  (assert-equal (list-ref leaf 2) 2 "duplicate hello moved to slot 2"))
 (assert-equal (vector-ref *completion-word-order* 0) nil
  "old slot cleared to nil after move")
 
 ;; Completions return newest first
-(set! *completion-word-store* (make-hash-table))
-(set! *completion-word-order* (make-vector 10 nil))
-(set! *completion-word-order-index* 0)
-(set! *completion-word-count* 0)
+(reset-completion-store 10)
 (add-word-to-store "apple")
 (add-word-to-store "avocado")
 (add-word-to-store "apricot")
@@ -136,11 +139,7 @@
 (assert-equal (add-word-to-store "hi") 0 "2-char word rejected")
 
 ;; FIFO eviction with full buffer
-(set! *completion-word-store* (make-hash-table))
-(set! *completion-word-order* (make-vector 5 nil))
-(set! *completion-word-store-size* 5)
-(set! *completion-word-order-index* 0)
-(set! *completion-word-count* 0)
+(reset-completion-store 5)
 (add-word-to-store "aaa")
 (add-word-to-store "bbb")
 (add-word-to-store "ccc")
@@ -148,16 +147,13 @@
 (add-word-to-store "eee")
 ;; Buffer is full, next insert evicts "aaa" at slot 0
 (add-word-to-store "fff")
-(assert-true (null? (hash-ref *completion-word-store* "aaa"))
+(assert-true (null? (trie-lookup *completion-trie* "aaa"))
  "aaa evicted after buffer wraps")
-(assert-equal (hash-ref *completion-word-store* "fff") 0
- "fff occupies slot 0 after wrap")
+(let ((leaf (trie-lookup *completion-trie* "fff")))
+  (assert-equal (list-ref leaf 2) 0 "fff occupies slot 0 after wrap"))
 
 ;; Word count tracking
-(set! *completion-word-store* (make-hash-table))
-(set! *completion-word-order* (make-vector 10 nil))
-(set! *completion-word-order-index* 0)
-(set! *completion-word-count* 0)
+(reset-completion-store 10)
 (add-word-to-store "aaa")
 (add-word-to-store "bbb")
 (add-word-to-store "ccc")
@@ -165,48 +161,35 @@
 (add-word-to-store "aaa")
 (assert-equal *completion-word-count* 3 "count unchanged on duplicate")
 ;; With eviction in a small buffer
-(set! *completion-word-store* (make-hash-table))
-(set! *completion-word-order* (make-vector 3 nil))
-(set! *completion-word-store-size* 3)
-(set! *completion-word-order-index* 0)
-(set! *completion-word-count* 0)
+(reset-completion-store 3)
 (add-word-to-store "aaa")
 (add-word-to-store "bbb")
 (add-word-to-store "ccc")
 (assert-equal *completion-word-count* 3 "count at capacity")
 (add-word-to-store "ddd")
 (assert-equal *completion-word-count* 3 "count stays at capacity after eviction")
-;; Scan only visits occupied slots, not full vector
-(set! *completion-word-store* (make-hash-table))
-(set! *completion-word-order* (make-vector 50000 nil))
-(set! *completion-word-store-size* 50000)
-(set! *completion-word-order-index* 0)
-(set! *completion-word-count* 0)
+;; Trie lookup is fast regardless of buffer size
+(reset-completion-store 50000)
 (add-word-to-store "alpha")
 (add-word-to-store "bravo")
 (assert-equal *completion-word-count* 2 "only 2 words in 50K buffer")
 (let ((results (get-completions-from-store "xyz")))
-  (assert-equal results '() "no-match scan completes quickly with low count"))
+  (assert-equal results '() "no-match returns empty instantly via trie"))
 (let ((results (get-completions-from-store "alp")))
   (assert-equal (length results) 1 "finds word in sparse buffer")
   (assert-equal (car results) "alpha" "correct word from sparse buffer"))
 
-;; Vector entries are cons pairs (lowercase . original)
-(set! *completion-word-store* (make-hash-table))
-(set! *completion-word-order* (make-vector 10 nil))
-(set! *completion-word-order-index* 0)
-(set! *completion-word-count* 0)
+;; Vector entries are lowercase strings (buffer slot stores lowercase key)
+(reset-completion-store 10)
 (add-word-to-store "Hello")
 (let ((entry (vector-ref *completion-word-order* 0)))
-  (assert-true (pair? entry) "vector entry is a cons pair")
-  (assert-equal (car entry) "hello" "vector entry car is lowercase key")
-  (assert-equal (cdr entry) "Hello" "vector entry cdr is original case"))
+  (assert-true (string? entry) "vector entry is a string")
+  (assert-equal entry "hello" "vector entry is lowercase key"))
 
-;; Hash key is lowercase
-(assert-equal (hash-ref *completion-word-store* "hello") 0
- "hash key is lowercase for mixed-case word")
-(assert-true (null? (hash-ref *completion-word-store* "Hello"))
- "original case is not a hash key")
+;; Trie leaf contains original case
+(let ((leaf (trie-lookup *completion-trie* "hello")))
+  (assert-true (not (null? leaf)) "trie has entry for lowercase key")
+  (assert-equal (car leaf) "Hello" "trie leaf stores original case"))
 
 ;; Case-insensitive matching returns original case
 (add-word-to-store "World")
@@ -224,14 +207,12 @@
    "lowercase prefix matches all-caps word"))
 
 ;; Mixed-case duplicate detection (same lowercase key)
-(set! *completion-word-store* (make-hash-table))
-(set! *completion-word-order* (make-vector 10 nil))
-(set! *completion-word-order-index* 0)
-(set! *completion-word-count* 0)
+(reset-completion-store 10)
 (add-word-to-store "Hello")
 (add-word-to-store "hello")
-(assert-equal (hash-ref *completion-word-store* "hello") 1
- "second insert of same-lowercase word takes new slot")
+(let ((leaf (trie-lookup *completion-trie* "hello")))
+  (assert-equal (list-ref leaf 2) 1
+   "second insert of same-lowercase word takes new slot"))
 (assert-equal (vector-ref *completion-word-order* 0) nil
  "first slot cleared when same-lowercase duplicate inserted")
 (let ((results (get-completions-from-store "hel")))
@@ -251,10 +232,7 @@
  "empty prefix returns empty list")
 (assert-equal (get-completions-from-store nil) '()
  "nil prefix returns empty list")
-(set! *completion-word-store* (make-hash-table))
-(set! *completion-word-order* (make-vector 10 nil))
-(set! *completion-word-order-index* 0)
-(set! *completion-word-count* 0)
+(reset-completion-store 10)
 (assert-equal (get-completions-from-store "xyz") '()
  "no matches in empty store returns empty list")
 
@@ -264,11 +242,8 @@
 (assert-equal (get-completions-from-store "xyz") '()
  "no matches in populated store returns empty list")
 
-;; max-results limits circular buffer results
-(set! *completion-word-store* (make-hash-table))
-(set! *completion-word-order* (make-vector 10 nil))
-(set! *completion-word-order-index* 0)
-(set! *completion-word-count* 0)
+;; max-results limits results
+(reset-completion-store 10)
 (set! *completion-max-results* 2)
 (add-word-to-store "aaa")
 (add-word-to-store "aab")
@@ -282,10 +257,7 @@
 (set! *completion-max-results* 20)
 
 ;; collect-words-from-text integration
-(set! *completion-word-store* (make-hash-table))
-(set! *completion-word-order* (make-vector 10 nil))
-(set! *completion-word-order-index* 0)
-(set! *completion-word-count* 0)
+(reset-completion-store 10)
 (collect-words-from-text "The quick Brown fox")
 (let ((results (get-completions-from-store "bro")))
   (assert-equal (length results) 1 "collect-words-from-text adds words")
@@ -301,22 +273,33 @@
 (collect-words-from-text nil)
 (collect-words-from-text "")
 
-;; FIFO eviction removes old cons pair from hash
-(set! *completion-word-store* (make-hash-table))
-(set! *completion-word-order* (make-vector 3 nil))
-(set! *completion-word-store-size* 3)
-(set! *completion-word-order-index* 0)
-(set! *completion-word-count* 0)
+;; FIFO eviction removes word from trie
+(reset-completion-store 3)
 (add-word-to-store "Alpha")
 (add-word-to-store "Beta")
 (add-word-to-store "Gamma")
 (add-word-to-store "Delta")
-(assert-true (null? (hash-ref *completion-word-store* "alpha"))
- "evicted word's lowercase key removed from hash")
-(assert-equal (hash-ref *completion-word-store* "delta") 0
- "new word takes evicted slot")
+(assert-true (null? (trie-lookup *completion-trie* "alpha"))
+ "evicted word removed from trie")
+(let ((leaf (trie-lookup *completion-trie* "delta")))
+  (assert-equal (list-ref leaf 2) 0 "new word takes evicted slot"))
 (assert-equal (get-completions-from-store "alp") '()
  "evicted word not found in completions")
+
+;; Trie node pruning: empty nodes are cleaned up on removal
+(reset-completion-store 10)
+(add-word-to-store "cat")
+(add-word-to-store "car")
+(trie-remove! *completion-trie* "cat")
+;; "c" -> "a" path should still exist for "car"
+(assert-true (not (null? (trie-lookup *completion-trie* "car")))
+ "car still in trie after removing cat")
+(assert-true (null? (trie-lookup *completion-trie* "cat"))
+ "cat removed from trie")
+;; Remove car too — now trie should be empty
+(trie-remove! *completion-trie* "car")
+(assert-equal (length (hash-keys *completion-trie*)) 0
+ "trie is empty after removing all words")
 
 ;; Restore defaults
 (set! *completion-word-store-size* 50000)

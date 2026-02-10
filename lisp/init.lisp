@@ -16,8 +16,11 @@
 (defvar *completion-max-results* 64
   "Maximum number of completion candidates to return per prefix.")
 
-;; Initialize word store (hash table for fast lookups)
-(define *completion-word-store* (make-hash-table))
+;; Initialize trie root (hash table used as prefix tree)
+(define *completion-trie* (make-hash-table))
+
+;; Recency counter (monotonically increasing)
+(define *completion-seq* 0)
 
 ;; Initialize word order (vector for FIFO bounded storage)
 (define *completion-word-order* (make-vector *completion-word-store-size* nil))
@@ -145,20 +148,125 @@
     (let ((words (regex-split "\\s+" text)))
       (if (null? words) '() (filter-valid-words words)))))
 
-(defun normalize-order-index (idx vec-size) (if (>= idx vec-size) 0 idx))
-
-(defun advance-order-index (vec-size)
-  (set! *completion-word-order-index* (+ *completion-word-order-index* 1))
-  (if (>= *completion-word-order-index* vec-size)
-    (set! *completion-word-order-index* 0)))
-
-(defun insert-word-into-slot! (vec store slot old-entry key new-word)
-  (if (pair? old-entry) (hash-remove! store (car old-entry)))
-  (vector-set! vec slot (cons key new-word))
-  (hash-set! store key slot))
-
 (defun word-valid-for-store? (word) (and (string? word) (>= (length word) 3)))
 
+;; ============================================================================
+;; TRIE FUNCTIONS
+;; ============================================================================
+(defun trie-insert! (root word leaf-data)
+  "Insert word into trie. Leaf stored under \"*\" key at terminal node."
+  (let ((node root)
+        (len (length word)))
+    (do ((i 0 (+ i 1))) ((>= i len))
+      (let* ((ch (char->string (string-ref word i)))
+             (child (hash-ref node ch)))
+        (when (null? child) (set! child (make-hash-table))
+          (hash-set! node ch child))
+        (set! node child)))
+    (hash-set! node "*" leaf-data)))
+
+(defun trie-remove! (root word)
+  "Remove word from trie, pruning empty nodes. Returns #t if removed."
+  (let ((len (length word)))
+    (if (= len 0)
+      #f
+      ;; Build path of (node . char-key) pairs for cleanup
+      (let ((path (list (cons root (char->string (string-ref word 0)))))
+            (node root)
+            (found #t))
+        ;; Walk to terminal node
+        (do ((i 0 (+ i 1))) ((or (>= i len) (not found)))
+          (let ((child (hash-ref node (char->string (string-ref word i)))))
+            (if (null? child)
+              (set! found #f)
+              (progn
+                (when (< (+ i 1) len)
+                  (set! path
+                   (cons (cons child (char->string (string-ref word (+ i 1))))
+                    path)))
+                (set! node child)))))
+        (if (not found)
+          #f
+          (if (null? (hash-ref node "*"))
+            #f
+            (progn (hash-remove! node "*")
+              ;; Prune empty nodes bottom-up
+              (do ((remaining path (cdr remaining))) ((null? remaining))
+                (let* ((pair (car remaining))
+                       (parent (car pair))
+                       (key (cdr pair))
+                       (child (hash-ref parent key)))
+                  (when (and child (= (length (hash-keys child)) 0))
+                    (hash-remove! parent key))))
+              #t)))))))
+
+(defun trie-lookup (root word)
+  "Look up word in trie. Returns leaf data or nil."
+  (let ((node root)
+        (len (length word))
+        (found #t))
+    (do ((i 0 (+ i 1))) ((or (>= i len) (not found)))
+      (let ((child (hash-ref node (char->string (string-ref word i)))))
+        (if (null? child) (set! found #f) (set! node child))))
+    (if found (hash-ref node "*") nil)))
+
+(defun trie-walk-to (root prefix)
+  "Walk trie following prefix characters. Returns node or nil."
+  (let ((node root)
+        (len (length prefix))
+        (found #t))
+    (do ((i 0 (+ i 1))) ((or (>= i len) (not found)))
+      (let ((child (hash-ref node (char->string (string-ref prefix i)))))
+        (if (null? child) (set! found #f) (set! node child))))
+    (if found node nil)))
+
+(defun trie-collect (node)
+  "DFS collect all leaf entries under node."
+  (let ((acc '()))
+    (let ((leaf (hash-ref node "*"))) (when leaf (set! acc (cons leaf acc))))
+    (let ((keys (hash-keys node)))
+      (do ((remaining keys (cdr remaining))) ((null? remaining) acc)
+        (let ((key (car remaining)))
+          (when (not (string=? key "*"))
+            (set! acc (append (trie-collect (hash-ref node key)) acc))))))))
+
+(defun merge-sort-by-seq-desc (lst)
+  "Merge sort list of entries by seq number (index 1) descending."
+  (if (or (null? lst) (null? (cdr lst)))
+    lst
+    (let ((mid (quotient (length lst) 2))
+          (left '())
+          (right '()))
+      ;; Split into two halves
+      (do ((remaining lst (cdr remaining)) (i 0 (+ i 1))) ((null? remaining))
+        (if (< i mid)
+          (set! left (cons (car remaining) left))
+          (set! right (cons (car remaining) right))))
+      (set! left (reverse left))
+      (set! right (reverse right))
+      ;; Recursively sort and merge
+      (let ((sl (merge-sort-by-seq-desc left))
+            (sr (merge-sort-by-seq-desc right))
+            (result '()))
+        ;; Merge descending
+        (do () ((and (null? sl) (null? sr)) (reverse result))
+          (cond
+            ((null? sl) (set! result (cons (car sr) result)) (set! sr (cdr sr)))
+            ((null? sr) (set! result (cons (car sl) result)) (set! sl (cdr sl)))
+            ((> (list-ref (car sl) 1) (list-ref (car sr) 1))
+             (set! result (cons (car sl) result)) (set! sl (cdr sl)))
+            (#t (set! result (cons (car sr) result)) (set! sr (cdr sr)))))))))
+
+(defun take-at-most (n lst)
+  "Return first N elements of list, or all if fewer than N."
+  (let ((acc '()))
+    (do ((remaining lst (cdr remaining)) (i 0 (+ i 1)))
+      ((or (null? remaining) (>= i n)) (reverse acc))
+      (set! acc (cons (car remaining) acc)))))
+
+;; ============================================================================
+;; WORD STORE INSERT/QUERY
+;; ============================================================================
 (defun add-word-to-store (word)
   "Add a word to the completion store with FIFO eviction."
   (if (not (word-valid-for-store? word))
@@ -166,23 +274,44 @@
     (let* ((lower (string-downcase word))
            (vec *completion-word-order*)
            (vec-size (length vec))
-           (existing-slot (hash-ref *completion-word-store* lower)))
-      (if existing-slot (vector-set! vec existing-slot nil))
-      (if (>= *completion-word-order-index* vec-size)
+           (existing (trie-lookup *completion-trie* lower)))
+      ;; If duplicate, clear its old buffer slot
+      (when existing (vector-set! vec (list-ref existing 2) nil))
+      ;; Wrap index
+      (when (>= *completion-word-order-index* vec-size)
         (set! *completion-word-order-index* 0))
-      (let* ((slot
-              (normalize-order-index *completion-word-order-index* vec-size))
-             (old (vector-ref vec slot)))
-        (insert-word-into-slot! vec *completion-word-store* slot old lower word)
-        ;; Track occupied slot count: +1 for new word into empty slot,
-        ;; -1 for duplicate that evicts a different word
-        (if (null? existing-slot)
-          (if (not (pair? old))
+      (let* ((slot *completion-word-order-index*)
+             (old-key (vector-ref vec slot)))
+        ;; Evict old word from trie if slot is occupied
+        (when (string? old-key) (trie-remove! *completion-trie* old-key))
+        ;; Bump seq and insert into trie
+        (set! *completion-seq* (+ *completion-seq* 1))
+        (trie-insert! *completion-trie* lower (list word *completion-seq* slot))
+        ;; Store lowercase key in buffer slot
+        (vector-set! vec slot lower)
+        ;; Track word count
+        (if (null? existing)
+          (when (not (string? old-key))
             (set! *completion-word-count* (+ *completion-word-count* 1)))
-          (if (pair? old)
+          (when (string? old-key)
             (set! *completion-word-count* (- *completion-word-count* 1))))
-        (advance-order-index vec-size)
+        ;; Advance index
+        (set! *completion-word-order-index* (+ *completion-word-order-index* 1))
+        (when (>= *completion-word-order-index* vec-size)
+          (set! *completion-word-order-index* 0))
         1))))
+
+(defun get-completions-from-store (prefix)
+  "Retrieve words from store matching a prefix (case-insensitive)."
+  (if (not (and (string? prefix) (> (length prefix) 0)))
+    '()
+    (let ((node (trie-walk-to *completion-trie* (string-downcase prefix))))
+      (if (null? node)
+        '()
+        (let* ((entries (trie-collect node))
+               (sorted (merge-sort-by-seq-desc entries))
+               (limited (take-at-most *completion-max-results* sorted)))
+          (map car limited))))))
 
 (defvar *collect-words-max-length* 65536
   "Maximum text length for word collection. Texts longer than this are truncated.")
@@ -200,29 +329,6 @@
           ()
           (do ((remaining words (cdr remaining))) ((null? remaining))
             (add-word-to-store (car remaining))))))))
-
-(defun scan-circular-buffer
-  (vec vec-size start prefix-lower scan-limit max-results)
-  (let ((acc '())
-        (count 0))
-    (do ((i 0 (+ i 1)))
-      ((or (>= i scan-limit) (>= count max-results)) (reverse acc))
-      (let* ((pos (- start 1 i))
-             (idx (if (< pos 0) (+ pos vec-size) pos))
-             (entry (vector-ref vec idx)))
-        (if (and (pair? entry) (string-prefix? prefix-lower (car entry)))
-          (progn (set! acc (cons (cdr entry) acc)) (set! count (+ count 1))))))))
-
-(defun get-completions-from-store (prefix)
-  "Retrieve words from store matching a prefix (case-insensitive)."
-  (if (not (and (string? prefix) (> (length prefix) 0)))
-    '()
-    (let* ((p (string-downcase prefix))
-           (vec *completion-word-order*)
-           (vec-size (length vec))
-           (start *completion-word-order-index*))
-      (scan-circular-buffer vec vec-size start p *completion-word-count*
-       *completion-max-results*))))
 
 ;; ============================================================================
 ;; HOOK WRAPPER FUNCTIONS
@@ -352,11 +458,10 @@
   "Print completion word store diagnostics."
   (let* ((vec *completion-word-order*)
          (vec-size (length vec))
-         (store-count (length (hash-keys *completion-word-store*)))
          (idx *completion-word-order-index*))
     (terminal-echo
-     (concat "\r\nCompletion store: " (number->string store-count)
-      " unique words\r\n" "Circular buffer size: " (number->string vec-size)
+     (concat "\r\nCompletion store: " (number->string *completion-word-count*)
+      " words (trie)\r\n" "Circular buffer size: " (number->string vec-size)
       "\r\n" "Buffer index: " (number->string idx) "\r\n"))))
 
 ;; ============================================================================
