@@ -150,7 +150,129 @@
 (assert-equal (hash-ref *completion-word-store* "fff") 0
  "fff occupies slot 0 after wrap")
 
+;; Vector entries are cons pairs (lowercase . original)
+(set! *completion-word-store* (make-hash-table))
+(set! *completion-word-order* (make-vector 10 nil))
+(set! *completion-word-order-index* 0)
+(add-word-to-store "Hello")
+(let ((entry (vector-ref *completion-word-order* 0)))
+  (assert-true (pair? entry) "vector entry is a cons pair")
+  (assert-equal (car entry) "hello" "vector entry car is lowercase key")
+  (assert-equal (cdr entry) "Hello" "vector entry cdr is original case"))
+
+;; Hash key is lowercase
+(assert-equal (hash-ref *completion-word-store* "hello") 0
+ "hash key is lowercase for mixed-case word")
+(assert-true (null? (hash-ref *completion-word-store* "Hello"))
+ "original case is not a hash key")
+
+;; Case-insensitive matching returns original case
+(add-word-to-store "World")
+(add-word-to-store "APPLE")
+(let ((results (get-completions-from-store "w")))
+  (assert-equal (length results) 1 "one match for 'w'")
+  (assert-equal (car results) "World"
+   "lowercase prefix returns original-case word"))
+(let ((results (get-completions-from-store "W")))
+  (assert-equal (length results) 1 "one match for 'W'")
+  (assert-equal (car results) "World"
+   "uppercase prefix returns original-case word"))
+(let ((results (get-completions-from-store "app")))
+  (assert-equal (car results) "APPLE"
+   "lowercase prefix matches all-caps word"))
+
+;; Mixed-case duplicate detection (same lowercase key)
+(set! *completion-word-store* (make-hash-table))
+(set! *completion-word-order* (make-vector 10 nil))
+(set! *completion-word-order-index* 0)
+(add-word-to-store "Hello")
+(add-word-to-store "hello")
+(assert-equal (hash-ref *completion-word-store* "hello") 1
+ "second insert of same-lowercase word takes new slot")
+(assert-equal (vector-ref *completion-word-order* 0) nil
+ "first slot cleared when same-lowercase duplicate inserted")
+(let ((results (get-completions-from-store "hel")))
+  (assert-equal (length results) 1 "only one entry for case-variant duplicates")
+  (assert-equal (car results) "hello"
+   "latest case variant is the one returned"))
+
+;; Re-insert with different case updates stored word
+(add-word-to-store "HELLO")
+(let ((results (get-completions-from-store "hel")))
+  (assert-equal (length results) 1 "still one entry after case-variant re-add")
+  (assert-equal (car results) "HELLO"
+   "re-add with different case updates stored word"))
+
+;; get-completions-from-store edge cases
+(assert-equal (get-completions-from-store "") '()
+ "empty prefix returns empty list")
+(assert-equal (get-completions-from-store nil) '()
+ "nil prefix returns empty list")
+(set! *completion-word-store* (make-hash-table))
+(set! *completion-word-order* (make-vector 10 nil))
+(set! *completion-word-order-index* 0)
+(assert-equal (get-completions-from-store "xyz") '()
+ "no matches in empty store returns empty list")
+
+;; No matches in populated store returns empty
+(add-word-to-store "alpha")
+(add-word-to-store "beta")
+(assert-equal (get-completions-from-store "xyz") '()
+ "no matches in populated store returns empty list")
+
+;; max-results limits circular buffer results
+(set! *completion-word-store* (make-hash-table))
+(set! *completion-word-order* (make-vector 10 nil))
+(set! *completion-word-order-index* 0)
+(set! *completion-max-results* 2)
+(add-word-to-store "aaa")
+(add-word-to-store "aab")
+(add-word-to-store "aac")
+(add-word-to-store "aad")
+(let ((results (get-completions-from-store "aa")))
+  (assert-equal (length results) 2
+   "max-results limits number of completions returned")
+  (assert-equal (car results) "aad" "most recent result first with limit")
+  (assert-equal (car (cdr results)) "aac" "second most recent with limit"))
+(set! *completion-max-results* 20)
+
+;; collect-words-from-text integration
+(set! *completion-word-store* (make-hash-table))
+(set! *completion-word-order* (make-vector 10 nil))
+(set! *completion-word-order-index* 0)
+(collect-words-from-text "The quick Brown fox")
+(let ((results (get-completions-from-store "bro")))
+  (assert-equal (length results) 1 "collect-words-from-text adds words")
+  (assert-equal (car results) "Brown"
+   "collect-words-from-text preserves original case"))
+(let ((results (get-completions-from-store "qui")))
+  (assert-equal (car results) "quick" "multi-word text all searchable"))
+;; Short words from text are filtered
+(collect-words-from-text "I am ok")
+(assert-equal (get-completions-from-store "am") '()
+ "collect-words-from-text skips short words")
+;; nil and empty text
+(collect-words-from-text nil)
+(collect-words-from-text "")
+
+;; FIFO eviction removes old cons pair from hash
+(set! *completion-word-store* (make-hash-table))
+(set! *completion-word-order* (make-vector 3 nil))
+(set! *completion-word-store-size* 3)
+(set! *completion-word-order-index* 0)
+(add-word-to-store "Alpha")
+(add-word-to-store "Beta")
+(add-word-to-store "Gamma")
+(add-word-to-store "Delta")
+(assert-true (null? (hash-ref *completion-word-store* "alpha"))
+ "evicted word's lowercase key removed from hash")
+(assert-equal (hash-ref *completion-word-store* "delta") 0
+ "new word takes evicted slot")
+(assert-equal (get-completions-from-store "alp") '()
+ "evicted word not found in completions")
+
 ;; Restore defaults
 (set! *completion-word-store-size* 50000)
+(set! *completion-max-results* 20)
 
 (print "All init.lisp tests passed!")

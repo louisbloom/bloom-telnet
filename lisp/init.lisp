@@ -149,10 +149,10 @@
   (if (>= *completion-word-order-index* vec-size)
     (set! *completion-word-order-index* 0)))
 
-(defun insert-word-into-slot! (vec store slot old-word new-word)
-  (if (string? old-word) (hash-remove! store old-word))
-  (vector-set! vec slot new-word)
-  (if (string? new-word) (hash-set! store new-word slot)))
+(defun insert-word-into-slot! (vec store slot old-entry key new-word)
+  (if (pair? old-entry) (hash-remove! store (car old-entry)))
+  (vector-set! vec slot (cons key new-word))
+  (hash-set! store key slot))
 
 (defun word-valid-for-store? (word) (and (string? word) (>= (length word) 3)))
 
@@ -160,16 +160,17 @@
   "Add a word to the completion store with FIFO eviction."
   (if (not (word-valid-for-store? word))
     0
-    (let* ((vec *completion-word-order*)
+    (let* ((lower (string-downcase word))
+           (vec *completion-word-order*)
            (vec-size (length vec))
-           (existing-slot (hash-ref *completion-word-store* word)))
+           (existing-slot (hash-ref *completion-word-store* lower)))
       (if existing-slot (vector-set! vec existing-slot nil))
       (if (>= *completion-word-order-index* vec-size)
         (set! *completion-word-order-index* 0))
       (let* ((slot
               (normalize-order-index *completion-word-order-index* vec-size))
              (old (vector-ref vec slot)))
-        (insert-word-into-slot! vec *completion-word-store* slot old word)
+        (insert-word-into-slot! vec *completion-word-store* slot old lower word)
         (advance-order-index vec-size)
         1))))
 
@@ -190,40 +191,16 @@
           (do ((remaining words (cdr remaining))) ((null? remaining))
             (add-word-to-store (car remaining))))))))
 
-(defun compute-circular-index (pos vec-size)
-  (if (< pos 0) (+ pos vec-size) pos))
-
-(defun word-matches-prefix? (word prefix-lower seen)
-  (and (string? word) (string-prefix? prefix-lower (string-downcase word))
-       (null? (hash-ref seen word))))
-
-(defun scan-circular-buffer
-  (vec vec-size start prefix-lower seen max-results)
+(defun scan-circular-buffer (vec vec-size start prefix-lower max-results)
   (let ((acc '())
         (count 0))
     (do ((i 0 (+ i 1)))
-      ((or (>= i vec-size) (>= count max-results)) (cons (reverse acc) count))
+      ((or (>= i vec-size) (>= count max-results)) (reverse acc))
       (let* ((pos (- start 1 i))
-             (idx (compute-circular-index pos vec-size))
-             (k (vector-ref vec idx)))
-        (if (not (string? k))
-          ()
-          (if (not (word-matches-prefix? k prefix-lower seen))
-            ()
-            (progn (hash-set! seen k 1) (set! acc (cons k acc))
-              (set! count (+ count 1)))))))))
-
-(defun scan-hash-keys (store prefix-lower seen acc count max-results)
-  (let ((keys (hash-keys store)))
-    (if (null? keys)
-      acc
-      (do ((remaining keys (cdr remaining)))
-        ((or (null? remaining) (>= count max-results)) acc)
-        (let ((k (car remaining)))
-          (if (not (word-matches-prefix? k prefix-lower seen))
-            ()
-            (progn (hash-set! seen k 1) (set! acc (cons k acc))
-              (set! count (+ count 1)))))))))
+             (idx (if (< pos 0) (+ pos vec-size) pos))
+             (entry (vector-ref vec idx)))
+        (if (and (pair? entry) (string-prefix? prefix-lower (car entry)))
+          (progn (set! acc (cons (cdr entry) acc)) (set! count (+ count 1))))))))
 
 (defun get-completions-from-store (prefix)
   "Retrieve words from store matching a prefix (case-insensitive)."
@@ -232,17 +209,8 @@
     (let* ((p (string-downcase prefix))
            (vec *completion-word-order*)
            (vec-size (length vec))
-           (start *completion-word-order-index*)
-           (seen (make-hash-table))
-           (result
-            (scan-circular-buffer vec vec-size start p seen
-             *completion-max-results*))
-           (acc (car result))
-           (count (cdr result)))
-      (if (> count 0)
-        acc
-        (scan-hash-keys *completion-word-store* p seen acc count
-         *completion-max-results*)))))
+           (start *completion-word-order-index*))
+      (scan-circular-buffer vec vec-size start p *completion-max-results*))))
 
 ;; ============================================================================
 ;; HOOK WRAPPER FUNCTIONS
