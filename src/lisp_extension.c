@@ -39,7 +39,8 @@ static LispObject *get_session_hooks(void) {
   if (!s || !s->env) {
     return NULL;
   }
-  LispObject *hooks = env_lookup(s->env, "*hooks*");
+  LispObject *hooks =
+      env_lookup_sym(s->env, lisp_intern("*hooks*")->value.symbol);
   if (!hooks || hooks->type != LISP_HASH_TABLE) {
     return NULL;
   }
@@ -132,7 +133,8 @@ static void apply_default_hooks_to_table(LispObject *hooks_table) {
   if (!base) {
     return;
   }
-  LispObject *defaults = env_lookup(base, "*default-hooks*");
+  LispObject *defaults =
+      env_lookup_sym(base, lisp_intern("*default-hooks*")->value.symbol);
   if (!defaults || defaults == NIL) {
     return;
   }
@@ -703,7 +705,7 @@ static LispObject *builtin_session_create(LispObject *args, Environment *env) {
 
   /* Give new session its own *hooks* table and populate from defaults */
   LispObject *hooks_table = lisp_make_hash_table();
-  env_define(s->env, "*hooks*", hooks_table);
+  env_define_sym(s->env, lisp_intern("*hooks*")->value.symbol, hooks_table);
   apply_default_hooks_to_table(hooks_table);
 
   /* Echo creation message to terminal */
@@ -875,7 +877,8 @@ static LispObject *builtin_add_hook(LispObject *args, Environment *env) {
     if (!base) {
       return lisp_make_error("add-hook: no base environment");
     }
-    LispObject *defaults = env_lookup(base, "*default-hooks*");
+    Symbol *default_hooks_sym = lisp_intern("*default-hooks*")->value.symbol;
+    LispObject *defaults = env_lookup_sym(base, default_hooks_sym);
     if (!defaults) {
       defaults = NIL;
     }
@@ -884,7 +887,7 @@ static LispObject *builtin_add_hook(LispObject *args, Environment *env) {
         lisp_make_cons(fn_obj, lisp_make_integer(priority));
     LispObject *triple = lisp_make_cons(name_str, fn_and_prio);
     defaults = lisp_make_cons(triple, defaults);
-    env_set(base, "*default-hooks*", defaults);
+    env_set_sym(base, default_hooks_sym, defaults);
     return NIL;
   }
 
@@ -1039,14 +1042,16 @@ static LispObject *builtin_run_filter_hook(LispObject *args, Environment *env) {
   return value;
 }
 
+/* Helper: register a builtin using interned symbol */
+#define REG(name, func)                                                        \
+  env_define_sym(env, lisp_intern(name)->value.symbol,                         \
+                 lisp_make_builtin(func, name))
+
 /* Register all builtins on the given environment */
 static void register_builtins(Environment *env) {
-  env_define(env, "strip-ansi",
-             lisp_make_builtin(builtin_strip_ansi, "strip-ansi"));
-  env_define(env, "terminal-echo",
-             lisp_make_builtin(builtin_terminal_echo, "terminal-echo"));
-  env_define(env, "telnet-send",
-             lisp_make_builtin(builtin_telnet_send, "telnet-send"));
+  REG("strip-ansi", builtin_strip_ansi);
+  REG("terminal-echo", builtin_terminal_echo);
+  REG("telnet-send", builtin_telnet_send);
 
   /* Terminal capability builtin */
   lisp_set_docstring(
@@ -1066,11 +1071,10 @@ static void register_builtins(Environment *env) {
       "- `(termcap 'reset)` - SGR reset escape sequence\n"
       "- `(termcap 'fg-color r g b)` - foreground color escape sequence\n"
       "- `(termcap 'bg-color r g b)` - background color escape sequence");
-  env_define(env, "termcap", lisp_make_builtin(builtin_termcap, "termcap"));
+  REG("termcap", builtin_termcap);
 
   /* System file loader (uses standard search paths) */
-  env_define(env, "load-system-file",
-             lisp_make_builtin(builtin_load_system_file, "load-system-file"));
+  REG("load-system-file", builtin_load_system_file);
 
   /* Intern termcap symbols for pointer comparison */
   sym_tc_cols = lisp_intern("cols");
@@ -1093,10 +1097,8 @@ static void register_builtins(Environment *env) {
   sym_log_error = lisp_intern("error");
 
   /* Logging builtins */
-  env_define(env, "bloom-log",
-             lisp_make_builtin(builtin_bloom_log, "bloom-log"));
-  env_define(env, "set-log-filter",
-             lisp_make_builtin(builtin_set_log_filter, "set-log-filter"));
+  REG("bloom-log", builtin_bloom_log);
+  REG("set-log-filter", builtin_set_log_filter);
 
   /* Statusbar builtins (raw API - mode registry is in Lisp) */
   lisp_set_docstring("statusbar-set-mode",
@@ -1107,50 +1109,36 @@ static void register_builtins(Environment *env) {
                      "\n"
                      "This is the raw API. Use statusbar-mode-set/remove\n"
                      "for the higher-level mode registry.");
-  env_define(
-      env, "statusbar-set-mode",
-      lisp_make_builtin(builtin_statusbar_set_mode, "statusbar-set-mode"));
+  REG("statusbar-set-mode", builtin_statusbar_set_mode);
 
   lisp_set_docstring("statusbar-notify",
                      "Set the notification in the statusbar (right side).\n"
                      "\n"
                      "Usage: (statusbar-notify \"message\")");
-  env_define(env, "statusbar-notify",
-             lisp_make_builtin(builtin_statusbar_notify, "statusbar-notify"));
+  REG("statusbar-notify", builtin_statusbar_notify);
 
   lisp_set_docstring("statusbar-clear",
                      "Clear the notification from the statusbar.\n"
                      "\n"
                      "Usage: (statusbar-clear)");
-  env_define(env, "statusbar-clear",
-             lisp_make_builtin(builtin_statusbar_clear, "statusbar-clear"));
+  REG("statusbar-clear", builtin_statusbar_clear);
 
   /* Session management builtins */
-  env_define(
-      env, "telnet-session-create",
-      lisp_make_builtin(builtin_session_create, "telnet-session-create"));
-  env_define(env, "telnet-session-list",
-             lisp_make_builtin(builtin_session_list, "telnet-session-list"));
-  env_define(
-      env, "telnet-session-current",
-      lisp_make_builtin(builtin_session_current, "telnet-session-current"));
-  env_define(
-      env, "telnet-session-switch",
-      lisp_make_builtin(builtin_session_switch, "telnet-session-switch"));
-  env_define(env, "telnet-session-name",
-             lisp_make_builtin(builtin_session_name, "telnet-session-name"));
-  env_define(
-      env, "telnet-session-destroy",
-      lisp_make_builtin(builtin_session_destroy, "telnet-session-destroy"));
+  REG("telnet-session-create", builtin_session_create);
+  REG("telnet-session-list", builtin_session_list);
+  REG("telnet-session-current", builtin_session_current);
+  REG("telnet-session-switch", builtin_session_switch);
+  REG("telnet-session-name", builtin_session_name);
+  REG("telnet-session-destroy", builtin_session_destroy);
 
   /* Hook system builtins */
-  env_define(env, "add-hook", lisp_make_builtin(builtin_add_hook, "add-hook"));
-  env_define(env, "remove-hook",
-             lisp_make_builtin(builtin_remove_hook, "remove-hook"));
-  env_define(env, "run-hook", lisp_make_builtin(builtin_run_hook, "run-hook"));
-  env_define(env, "run-filter-hook",
-             lisp_make_builtin(builtin_run_filter_hook, "run-filter-hook"));
+  REG("add-hook", builtin_add_hook);
+  REG("remove-hook", builtin_remove_hook);
+  REG("run-hook", builtin_run_hook);
+  REG("run-filter-hook", builtin_run_filter_hook);
 }
+
+#undef REG
 
 /* Initialize Lisp interpreter and environment */
 int lisp_x_init(void) {
@@ -1192,11 +1180,12 @@ int lisp_x_init(void) {
   register_builtins(base_env);
 
   /* Version string accessible from Lisp */
-  env_define(base_env, "*version*", lisp_make_string(BLOOM_TELNET_VERSION));
+  env_define_sym(base_env, lisp_intern("*version*")->value.symbol,
+                 lisp_make_string(BLOOM_TELNET_VERSION));
 
   /* Initialize *default-hooks* in base env (collects hooks registered
    * during init.lisp before any session exists) */
-  env_define(base_env, "*default-hooks*", NIL);
+  env_define_sym(base_env, lisp_intern("*default-hooks*")->value.symbol, NIL);
 
   /* Default session is created later in lisp_x_load_init() once the
    * TUI is ready, so echo_callback can display the creation message */
@@ -1275,7 +1264,8 @@ void lisp_x_call_telnet_input_hook(const char *text, size_t len) {
     return;
   }
 
-  LispObject *hook = env_lookup(env, "telnet-input-hook");
+  LispObject *hook =
+      env_lookup_sym(env, lisp_intern("telnet-input-hook")->value.symbol);
   if (!lisp_is_callable(hook)) {
     bloom_log(LOG_DEBUG, "hooks", "input-hook: hook not found or wrong type");
     return;
@@ -1308,7 +1298,7 @@ void lisp_x_run_timers(void) {
   if (!env)
     return;
 
-  LispObject *fn = env_lookup(env, "run-timers");
+  LispObject *fn = env_lookup_sym(env, lisp_intern("run-timers")->value.symbol);
   if (!lisp_is_callable(fn))
     return;
 
@@ -1333,7 +1323,8 @@ const char *lisp_x_call_telnet_input_filter_hook(const char *text, size_t len,
     return text;
   }
 
-  LispObject *hook = env_lookup(env, "telnet-input-filter-hook");
+  LispObject *hook = env_lookup_sym(
+      env, lisp_intern("telnet-input-filter-hook")->value.symbol);
   if (!lisp_is_callable(hook)) {
     *out_len = len;
     return text;
@@ -1395,7 +1386,8 @@ const char *lisp_x_call_user_input_hook(const char *text, int cursor_pos) {
     return text;
   }
 
-  LispObject *hook = env_lookup(env, "user-input-hook");
+  LispObject *hook =
+      env_lookup_sym(env, lisp_intern("user-input-hook")->value.symbol);
   if (!lisp_is_callable(hook)) {
     return text;
   }
@@ -1451,7 +1443,8 @@ int lisp_x_get_input_history_size(void) {
     return 1000;
   }
 
-  LispObject *value = env_lookup(env, "*input-history-size*");
+  LispObject *value =
+      env_lookup_sym(env, lisp_intern("*input-history-size*")->value.symbol);
   if (value && value->type == LISP_INTEGER) {
     int size = (int)value->value.integer;
     if (size > 0) {
@@ -1532,7 +1525,7 @@ void lisp_x_load_init(void) {
 
   /* Give the default session its own *hooks* table */
   LispObject *hooks_table = lisp_make_hash_table();
-  env_define(s->env, "*hooks*", hooks_table);
+  env_define_sym(s->env, lisp_intern("*hooks*")->value.symbol, hooks_table);
 
   /* Echo creation message to terminal */
   char msg[256];
@@ -1556,7 +1549,8 @@ const char *lisp_x_get_prompt(void) {
     return "> ";
   }
 
-  LispObject *value = env_lookup(env, "*prompt*");
+  LispObject *value =
+      env_lookup_sym(env, lisp_intern("*prompt*")->value.symbol);
   if (value && value->type == LISP_STRING) {
     return value->value.string;
   }
@@ -1569,7 +1563,7 @@ int lisp_x_get_color(const char *var_name, int *r, int *g, int *b) {
   if (!env || !var_name || !r || !g || !b)
     return -1;
 
-  LispObject *val = env_lookup(env, var_name);
+  LispObject *val = env_lookup_sym(env, lisp_intern(var_name)->value.symbol);
   if (!val || val->type != LISP_CONS)
     return -1;
 
@@ -1602,7 +1596,8 @@ char **lisp_x_complete_prefix(const char *prefix) {
   }
 
   /* Look up completion-hook */
-  LispObject *hook = env_lookup(env, "completion-hook");
+  LispObject *hook =
+      env_lookup_sym(env, lisp_intern("completion-hook")->value.symbol);
   if (!lisp_is_callable(hook)) {
     bloom_log(LOG_DEBUG, "completion", "hook not found or wrong type");
     return NULL;
