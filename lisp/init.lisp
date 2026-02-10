@@ -25,6 +25,9 @@
 ;; Current position in the order vector (circular buffer index)
 (define *completion-word-order-index* 0)
 
+;; Number of words currently stored (may be less than vector capacity)
+(define *completion-word-count* 0)
+
 ;; ============================================================================
 ;; TELNET I/O LOGGING CONFIGURATION
 ;; ============================================================================
@@ -171,6 +174,13 @@
               (normalize-order-index *completion-word-order-index* vec-size))
              (old (vector-ref vec slot)))
         (insert-word-into-slot! vec *completion-word-store* slot old lower word)
+        ;; Track occupied slot count: +1 for new word into empty slot,
+        ;; -1 for duplicate that evicts a different word
+        (if (null? existing-slot)
+          (if (not (pair? old))
+            (set! *completion-word-count* (+ *completion-word-count* 1)))
+          (if (pair? old)
+            (set! *completion-word-count* (- *completion-word-count* 1))))
         (advance-order-index vec-size)
         1))))
 
@@ -191,11 +201,12 @@
           (do ((remaining words (cdr remaining))) ((null? remaining))
             (add-word-to-store (car remaining))))))))
 
-(defun scan-circular-buffer (vec vec-size start prefix-lower max-results)
+(defun scan-circular-buffer
+  (vec vec-size start prefix-lower scan-limit max-results)
   (let ((acc '())
         (count 0))
     (do ((i 0 (+ i 1)))
-      ((or (>= i vec-size) (>= count max-results)) (reverse acc))
+      ((or (>= i scan-limit) (>= count max-results)) (reverse acc))
       (let* ((pos (- start 1 i))
              (idx (if (< pos 0) (+ pos vec-size) pos))
              (entry (vector-ref vec idx)))
@@ -210,7 +221,8 @@
            (vec *completion-word-order*)
            (vec-size (length vec))
            (start *completion-word-order-index*))
-      (scan-circular-buffer vec vec-size start p *completion-max-results*))))
+      (scan-circular-buffer vec vec-size start p *completion-word-count*
+       *completion-max-results*))))
 
 ;; ============================================================================
 ;; HOOK WRAPPER FUNCTIONS
