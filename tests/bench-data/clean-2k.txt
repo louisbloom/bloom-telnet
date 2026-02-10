@@ -1,0 +1,49 @@
+
+Level  1: detect magic                       1%    0% max mana
+          magic missile                    100%    2% max mana
+Level  2: detect charm                       1%    0% max mana
+          sighttheft                        75%    3% max mana
+Level  3: detect invis                      88%    0% max mana
+Level  4: invis                             84%    0% max mana
+Level  5: armor                              1%    0% max mana
+Level  6: faerie fire                       86%    0% max mana
+Level  9: infravision                        1%    0% max mana
+Level 10: identify                          79%    1% max mana
+Level 11: warp dimension                    87%    3% max mana
+Level 13: teleport                          78%    5% max mana
+Level 14: dispel magic                      78%    2% max mana
+Level 15: locate object                     75%    3% max mana
+Level 16: flash                             77%    4% max mana
+Level 17: familiar                          76%    1% max mana
+Level 18: cancellation                      75%    3% max mana
+          resist negative                   75%    5% max mana
+          resist positive                   75%    5% max mana
+Level 19: conjure smoke mephit              75%    4% max mana
+Level 20: pass door                         78%    3% max mana
+          conjure elemental                 79%   16% max mana
+          bind elemental                    78%   11% max mana
+Level 21: deny summoning                     1%    4% max mana
+Level 22: celestial circle                  80%    4% max mana
+Level 23: conjure will-o-wisp               75%    6% max mana
+          dismissal                         75%   14% max mana
+Level 25: planar ward                       75%    9% max mana
+          conjure angel                     77%   16% max mana
+          conjure demon                      1%   16% max mana
+          lightbind                         76%   13% max mana
+          darkbind                           1%   13% max mana
+Level 26: sending                            1%    6% max mana
+Level 27: thaumaturgic circle               75%    6% max mana
+Level 28: phase door                         1%    8% max mana
+Level 30: projection                       n/a      
+Level 34: word of recall                   n/a      
+Level 35: conjure archon                   n/a      
+          conjure devil                    n/a      
+Level 37: Kaubris Anchor                   n/a      
+Level 40: bind nightgaunt                  n/a      
+          conjure nightgaunt               n/a      
+Level 43: clairaudience                    n/a      
+Level 44: clairvoyance                     n/a      
+Level 45: contact other planes             n/a      
+Level 51: tesseract                        n/a      
+
+PROTECTED civilized <73%hp 100%m 100%mv 11066tnl (-15.27%) 1 AM> 

@@ -6,6 +6,7 @@
 ;; Helper to reset store at a given capacity
 (defun reset-store (capacity)
   (set! *completion-trie* (make-hash-table))
+  (set! *completion-words* (make-hash-table))
   (set! *completion-seq* 0)
   (set! *completion-word-order* (make-vector capacity nil))
   (set! *completion-word-store-size* capacity)

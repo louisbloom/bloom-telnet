@@ -1,0 +1,11 @@
+Silverwood 
+  All around you is a quiet woodland, with majestic silverwood trees rising
+out of the soft earth to provide a canopy of rustling green leaves. You
+can make out the signs of wildlife all around you.  The forest seems to
+thin out to the south, opening up into a large, grassy meadow.  
+ 
+[Exits: north east south west]
+     A large, well cooked steak lies here fizzling with juices.
+A giant mercenary has arrived.
+
+wilderness /outdoor <100%hp 100%m 98%mv 12163tml (3.47%) 6 PM> 

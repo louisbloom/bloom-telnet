@@ -19,6 +19,10 @@
 ;; Initialize trie root (hash table used as prefix tree)
 (define *completion-trie* (make-hash-table))
 
+;; Flat hash for O(1) duplicate detection: lowercase -> (original seq slot trie-node)
+;; The trie-node reference allows O(1) leaf updates on duplicates.
+(define *completion-words* (make-hash-table))
+
 ;; Recency counter (monotonically increasing)
 (define *completion-seq* 0)
 
@@ -105,65 +109,27 @@
   (termcap 'fg-color (car rgb) (car (cdr rgb)) (car (cdr (cdr rgb)))))
 
 ;; ============================================================================
-;; WORD STORE HELPER FUNCTIONS
+;; WORD EXTRACTION PATTERN
 ;; ============================================================================
-(define *trim-punctuation-string* ".,!?;:()[]{}'\"-")
-
-(defun punctuation-char? (c)
-  "Check if character is punctuation to trim."
-  (string-index *trim-punctuation-string* (char->string c)))
-
-(defun trim-punctuation (word)
-  "Remove leading and trailing punctuation from word."
-  (if (not (and (string? word) (> (length word) 0)))
-    ""
-    (let ((len (length word)))
-      (do ((start 0 (+ start 1)))
-        ((or (>= start len) (not (punctuation-char? (string-ref word start))))
-         (do ((end len (- end 1)))
-           ((or (<= end start)
-                (not (punctuation-char? (string-ref word (- end 1)))))
-            (if (>= start end) "" (substring word start end)))))))))
-
-(defun clean-word (word)
-  "Clean a word by trimming punctuation."
-  (if (and (string? word) (> (length word) 0)) (trim-punctuation word) ""))
-
-(defun valid-word? (cleaned)
-  "Check if a cleaned word is valid for storage."
-  (and (string? cleaned) (> (length cleaned) 0)))
-
-(defun filter-valid-words (words)
-  (let ((filtered '()))
-    (do ((remaining words (cdr remaining)))
-      ((null? remaining) (reverse filtered))
-      (let ((cleaned (clean-word (car remaining))))
-        (if (not (valid-word? cleaned))
-          ()
-          (set! filtered (cons cleaned filtered)))))))
-
-(defun extract-words (text)
-  (if (not (string? text))
-    '()
-    (let ((words (regex-split "\\s+" text)))
-      (if (null? words) '() (filter-valid-words words)))))
-
-(defun word-valid-for-store? (word) (and (string? word) (>= (length word) 3)))
+;; Matches 3+ character sequences excluding whitespace and common punctuation.
+;; Replaces the old regex-split + trim-punctuation + filter pipeline.
+(define *word-extract-pattern* "[^\\s.,;:!?()\\[\\]{}'\"-]{3,}")
 
 ;; ============================================================================
 ;; TRIE FUNCTIONS
 ;; ============================================================================
 (defun trie-insert! (root word leaf-data)
-  "Insert word into trie. Leaf stored under \"*\" key at terminal node."
+  "Insert word into trie. Returns the terminal node."
   (let ((node root)
         (len (length word)))
     (do ((i 0 (+ i 1))) ((>= i len))
-      (let* ((ch (char->string (string-ref word i)))
+      (let* ((ch (substring word i (+ i 1)))
              (child (hash-ref node ch)))
         (when (null? child) (set! child (make-hash-table))
           (hash-set! node ch child))
         (set! node child)))
-    (hash-set! node "*" leaf-data)))
+    (hash-set! node "*" leaf-data)
+    node))
 
 (defun trie-remove! (root word)
   "Remove word from trie, pruning empty nodes. Returns #t if removed."
@@ -171,19 +137,18 @@
     (if (= len 0)
       #f
       ;; Build path of (node . char-key) pairs for cleanup
-      (let ((path (list (cons root (char->string (string-ref word 0)))))
+      (let ((path (list (cons root (substring word 0 1))))
             (node root)
             (found #t))
         ;; Walk to terminal node
         (do ((i 0 (+ i 1))) ((or (>= i len) (not found)))
-          (let ((child (hash-ref node (char->string (string-ref word i)))))
+          (let ((child (hash-ref node (substring word i (+ i 1)))))
             (if (null? child)
               (set! found #f)
               (progn
                 (when (< (+ i 1) len)
                   (set! path
-                   (cons (cons child (char->string (string-ref word (+ i 1))))
-                    path)))
+                   (cons (cons child (substring word (+ i 1) (+ i 2))) path)))
                 (set! node child)))))
         (if (not found)
           #f
@@ -200,23 +165,13 @@
                     (hash-remove! parent key))))
               #t)))))))
 
-(defun trie-lookup (root word)
-  "Look up word in trie. Returns leaf data or nil."
-  (let ((node root)
-        (len (length word))
-        (found #t))
-    (do ((i 0 (+ i 1))) ((or (>= i len) (not found)))
-      (let ((child (hash-ref node (char->string (string-ref word i)))))
-        (if (null? child) (set! found #f) (set! node child))))
-    (if found (hash-ref node "*") nil)))
-
 (defun trie-walk-to (root prefix)
   "Walk trie following prefix characters. Returns node or nil."
   (let ((node root)
         (len (length prefix))
         (found #t))
     (do ((i 0 (+ i 1))) ((or (>= i len) (not found)))
-      (let ((child (hash-ref node (char->string (string-ref prefix i)))))
+      (let ((child (hash-ref node (substring prefix i (+ i 1)))))
         (if (null? child) (set! found #f) (set! node child))))
     (if found node nil)))
 
@@ -269,12 +224,12 @@
 ;; ============================================================================
 (defun add-word-to-store (word)
   "Add a word to the completion store with FIFO eviction."
-  (if (not (word-valid-for-store? word))
+  (if (not (and (string? word) (>= (length word) 3)))
     0
     (let* ((lower (string-downcase word))
            (vec *completion-word-order*)
            (vec-size (length vec))
-           (existing (trie-lookup *completion-trie* lower)))
+           (existing (hash-ref *completion-words* lower)))
       ;; If duplicate, clear its old buffer slot
       (when existing (vector-set! vec (list-ref existing 2) nil))
       ;; Wrap index
@@ -282,11 +237,22 @@
         (set! *completion-word-order-index* 0))
       (let* ((slot *completion-word-order-index*)
              (old-key (vector-ref vec slot)))
-        ;; Evict old word from trie if slot is occupied
-        (when (string? old-key) (trie-remove! *completion-trie* old-key))
-        ;; Bump seq and insert into trie
+        ;; Evict old word from both stores if slot is occupied
+        (when (string? old-key) (hash-remove! *completion-words* old-key)
+          (trie-remove! *completion-trie* old-key))
+        ;; Bump seq
         (set! *completion-seq* (+ *completion-seq* 1))
-        (trie-insert! *completion-trie* lower (list word *completion-seq* slot))
+        (let ((leaf (list word *completion-seq* slot)))
+          (if existing
+            ;; DUPLICATE: update cached trie node directly (O(1), no trie walk)
+            (let ((trie-node (list-ref existing 3)))
+              (hash-set! trie-node "*" leaf)
+              (hash-set! *completion-words* lower
+               (list word *completion-seq* slot trie-node)))
+            ;; NEW WORD: walk trie once, cache the terminal node
+            (let ((trie-node (trie-insert! *completion-trie* lower leaf)))
+              (hash-set! *completion-words* lower
+               (list word *completion-seq* slot trie-node)))))
         ;; Store lowercase key in buffer slot
         (vector-set! vec slot lower)
         ;; Track word count
@@ -324,11 +290,9 @@
            (if (> (length text) *collect-words-max-length*)
              (substring text 0 *collect-words-max-length*)
              text)))
-      (let ((words (extract-words input)))
-        (if (null? words)
-          ()
-          (do ((remaining words (cdr remaining))) ((null? remaining))
-            (add-word-to-store (car remaining))))))))
+      (let ((words (regex-find-all *word-extract-pattern* input)))
+        (do ((remaining words (cdr remaining))) ((null? remaining))
+          (add-word-to-store (car remaining)))))))
 
 ;; ============================================================================
 ;; HOOK WRAPPER FUNCTIONS
@@ -461,8 +425,9 @@
          (idx *completion-word-order-index*))
     (terminal-echo
      (concat "\r\nCompletion store: " (number->string *completion-word-count*)
-      " words (trie)\r\n" "Circular buffer size: " (number->string vec-size)
-      "\r\n" "Buffer index: " (number->string idx) "\r\n"))))
+      " words (hash+trie)\r\n" "Circular buffer size: "
+      (number->string vec-size) "\r\n" "Buffer index: " (number->string idx)
+      "\r\n"))))
 
 ;; ============================================================================
 ;; LOGGING CONVENIENCE WRAPPERS

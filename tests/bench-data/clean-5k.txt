@@ -1,0 +1,21 @@
+                                                                                
+  ____  _                        _____         _
+ | __ )| | ___   ___  _ __ ___  |_   _|__  ___| |_
+ |  _ \| |/ _ \ / _ \| '_ ` _ \   | |/ _ \/ __| __|
+ | |_) | | (_) | (_) | | | | | |  | |  __/\__ \ |_
+ |____/|_|\___/ \___/|_| |_| |_|  |_|\___||___/\__|
+                                                                                
+
+  â¨ Welcome to the Bloom Test Server! â¨
+  ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+  A test server for bloom-telnet development.
+  Unrecognized input is echoed back to you.
+
+  Commands:
+Available commands:
+  help         - Show available commands
+  orange       - Display text in orange color
+  quit         - Disconnect from server
+
+
+> 

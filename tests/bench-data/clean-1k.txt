@@ -1,0 +1,21 @@
+You are using:
+<worn on finger>    (Glowing) a golden ring with a spider-shaped ruby
+<worn on finger>    (Glowing) a golden ring with a spider-shaped ruby
+<worn around neck>  a broad gold plated neck collar
+<worn around neck>  a broad gold plated neck collar
+<worn on body>      a black breastplate
+<worn on tail>      a leafy tail-cover
+<worn on head>      a helmet of living bark
+<worn on face>      a black and white tragi-comedy mask
+<worn on legs>      a pair of red dragonscale leggings
+<worn on foreclaws> three-fingered gloves
+<worn on claws>     iron talon tips
+<worn on arms>      a pair of hardened leather armguards studded with violet crystals
+<worn about body>   a skin from the snow leopard
+<worn about waist>  a belt of shimmering snake skin
+<worn around wrist> a vine bracer
+<worn around wrist> an oddly shaped glass bracelet
+<mainhand wielded>  a chain flail
+<worn as shield>    an iron tower shield bearing an inverted cross
+
+wilderness /indoor <61%hp 91%m 100%mv 3020tml (75.33%) 3 PM> 

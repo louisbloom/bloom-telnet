@@ -1,0 +1,4 @@
+You call upon Vazgumur the Ill-Giver to poison an elven shopkeeper's blood, but she resists.
+An elven shopkeeper has some small but disgusting cuts. 
+
+civilized/indoor <100%hp 71%m 100%mv 11869tml (5.80%) 8 PM> 

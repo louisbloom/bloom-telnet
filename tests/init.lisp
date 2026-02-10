@@ -45,32 +45,6 @@
 (assert-equal (repeat-string "" 5) "" "repeat-string of empty string")
 
 ;; ============================================================================
-;; Test: trim-punctuation
-;; ============================================================================
-(assert-equal (trim-punctuation "hello") "hello"
- "trim-punctuation no-op on clean word")
-(assert-equal (trim-punctuation "hello!") "hello"
- "trim-punctuation strips trailing !")
-(assert-equal (trim-punctuation "\"hello\"") "hello"
- "trim-punctuation strips surrounding quotes")
-(assert-equal (trim-punctuation "(hello)") "hello"
- "trim-punctuation strips surrounding parens")
-(assert-equal (trim-punctuation "...") ""
- "trim-punctuation on all-punctuation returns empty")
-(assert-equal (trim-punctuation "") "" "trim-punctuation on empty string")
-(assert-equal (trim-punctuation nil) "" "trim-punctuation on nil")
-
-;; ============================================================================
-;; Test: extract-words
-;; ============================================================================
-(assert-equal (extract-words "hello world") '("hello" "world")
- "extract-words splits on whitespace")
-(assert-equal (extract-words "hello, world!") '("hello" "world")
- "extract-words trims punctuation from words")
-(assert-equal (extract-words "") '() "extract-words on empty string")
-(assert-equal (extract-words nil) '() "extract-words on nil")
-
-;; ============================================================================
 ;; Test: obj-to-string
 ;; ============================================================================
 (assert-equal (obj-to-string 'foo) "foo" "obj-to-string symbol")
@@ -90,9 +64,10 @@
 ;; Test: completion word store
 ;; ============================================================================
 
-;; Helper to reset trie store for testing
+;; Helper to reset completion store for testing
 (defun reset-completion-store (capacity)
   (set! *completion-trie* (make-hash-table))
+  (set! *completion-words* (make-hash-table))
   (set! *completion-seq* 0)
   (set! *completion-word-store-size* capacity)
   (set! *completion-word-order* (make-vector capacity nil))
@@ -105,16 +80,16 @@
 ;; Basic insertion
 (add-word-to-store "hello")
 (add-word-to-store "world")
-(let ((leaf (trie-lookup *completion-trie* "hello")))
-  (assert-true (not (null? leaf)) "hello present in trie")
-  (assert-equal (list-ref leaf 2) 0 "hello stored at slot 0"))
-(let ((leaf (trie-lookup *completion-trie* "world")))
-  (assert-equal (list-ref leaf 2) 1 "world stored at slot 1"))
+(let ((entry (hash-ref *completion-words* "hello")))
+  (assert-true (not (null? entry)) "hello present in store")
+  (assert-equal (list-ref entry 2) 0 "hello stored at slot 0"))
+(let ((entry (hash-ref *completion-words* "world")))
+  (assert-equal (list-ref entry 2) 1 "world stored at slot 1"))
 
 ;; Duplicate moves to front (most recent position)
 (add-word-to-store "hello")
-(let ((leaf (trie-lookup *completion-trie* "hello")))
-  (assert-equal (list-ref leaf 2) 2 "duplicate hello moved to slot 2"))
+(let ((entry (hash-ref *completion-words* "hello")))
+  (assert-equal (list-ref entry 2) 2 "duplicate hello moved to slot 2"))
 (assert-equal (vector-ref *completion-word-order* 0) nil
  "old slot cleared to nil after move")
 
@@ -147,10 +122,10 @@
 (add-word-to-store "eee")
 ;; Buffer is full, next insert evicts "aaa" at slot 0
 (add-word-to-store "fff")
-(assert-true (null? (trie-lookup *completion-trie* "aaa"))
+(assert-true (null? (hash-ref *completion-words* "aaa"))
  "aaa evicted after buffer wraps")
-(let ((leaf (trie-lookup *completion-trie* "fff")))
-  (assert-equal (list-ref leaf 2) 0 "fff occupies slot 0 after wrap"))
+(let ((entry (hash-ref *completion-words* "fff")))
+  (assert-equal (list-ref entry 2) 0 "fff occupies slot 0 after wrap"))
 
 ;; Word count tracking
 (reset-completion-store 10)
@@ -186,10 +161,10 @@
   (assert-true (string? entry) "vector entry is a string")
   (assert-equal entry "hello" "vector entry is lowercase key"))
 
-;; Trie leaf contains original case
-(let ((leaf (trie-lookup *completion-trie* "hello")))
-  (assert-true (not (null? leaf)) "trie has entry for lowercase key")
-  (assert-equal (car leaf) "Hello" "trie leaf stores original case"))
+;; Store entry contains original case
+(let ((entry (hash-ref *completion-words* "hello")))
+  (assert-true (not (null? entry)) "store has entry for lowercase key")
+  (assert-equal (car entry) "Hello" "store entry preserves original case"))
 
 ;; Case-insensitive matching returns original case
 (add-word-to-store "World")
@@ -210,8 +185,8 @@
 (reset-completion-store 10)
 (add-word-to-store "Hello")
 (add-word-to-store "hello")
-(let ((leaf (trie-lookup *completion-trie* "hello")))
-  (assert-equal (list-ref leaf 2) 1
+(let ((entry (hash-ref *completion-words* "hello")))
+  (assert-equal (list-ref entry 2) 1
    "second insert of same-lowercase word takes new slot"))
 (assert-equal (vector-ref *completion-word-order* 0) nil
  "first slot cleared when same-lowercase duplicate inserted")
@@ -279,10 +254,10 @@
 (add-word-to-store "Beta")
 (add-word-to-store "Gamma")
 (add-word-to-store "Delta")
-(assert-true (null? (trie-lookup *completion-trie* "alpha"))
- "evicted word removed from trie")
-(let ((leaf (trie-lookup *completion-trie* "delta")))
-  (assert-equal (list-ref leaf 2) 0 "new word takes evicted slot"))
+(assert-true (null? (hash-ref *completion-words* "alpha"))
+ "evicted word removed from store")
+(let ((entry (hash-ref *completion-words* "delta")))
+  (assert-equal (list-ref entry 2) 0 "new word takes evicted slot"))
 (assert-equal (get-completions-from-store "alp") '()
  "evicted word not found in completions")
 
@@ -292,10 +267,11 @@
 (add-word-to-store "car")
 (trie-remove! *completion-trie* "cat")
 ;; "c" -> "a" path should still exist for "car"
-(assert-true (not (null? (trie-lookup *completion-trie* "car")))
- "car still in trie after removing cat")
-(assert-true (null? (trie-lookup *completion-trie* "cat"))
- "cat removed from trie")
+(let ((node (trie-walk-to *completion-trie* "car")))
+  (assert-true (not (null? (hash-ref node "*")))
+   "car still in trie after removing cat"))
+(assert-true (null? (trie-walk-to *completion-trie* "cat"))
+ "cat path removed from trie")
 ;; Remove car too — now trie should be empty
 (trie-remove! *completion-trie* "car")
 (assert-equal (length (hash-keys *completion-trie*)) 0
