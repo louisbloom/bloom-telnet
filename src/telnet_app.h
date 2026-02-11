@@ -50,20 +50,6 @@ typedef struct {
   size_t len;
 } TelnetAppEchoData;
 
-/* Create a new TelnetApp component */
-TelnetAppModel *telnet_app_create(const TelnetAppConfig *config);
-
-/* Free TelnetApp component */
-void telnet_app_free(TelnetAppModel *app);
-
-/* Update TelnetApp with a message */
-TuiUpdateResult telnet_app_update(TelnetAppModel *app, TuiMsg msg);
-
-/* Render TelnetApp to output buffer */
-void telnet_app_view(const TelnetAppModel *app, DynamicBuffer *out);
-
-/* App-specific API */
-
 /* Echo text to the textview (for terminal-echo builtin)
  * Outputs text to terminal and stores in textview buffer.
  * Converts \n to \r\n for terminal output.

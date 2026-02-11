@@ -17,10 +17,11 @@
 #define TELNET_APP_TYPE_ID (TUI_COMPONENT_TYPE_BASE + 10)
 
 /* Create a new TelnetApp component */
-TelnetAppModel *telnet_app_create(const TelnetAppConfig *config) {
+static TuiInitResult telnet_app_init(void *cfg) {
+  const TelnetAppConfig *config = (const TelnetAppConfig *)cfg;
   TelnetAppModel *app = (TelnetAppModel *)malloc(sizeof(TelnetAppModel));
   if (!app)
-    return NULL;
+    return tui_init_result_none(NULL);
 
   memset(app, 0, sizeof(TelnetAppModel));
   app->base.type = TELNET_APP_TYPE_ID;
@@ -35,7 +36,7 @@ TelnetAppModel *telnet_app_create(const TelnetAppConfig *config) {
   app->viewport = tui_viewport_create();
   if (!app->viewport) {
     free(app);
-    return NULL;
+    return tui_init_result_none(NULL);
   }
 
   /* Create textinput child (user input) with multiline support */
@@ -44,7 +45,7 @@ TelnetAppModel *telnet_app_create(const TelnetAppConfig *config) {
   if (!app->textinput) {
     tui_viewport_free(app->viewport);
     free(app);
-    return NULL;
+    return tui_init_result_none(NULL);
   }
   tui_textinput_set_show_dividers(app->textinput, 1);
 
@@ -54,7 +55,7 @@ TelnetAppModel *telnet_app_create(const TelnetAppConfig *config) {
     tui_textinput_free(app->textinput);
     tui_viewport_free(app->viewport);
     free(app);
-    return NULL;
+    return tui_init_result_none(NULL);
   }
 
   /* Configure layout using dynamic height queries */
@@ -71,11 +72,12 @@ TelnetAppModel *telnet_app_create(const TelnetAppConfig *config) {
     tui_textinput_set_word_delimiters(app->textinput, " \t()'`");
   }
 
-  return app;
+  return tui_init_result_none((TuiModel *)app);
 }
 
 /* Free TelnetApp component */
-void telnet_app_free(TelnetAppModel *app) {
+static void telnet_app_free(TuiModel *model) {
+  TelnetAppModel *app = (TelnetAppModel *)model;
   if (!app)
     return;
 
@@ -92,7 +94,8 @@ void telnet_app_free(TelnetAppModel *app) {
 }
 
 /* Update TelnetApp with a message */
-TuiUpdateResult telnet_app_update(TelnetAppModel *app, TuiMsg msg) {
+static TuiUpdateResult telnet_app_update(TuiModel *model, TuiMsg msg) {
+  TelnetAppModel *app = (TelnetAppModel *)model;
   if (!app)
     return tui_update_result_none();
 
@@ -141,7 +144,8 @@ TuiUpdateResult telnet_app_update(TelnetAppModel *app, TuiMsg msg) {
  * Uses absolute cursor positioning for both viewport and textinput.
  * No scroll regions - full software control of rendering.
  */
-void telnet_app_view(const TelnetAppModel *app, DynamicBuffer *out) {
+static void telnet_app_view(const TuiModel *model, DynamicBuffer *out) {
+  const TelnetAppModel *app = (const TelnetAppModel *)model;
   if (!app || !out)
     return;
 
@@ -259,31 +263,12 @@ void telnet_app_page_down(TelnetAppModel *app) {
   }
 }
 
-/* Component interface wrappers */
-static TuiInitResult telnet_app_init_wrapper(void *config) {
-  TuiModel *model =
-      (TuiModel *)telnet_app_create((const TelnetAppConfig *)config);
-  return tui_init_result_none(model);
-}
-
-static TuiUpdateResult telnet_app_update_wrapper(TuiModel *model, TuiMsg msg) {
-  return telnet_app_update((TelnetAppModel *)model, msg);
-}
-
-static void telnet_app_view_wrapper(const TuiModel *model, DynamicBuffer *out) {
-  telnet_app_view((const TelnetAppModel *)model, out);
-}
-
-static void telnet_app_free_wrapper(TuiModel *model) {
-  telnet_app_free((TelnetAppModel *)model);
-}
-
 /* Static component interface instance */
 static const TuiComponent telnet_app_component_instance = {
-    .init = telnet_app_init_wrapper,
-    .update = telnet_app_update_wrapper,
-    .view = telnet_app_view_wrapper,
-    .free = telnet_app_free_wrapper,
+    .init = telnet_app_init,
+    .update = telnet_app_update,
+    .view = telnet_app_view,
+    .free = telnet_app_free,
 };
 
 /* Get component interface for TelnetApp */
