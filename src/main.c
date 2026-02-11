@@ -1,25 +1,17 @@
 /* bloom-telnet - Terminal-based telnet client with Lisp scripting
  *
- * Main entry point implementing a TUI using raw terminal mode,
- * select()-based event loop, and software-based scrolling (Bubbletea-style).
+ * Main entry point. The TUI runtime (bloom-boba) owns the event loop,
+ * raw mode, and signal handling. This file provides callbacks for
+ * telnet I/O, tick timers, resize, and stdin post-processing.
  */
 
-#include <errno.h>
 #include <gc.h>
 #include <getopt.h>
-#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#ifdef _WIN32
-#include <conio.h>
-#include <windows.h>
-#include <winsock2.h>
-#else
-#include <sys/ioctl.h>
-#include <sys/select.h>
-#include <termios.h>
+#ifndef _WIN32
 #include <unistd.h>
 #endif
 
@@ -32,14 +24,12 @@
 #include "telnet_app.h"
 #include <bloom-boba/ansi_sequences.h>
 #include <bloom-boba/cmd.h>
-#include <bloom-boba/dynamic_buffer.h>
-#include <bloom-boba/input_parser.h>
+#include <bloom-boba/runtime.h>
 
 /* Global state */
 static Telnet *g_telnet = NULL;
 static TelnetAppModel *g_app = NULL;
-static TuiInputParser *g_input_parser = NULL;
-static DynamicBuffer *g_render_buf = NULL;
+static TuiRuntime *g_runtime = NULL;
 static int g_connected = 0;
 static int g_quit_requested = 0;
 int g_term_rows = 24;
@@ -53,6 +43,7 @@ static char **g_tab_completions = NULL;
 static int g_tab_count = 0;
 static int g_tab_index = 0;
 static int g_tab_word_start = -1;
+static int g_tab_processed = 0;
 
 static void free_tab_completions(void) {
   if (g_tab_completions) {
@@ -66,120 +57,14 @@ static void free_tab_completions(void) {
   g_tab_word_start = -1;
 }
 
-#ifndef _WIN32
-static struct termios g_orig_termios;
-static int g_raw_mode = 0;
-#endif
-
-/* Event readiness structure for unified event handling */
-typedef struct {
-  int stdin_ready;
-  int socket_ready;
-  int error;
-} EventReadiness;
-
 /* Forward declarations */
 static void cleanup(void);
-static void handle_sigint(int sig);
-static void handle_sigwinch(int sig);
-static int enable_raw_mode(void);
-static void disable_raw_mode(void);
-static void update_terminal_size(void);
 static void update_divider_color(void);
 static void print_usage(const char *progname);
 static void print_version(void);
-static EventReadiness wait_for_events(int socket_fd);
-static int handle_user_input(const char **prompt);
-static int handle_telnet_data(char *recv_buffer, size_t buffer_size,
-                              const char **prompt);
-static void render_full_screen(void);
+static int handle_telnet_data(char *recv_buffer, size_t buffer_size);
 static void echo_to_viewport(const char *text, size_t len);
-
-/* Signal handler for SIGINT (Ctrl+C) */
-static void handle_sigint(int sig) {
-  (void)sig;
-  g_quit_requested = 1;
-}
-
-#ifndef _WIN32
-/* Signal handler for SIGWINCH (terminal resize) */
-static void handle_sigwinch(int sig) {
-  (void)sig;
-  update_terminal_size();
-  if (g_connected && g_telnet) {
-    telnet_set_terminal_size(g_telnet, g_term_cols, g_term_rows);
-  }
-  if (g_app) {
-    telnet_app_set_terminal_size(g_app, g_term_cols, g_term_rows);
-  }
-  /* Re-render on resize */
-  render_full_screen();
-}
-#endif
-
-/* Enable raw terminal mode */
-static int enable_raw_mode(void) {
-#ifdef _WIN32
-  /* Windows: No need to change console mode for basic operation */
-  return 0;
-#else
-  if (g_raw_mode)
-    return 0;
-
-  if (tcgetattr(STDIN_FILENO, &g_orig_termios) < 0) {
-    return -1;
-  }
-
-  struct termios raw = g_orig_termios;
-  /* Input: no break, no CR->NL, no parity check, no strip, no XOFF */
-  raw.c_iflag &= ~(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
-  /* Output: disable post processing (we handle newlines ourselves) */
-  raw.c_oflag &= ~(OPOST);
-  /* Control: 8-bit chars */
-  raw.c_cflag |= (CS8);
-  /* Local: no echo, no canonical mode, no signals, no extended */
-  raw.c_lflag &= ~(ECHO | ICANON | IEXTEN | ISIG);
-  /* Read with timeout */
-  raw.c_cc[VMIN] = 0;
-  raw.c_cc[VTIME] = 1;
-
-  if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) < 0) {
-    return -1;
-  }
-
-  g_raw_mode = 1;
-  return 0;
-#endif
-}
-
-/* Disable raw terminal mode */
-static void disable_raw_mode(void) {
-#ifndef _WIN32
-  if (g_raw_mode) {
-    tcsetattr(STDIN_FILENO, TCSAFLUSH, &g_orig_termios);
-    g_raw_mode = 0;
-  }
-#endif
-}
-
-/* Update terminal size from ioctl */
-static void update_terminal_size(void) {
-#ifdef _WIN32
-  CONSOLE_SCREEN_BUFFER_INFO csbi;
-  if (GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi)) {
-    g_term_cols = csbi.srWindow.Right - csbi.srWindow.Left + 1;
-    g_term_rows = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
-  }
-#else
-  struct winsize ws;
-  if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == 0) {
-    if (ws.ws_col > 0)
-      g_term_cols = ws.ws_col;
-    if (ws.ws_row > 0)
-      g_term_rows = ws.ws_row;
-  }
-#endif
-}
+static void handle_app_cmd(TuiCmd *cmd, void *user_data);
 
 /* Update divider color based on connection status */
 static void update_divider_color(void) {
@@ -204,18 +89,11 @@ static void update_divider_color(void) {
   tui_textinput_set_divider_color(g_textinput, color_buf);
 }
 
-/* Cleanup function called at exit */
+/* Cleanup function called at exit.
+ * tui_runtime_run() handles its own stop/raw-mode restore and also
+ * registers an atexit handler for abnormal exits. */
 static void cleanup(void) {
   free_tab_completions();
-  disable_raw_mode();
-
-  /* Disable kitty keyboard protocol */
-  printf(CSI "<u");
-  /* Disable mouse mode */
-  printf(CSI "?1006l" CSI "?1000l");
-  /* Exit alternate screen buffer (restores original terminal content) */
-  printf(CSI "?1049l");
-  fflush(stdout);
 
   if (g_telnet) {
     if (g_connected) {
@@ -225,19 +103,12 @@ static void cleanup(void) {
     g_telnet = NULL;
   }
 
-  if (g_app) {
-    telnet_app_free(g_app);
-    g_app = NULL;
-  }
+  /* g_app is owned by the runtime — just null our pointer */
+  g_app = NULL;
 
-  if (g_input_parser) {
-    tui_input_parser_free(g_input_parser);
-    g_input_parser = NULL;
-  }
-
-  if (g_render_buf) {
-    dynamic_buffer_destroy(g_render_buf);
-    g_render_buf = NULL;
+  if (g_runtime) {
+    tui_runtime_free(g_runtime);
+    g_runtime = NULL;
   }
 
   lisp_x_cleanup();
@@ -277,79 +148,49 @@ static void print_version(void) {
   printf("bloom-telnet %s\n", BLOOM_TELNET_VERSION);
 }
 
-/* Wait for events on stdin and/or socket */
-static EventReadiness wait_for_events(int socket_fd) {
-  EventReadiness events = {0, 0, 0};
+/* --- Runtime event callbacks --- */
 
-#ifdef _WIN32
-  /* Windows: Use _kbhit() for stdin, select() for socket */
-  if (_kbhit()) {
-    events.stdin_ready = 1;
+/* Return the telnet socket FD for the runtime to poll (-1 if not connected) */
+static int get_telnet_fd(void *user_data) {
+  (void)user_data;
+  return g_connected ? telnet_get_socket(g_telnet) : -1;
+}
+
+/* Called when the telnet socket has data ready */
+static void on_telnet_ready(void *user_data) {
+  (void)user_data;
+  char recv_buffer[4096];
+  handle_telnet_data(recv_buffer, sizeof(recv_buffer));
+}
+
+/* Called every ~100ms tick */
+static void on_tick(void *user_data) {
+  (void)user_data;
+  lisp_x_run_timers();
+}
+
+/* Called after terminal resize (runtime already sent WINDOW_SIZE to component)
+ */
+static void on_resize(int width, int height, void *user_data) {
+  (void)user_data;
+  g_term_cols = width;
+  g_term_rows = height;
+  if (g_connected && g_telnet) {
+    telnet_set_terminal_size(g_telnet, g_term_cols, g_term_rows);
   }
+}
 
-  if (socket_fd >= 0) {
-    fd_set read_fds;
-    struct timeval tv = {0, 0}; /* Zero timeout for non-blocking check */
-
-    FD_ZERO(&read_fds);
-    FD_SET((SOCKET)socket_fd, &read_fds);
-
-    int ready = select(0, &read_fds, NULL, NULL, &tv);
-    if (ready > 0 && FD_ISSET((SOCKET)socket_fd, &read_fds)) {
-      events.socket_ready = 1;
-    }
+/* Called after stdin input is processed through the runtime */
+static void on_stdin_processed(void *user_data) {
+  (void)user_data;
+  if (!g_tab_processed) {
+    free_tab_completions();
   }
-
-  /* If nothing ready, sleep briefly to prevent busy-waiting */
-  if (!events.stdin_ready && !events.socket_ready) {
-    Sleep(10);
-  }
-#else
-  /* Unix: Use select() for both stdin and socket */
-  fd_set read_fds;
-  struct timeval tv;
-  int max_fd = STDIN_FILENO;
-
-  FD_ZERO(&read_fds);
-  FD_SET(STDIN_FILENO, &read_fds);
-
-  if (socket_fd >= 0) {
-    FD_SET(socket_fd, &read_fds);
-    if (socket_fd > max_fd) {
-      max_fd = socket_fd;
-    }
-  }
-
-  /* Timer tick every 100ms */
-  tv.tv_sec = 0;
-  tv.tv_usec = 100000;
-
-  int ready = select(max_fd + 1, &read_fds, NULL, NULL, &tv);
-
-  if (ready < 0) {
-    if (errno == EINTR) {
-      /* Interrupted by signal, not an error */
-      return events;
-    }
-    perror("select");
-    events.error = 1;
-    return events;
-  }
-
-  if (FD_ISSET(STDIN_FILENO, &read_fds)) {
-    events.stdin_ready = 1;
-  }
-
-  if (socket_fd >= 0 && FD_ISSET(socket_fd, &read_fds)) {
-    events.socket_ready = 1;
-  }
-#endif
-
-  return events;
+  g_tab_processed = 0;
 }
 
 /* Process a submitted line */
-static void process_line(const char *line, const char **prompt) {
+static void process_line(const char *line) {
   TuiTextInput *textinput = g_textinput;
   if (line[0] != '\0') {
     tui_textinput_history_add(textinput, line);
@@ -361,6 +202,9 @@ static void process_line(const char *line, const char **prompt) {
     echo_to_viewport("\n", 1);
     process_command(line, g_telnet, &g_connected, &g_quit_requested,
                     g_term_cols, g_term_rows, echo_to_viewport);
+    if (g_quit_requested && g_runtime) {
+      tui_runtime_quit(g_runtime);
+    }
     if (g_connected != was_connected) {
       update_divider_color();
     }
@@ -392,27 +236,8 @@ static void process_line(const char *line, const char **prompt) {
   }
 
   /* Update prompt */
-  *prompt = lisp_x_get_prompt();
-  telnet_app_set_prompt(g_app, *prompt);
-}
-
-/* Render the full screen (viewport + textinput) */
-static void render_full_screen(void) {
-  dynamic_buffer_clear(g_render_buf);
-
-  /* Hide cursor during render to prevent flicker */
-  dynamic_buffer_append_str(g_render_buf, CSI "?25l");
-
-  /* Render viewport and textinput with absolute positioning */
-  telnet_app_view(g_app, g_render_buf);
-
-  /* Show cursor */
-  dynamic_buffer_append_str(g_render_buf, CSI "?25h");
-
-  /* Output all at once */
-  fwrite(dynamic_buffer_data(g_render_buf), 1, dynamic_buffer_len(g_render_buf),
-         stdout);
-  fflush(stdout);
+  const char *prompt = lisp_x_get_prompt();
+  telnet_app_set_prompt(g_app, prompt);
 }
 
 /* Echo callback for terminal-echo builtin */
@@ -422,137 +247,67 @@ static void echo_to_viewport(const char *text, size_t len) {
     telnet_app_echo(g_app, text, len);
 
     /* Re-render full screen */
-    render_full_screen();
+    tui_runtime_flush(g_runtime);
   }
 }
 
-/* Handle user input from stdin. Returns 0 on success, -1 on EOF/quit */
-static int handle_user_input(const char **prompt) {
-  unsigned char buf[256];
-  ssize_t n;
+/* Handle app-level commands from the runtime (LINE_SUBMIT, TAB_COMPLETE) */
+static void handle_app_cmd(TuiCmd *cmd, void *user_data) {
+  (void)user_data;
 
-#ifdef _WIN32
-  /* Windows: Use _getch() for non-blocking input */
-  n = 0;
-  while (_kbhit() && n < sizeof(buf)) {
-    buf[n++] = _getch();
-  }
-#else
-  n = read(STDIN_FILENO, buf, sizeof(buf));
-  if (n <= 0) {
-    if (n == 0 || errno == EAGAIN || errno == EWOULDBLOCK) {
-      return 0; /* No data available */
+  if (cmd->type == TUI_CMD_LINE_SUBMIT) {
+    free_tab_completions();
+    char *text = cmd->payload.line;
+    /* Split multiline input and process each line individually */
+    char *saveptr = NULL;
+    char *line = strtok_r(text, "\n", &saveptr);
+    if (line) {
+      while (line) {
+        process_line(line);
+        line = strtok_r(NULL, "\n", &saveptr);
+      }
+    } else {
+      /* Empty submit */
+      process_line("");
     }
-    /* Error */
-    g_quit_requested = 1;
-    return -1;
-  }
-#endif
+  } else if (cmd->type == TUI_CMD_TAB_COMPLETE) {
+    g_tab_processed = 1;
+    int word_start = cmd->payload.tab_complete.word_start;
 
-  /* Feed bytes to input parser and process messages */
-  for (ssize_t i = 0; i < n; i++) {
-    TuiMsg msg;
-    if (tui_input_parser_feed(g_input_parser, buf[i], &msg)) {
-      /* Handle mouse scroll events */
-      if (msg.type == TUI_MSG_MOUSE) {
-        if (msg.data.mouse.button == TUI_MOUSE_WHEEL_UP) {
-          telnet_app_scroll_up(g_app, 3);
-          render_full_screen();
-          continue;
-        } else if (msg.data.mouse.button == TUI_MOUSE_WHEEL_DOWN) {
-          telnet_app_scroll_down(g_app, 3);
-          render_full_screen();
-          continue;
-        }
-        /* Other mouse events ignored for now */
-        continue;
-      }
+    if (g_tab_completions && g_tab_word_start == word_start) {
+      /* Cycling: advance to next completion */
+      g_tab_index = (g_tab_index + 1) % g_tab_count;
+      tui_textinput_insert_completion(g_textinput, word_start,
+                                      g_tab_completions[g_tab_index]);
+    } else {
+      /* First Tab at this position: fetch completions */
+      free_tab_completions();
+      char *prefix = cmd->payload.tab_complete.prefix;
+      char **completions = lisp_x_complete_prefix(prefix);
 
-      /* Handle PageUp/PageDown keys */
-      if (msg.type == TUI_MSG_KEY_PRESS) {
-        if (msg.data.key.key == TUI_KEY_PAGE_UP) {
-          telnet_app_page_up(g_app);
-          render_full_screen();
-          continue;
-        } else if (msg.data.key.key == TUI_KEY_PAGE_DOWN) {
-          telnet_app_page_down(g_app);
-          render_full_screen();
-          continue;
-        }
-      }
+      if (completions && completions[0]) {
+        int count = 0;
+        while (completions[count])
+          count++;
 
-      /* Route message through TelnetApp */
-      TuiUpdateResult result = telnet_app_update(g_app, msg);
+        g_tab_completions = completions;
+        g_tab_count = count;
+        g_tab_index = 0;
+        g_tab_word_start = word_start;
 
-      /* Check for commands from textinput */
-      if (result.cmd) {
-        if (result.cmd->type == TUI_CMD_LINE_SUBMIT) {
-          free_tab_completions();
-          char *text = result.cmd->payload.line;
-          /* Split multiline input and process each line individually */
-          char *saveptr = NULL;
-          char *line = strtok_r(text, "\n", &saveptr);
-          if (line) {
-            while (line) {
-              process_line(line, prompt);
-              line = strtok_r(NULL, "\n", &saveptr);
-            }
-          } else {
-            /* Empty submit */
-            process_line("", prompt);
-          }
-          tui_cmd_free(result.cmd);
-          render_full_screen();
-        } else if (result.cmd->type == TUI_CMD_TAB_COMPLETE) {
-          int word_start = result.cmd->payload.tab_complete.word_start;
-
-          if (g_tab_completions && g_tab_word_start == word_start) {
-            /* Cycling: advance to next completion */
-            g_tab_index = (g_tab_index + 1) % g_tab_count;
-            tui_textinput_insert_completion(g_textinput, word_start,
-                                            g_tab_completions[g_tab_index]);
-          } else {
-            /* First Tab at this position: fetch completions */
-            free_tab_completions();
-            char *prefix = result.cmd->payload.tab_complete.prefix;
-            char **completions = lisp_x_complete_prefix(prefix);
-
-            if (completions && completions[0]) {
-              int count = 0;
-              while (completions[count])
-                count++;
-
-              g_tab_completions = completions;
-              g_tab_count = count;
-              g_tab_index = 0;
-              g_tab_word_start = word_start;
-
-              tui_textinput_insert_completion(g_textinput, word_start,
-                                              completions[0]);
-            }
-          }
-
-          tui_cmd_free(result.cmd);
-          render_full_screen();
-        } else {
-          free_tab_completions();
-          tui_cmd_free(result.cmd);
-        }
-      } else {
-        /* No command = regular keystroke; invalidate completions */
-        free_tab_completions();
-        render_full_screen();
+        tui_textinput_insert_completion(g_textinput, word_start,
+                                        completions[0]);
       }
     }
+  } else {
+    free_tab_completions();
   }
 
-  return 0;
+  tui_cmd_free(cmd);
 }
 
 /* Handle incoming telnet data. Returns 0 on success, -1 on disconnect */
-static int handle_telnet_data(char *recv_buffer, size_t buffer_size,
-                              const char **prompt) {
-  (void)prompt; /* Unused */
+static int handle_telnet_data(char *recv_buffer, size_t buffer_size) {
   int received = telnet_receive(g_telnet, recv_buffer, buffer_size - 1);
 
   if (received < 0) {
@@ -575,50 +330,15 @@ static int handle_telnet_data(char *recv_buffer, size_t buffer_size,
     telnet_app_echo(g_app, filtered, filtered_len);
 
     /* Re-render full screen */
-    render_full_screen();
+    tui_runtime_flush(g_runtime);
   }
 
   return 0;
 }
 
-/* Main event loop */
-static int run_event_loop(void) {
-  char recv_buffer[4096];
-  const char *prompt = lisp_x_get_prompt();
-
-  /* Enter alternate screen buffer, clear and home cursor */
-  printf(CSI "?1049h" CSI "2J" CSI "H");
-  /* Enable SGR extended mouse mode for scroll wheel support */
-  printf(CSI "?1000h" CSI "?1006h");
-  /* Enable kitty keyboard protocol (progressive enhancement level 1)
-   * for distinguishing Shift+Enter from Enter */
-  printf(CSI ">1u");
-  fflush(stdout);
-  render_full_screen();
-
-  while (!g_quit_requested) {
-    int socket_fd = g_connected ? telnet_get_socket(g_telnet) : -1;
-    EventReadiness events = wait_for_events(socket_fd);
-
-    if (events.error) {
-      break;
-    }
-
-    if (events.stdin_ready) {
-      if (handle_user_input(&prompt) < 0) {
-        break;
-      }
-    }
-
-    if (g_connected && events.socket_ready) {
-      handle_telnet_data(recv_buffer, sizeof(recv_buffer), &prompt);
-    }
-
-    lisp_x_run_timers();
-  }
-
-  return 0;
-}
+/* Main event loop — delegates to tui_runtime_run() which owns
+ * raw mode, signals, and the select() loop. */
+static int run_event_loop(void) { return tui_runtime_run(g_runtime); }
 
 int main(int argc, char *argv[]) {
   const char *hostname = NULL;
@@ -685,15 +405,6 @@ int main(int argc, char *argv[]) {
   /* Register cleanup */
   atexit(cleanup);
 
-  /* Setup signal handlers */
-  signal(SIGINT, handle_sigint);
-#ifndef _WIN32
-  signal(SIGWINCH, handle_sigwinch);
-#endif
-
-  /* Get terminal size */
-  update_terminal_size();
-
   /* Detect terminal capabilities */
   if (termcaps_init() < 0) {
     bloom_log(LOG_WARN, NULL, "Could not detect terminal capabilities");
@@ -715,14 +426,7 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  /* Create input parser */
-  g_input_parser = tui_input_parser_create();
-  if (!g_input_parser) {
-    fprintf(stderr, "Failed to create input parser\n");
-    return 1;
-  }
-
-  /* Create TelnetApp component (composes viewport + textinput) */
+  /* Create TelnetApp via runtime (composes viewport + textinput) */
   TelnetAppConfig app_config = {
       .terminal_width = g_term_cols,
       .terminal_height = g_term_rows,
@@ -730,11 +434,31 @@ int main(int argc, char *argv[]) {
       .show_prompt = 1,
       .history_size = lisp_x_get_input_history_size(),
   };
-  g_app = telnet_app_create(&app_config);
-  if (!g_app) {
-    fprintf(stderr, "Failed to create TelnetApp\n");
+  TuiRuntimeConfig runtime_config = {
+      .use_alternate_screen = 1,
+      .raw_mode = 1,
+      .enable_mouse = 1,
+      .enable_keyboard_enhancement = 1,
+      .output = stdout,
+      .cmd_handler = handle_app_cmd,
+      .cmd_handler_data = NULL,
+      .get_external_fd = get_telnet_fd,
+      .on_external_ready = on_telnet_ready,
+      .on_tick = on_tick,
+      .on_resize = on_resize,
+      .on_stdin_processed = on_stdin_processed,
+      .event_data = NULL,
+  };
+  g_runtime = tui_runtime_create((TuiComponent *)telnet_app_component(),
+                                 &app_config, &runtime_config);
+  if (!g_runtime) {
+    fprintf(stderr, "Failed to create runtime\n");
     return 1;
   }
+  g_app = (TelnetAppModel *)tui_runtime_model(g_runtime);
+
+  /* Register runtime with Lisp extension for terminal control commands */
+  lisp_x_register_runtime(g_runtime);
 
   /* Set initial divider color (gray = disconnected) */
   update_divider_color();
@@ -761,13 +485,6 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  /* Create render buffer */
-  g_render_buf = dynamic_buffer_create(4096);
-  if (!g_render_buf) {
-    fprintf(stderr, "Failed to create render buffer\n");
-    return 1;
-  }
-
   /* Connect if hostname provided */
   if (hostname) {
     char msg[256];
@@ -783,11 +500,6 @@ int main(int argc, char *argv[]) {
       telnet_set_terminal_size(g_telnet, g_term_cols, g_term_rows);
       telnet_app_echo(g_app, "Connected.\n", 11);
     }
-  }
-
-  /* Enable raw mode for terminal */
-  if (enable_raw_mode() < 0) {
-    bloom_log(LOG_WARN, NULL, "Could not enable raw terminal mode");
   }
 
   /* Run main event loop */

@@ -103,9 +103,28 @@ TuiUpdateResult telnet_app_update(TelnetAppModel *app, TuiMsg msg) {
     return tui_update_result_none();
   }
 
+  /* Handle mouse events (scroll wheel) */
+  if (msg.type == TUI_MSG_MOUSE) {
+    if (msg.data.mouse.button == TUI_MOUSE_WHEEL_UP) {
+      telnet_app_scroll_up(app, 3);
+    } else if (msg.data.mouse.button == TUI_MOUSE_WHEEL_DOWN) {
+      telnet_app_scroll_down(app, 3);
+    }
+    return tui_update_result_none();
+  }
+
   /* Route key messages to textinput (it always has focus in this simple model)
    */
   if (msg.type == TUI_MSG_KEY_PRESS) {
+    /* Handle page up/down at app level (viewport scrolling) */
+    if (msg.data.key.key == TUI_KEY_PAGE_UP) {
+      telnet_app_page_up(app);
+      return tui_update_result_none();
+    } else if (msg.data.key.key == TUI_KEY_PAGE_DOWN) {
+      telnet_app_page_down(app);
+      return tui_update_result_none();
+    }
+
     TuiUpdateResult result = tui_textinput_update(app->textinput, msg);
     /* Recalculate layout in case textinput height changed (multiline) */
     telnet_app_set_terminal_size(app, app->terminal_width,

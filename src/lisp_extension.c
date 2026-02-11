@@ -6,8 +6,10 @@
 #include "logging.h"
 #include "path_utils.h"
 #include "session.h"
+#include <bloom-boba/cmd.h>
 #include <bloom-boba/components/statusbar.h>
 #include <bloom-boba/dynamic_buffer.h>
+#include <bloom-boba/runtime.h>
 #include <bloom-lisp/file_utils.h>
 #include <bloom-lisp/lisp.h>
 #include <gc/gc.h>
@@ -24,8 +26,22 @@ static inline int lisp_is_callable(LispObject *obj) {
 /* Registered statusbar pointer for statusbar builtins */
 static TuiStatusBar *registered_statusbar = NULL;
 
+/* Registered runtime for terminal control commands */
+static TuiRuntime *registered_runtime = NULL;
+
 /* Terminal echo callback */
 static TerminalEchoCallback echo_callback = NULL;
+
+/* Update terminal window title to "bloom-telnet - session_name" */
+static void update_terminal_title(void) {
+  if (!registered_runtime)
+    return;
+  Session *s = session_get_current();
+  const char *name = s ? s->name : "default";
+  char title[256];
+  snprintf(title, sizeof(title), "bloom-telnet - %s", name);
+  tui_runtime_exec(registered_runtime, tui_cmd_set_window_title(title));
+}
 
 /* ========================================================================
  * Hook storage helpers — hooks are stored in a *hooks* hash table
@@ -772,6 +788,7 @@ static LispObject *builtin_session_switch(LispObject *args, Environment *env) {
   }
 
   session_set_current(s);
+  update_terminal_title();
   return LISP_TRUE;
 }
 
@@ -1242,6 +1259,7 @@ void lisp_x_cleanup(void) {
   }
 
   registered_statusbar = NULL;
+  registered_runtime = NULL;
 
   /* Cleanup all sessions and base environment */
   session_manager_cleanup();
@@ -1522,6 +1540,7 @@ void lisp_x_load_init(void) {
     return;
   }
   session_set_current(s);
+  update_terminal_title();
 
   /* Give the default session its own *hooks* table */
   LispObject *hooks_table = lisp_make_hash_table();
@@ -1661,4 +1680,9 @@ char **lisp_x_complete_prefix(const char *prefix) {
 /* Register terminal echo callback */
 void lisp_x_register_echo_callback(TerminalEchoCallback callback) {
   echo_callback = callback;
+}
+
+/* Register runtime for terminal control commands */
+void lisp_x_register_runtime(TuiRuntime *runtime) {
+  registered_runtime = runtime;
 }

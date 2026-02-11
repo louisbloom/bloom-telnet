@@ -80,4 +80,10 @@ typedef void (*TerminalEchoCallback)(const char *text, size_t len);
 /* Register terminal echo callback for terminal-echo builtin */
 void lisp_x_register_echo_callback(TerminalEchoCallback callback);
 
+/* Forward declaration for TuiRuntime type */
+struct TuiRuntime;
+
+/* Register runtime for terminal control commands (e.g. window title) */
+void lisp_x_register_runtime(struct TuiRuntime *runtime);
+
 #endif /* BLOOM_TELNET_LISP_H */
