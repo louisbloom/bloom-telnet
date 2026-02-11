@@ -66,7 +66,7 @@
 
 ;; Helper to reset completion store for testing
 (defun reset-completion-store (capacity)
-  (set! *completion-trie* (make-hash-table))
+  (set! *completion-trie* (cons nil (make-hash-table)))
   (set! *completion-words* (make-hash-table))
   (set! *completion-seq* 0)
   (set! *completion-word-store-size* capacity)
@@ -268,13 +268,13 @@
 (trie-remove! *completion-trie* "cat")
 ;; "c" -> "a" path should still exist for "car"
 (let ((node (trie-walk-to *completion-trie* "car")))
-  (assert-true (not (null? (hash-ref node "*")))
+  (assert-true (not (null? (car node)))
    "car still in trie after removing cat"))
 (assert-true (null? (trie-walk-to *completion-trie* "cat"))
  "cat path removed from trie")
 ;; Remove car too — now trie should be empty
 (trie-remove! *completion-trie* "car")
-(assert-equal (length (hash-keys *completion-trie*)) 0
+(assert-equal (length (hash-keys (cdr *completion-trie*))) 0
  "trie is empty after removing all words")
 
 ;; Restore defaults

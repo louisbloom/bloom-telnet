@@ -170,13 +170,12 @@ static void apply_default_hooks_to_table(LispObject *hooks_table) {
           priority = (int)prio_obj->value.integer;
         }
 
-        const char *name = name_obj->value.string;
-        struct HashEntry *he = hash_table_get_entry(hooks_table, name);
+        struct HashEntry *he = hash_table_get_entry(hooks_table, name_obj);
         LispObject *hook_list = (he && he->value) ? he->value : NIL;
 
         if (!hooks_has_fn(hook_list, fn)) {
           hook_list = hooks_insert_sorted(fn, priority, hook_list);
-          hash_table_set_entry(hooks_table, name, hook_list);
+          hash_table_set_entry(hooks_table, name_obj, hook_list);
         }
       }
     }
@@ -908,8 +907,7 @@ static LispObject *builtin_add_hook(LispObject *args, Environment *env) {
     return NIL;
   }
 
-  const char *name = name_obj->value.symbol->name;
-  struct HashEntry *he = hash_table_get_entry(hooks_table, name);
+  struct HashEntry *he = hash_table_get_entry(hooks_table, name_obj);
   LispObject *hook_list = (he && he->value) ? he->value : NIL;
 
   if (hooks_has_fn(hook_list, fn_obj)) {
@@ -917,7 +915,7 @@ static LispObject *builtin_add_hook(LispObject *args, Environment *env) {
   }
 
   hook_list = hooks_insert_sorted(fn_obj, priority, hook_list);
-  hash_table_set_entry(hooks_table, name, hook_list);
+  hash_table_set_entry(hooks_table, name_obj, hook_list);
   return NIL;
 }
 
@@ -949,14 +947,13 @@ static LispObject *builtin_remove_hook(LispObject *args, Environment *env) {
     return lisp_make_error("remove-hook: no current session");
   }
 
-  const char *name = name_obj->value.symbol->name;
-  struct HashEntry *he = hash_table_get_entry(hooks_table, name);
+  struct HashEntry *he = hash_table_get_entry(hooks_table, name_obj);
   if (!he || !he->value || he->value == NIL) {
     return NIL;
   }
 
   LispObject *new_list = hooks_remove_fn(he->value, fn_obj);
-  hash_table_set_entry(hooks_table, name, new_list);
+  hash_table_set_entry(hooks_table, name_obj, new_list);
   return NIL;
 }
 
@@ -979,7 +976,7 @@ static LispObject *builtin_run_hook(LispObject *args, Environment *env) {
   }
 
   const char *name = name_obj->value.symbol->name;
-  struct HashEntry *he = hash_table_get_entry(hooks_table, name);
+  struct HashEntry *he = hash_table_get_entry(hooks_table, name_obj);
   if (!he || !he->value || he->value == NIL) {
     return NIL;
   }
@@ -1029,7 +1026,7 @@ static LispObject *builtin_run_filter_hook(LispObject *args, Environment *env) {
   }
 
   const char *name = name_obj->value.symbol->name;
-  struct HashEntry *he = hash_table_get_entry(hooks_table, name);
+  struct HashEntry *he = hash_table_get_entry(hooks_table, name_obj);
   if (!he || !he->value || he->value == NIL) {
     return value;
   }

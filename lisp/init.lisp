@@ -16,8 +16,10 @@
 (defvar *completion-max-results* 64
   "Maximum number of completion candidates to return per prefix.")
 
-;; Initialize trie root (hash table used as prefix tree)
-(define *completion-trie* (make-hash-table))
+;; Initialize trie root — each node is (leaf . children-hash).
+;; Leaf data is in car (nil if not a terminal), children in cdr (hash table).
+;; This structurally separates leaf data from child keys — no sentinel needed.
+(define *completion-trie* (cons nil (make-hash-table)))
 
 ;; Flat hash for O(1) duplicate detection: lowercase -> (original seq slot trie-node)
 ;; The trie-node reference allows O(1) leaf updates on duplicates.
@@ -109,26 +111,38 @@
   (termcap 'fg-color (car rgb) (car (cdr rgb)) (car (cdr (cdr rgb)))))
 
 ;; ============================================================================
-;; WORD EXTRACTION PATTERN
+;; WORD EXTRACTION (string port scanner)
 ;; ============================================================================
-;; Matches 3+ character sequences excluding whitespace and common punctuation.
-;; Replaces the old regex-split + trim-punctuation + filter pipeline.
-(define *word-extract-pattern* "[^\\s.,;:!?()\\[\\]{}'\"-]{3,}")
+;; Characters that break words (whitespace handled separately via char-whitespace?)
+(define *word-break-chars* ".,;:!?()[]{}'\"-")
+
+(defun word-break-char? (c)
+  "Return #t if character is a word boundary (whitespace or punctuation)."
+  (or (char-whitespace? c) (string-index *word-break-chars* (char->string c))))
 
 ;; ============================================================================
 ;; TRIE FUNCTIONS
 ;; ============================================================================
+;; Each trie node is (leaf . children-hash):
+;;   car = leaf data (nil if not a terminal node, else (word seq slot))
+;;   cdr = hash table mapping single-char strings to child nodes
+;; Leaf data is structurally separate from child keys — no sentinel collision.
+(defun trie-make-node ()
+  "Create a new trie node with no leaf and no children."
+  (cons nil (make-hash-table)))
+
 (defun trie-insert! (root word leaf-data)
   "Insert word into trie. Returns the terminal node."
   (let ((node root)
         (len (length word)))
     (do ((i 0 (+ i 1))) ((>= i len))
       (let* ((ch (substring word i (+ i 1)))
-             (child (hash-ref node ch)))
-        (when (null? child) (set! child (make-hash-table))
-          (hash-set! node ch child))
+             (children (cdr node))
+             (child (hash-ref children ch)))
+        (when (null? child) (set! child (trie-make-node))
+          (hash-set! children ch child))
         (set! node child)))
-    (hash-set! node "*" leaf-data)
+    (set-car! node leaf-data)
     node))
 
 (defun trie-remove! (root word)
@@ -142,7 +156,7 @@
             (found #t))
         ;; Walk to terminal node
         (do ((i 0 (+ i 1))) ((or (>= i len) (not found)))
-          (let ((child (hash-ref node (substring word i (+ i 1)))))
+          (let ((child (hash-ref (cdr node) (substring word i (+ i 1)))))
             (if (null? child)
               (set! found #f)
               (progn
@@ -152,17 +166,19 @@
                 (set! node child)))))
         (if (not found)
           #f
-          (if (null? (hash-ref node "*"))
+          (if (null? (car node))
             #f
-            (progn (hash-remove! node "*")
+            (progn (set-car! node nil)
               ;; Prune empty nodes bottom-up
               (do ((remaining path (cdr remaining))) ((null? remaining))
                 (let* ((pair (car remaining))
                        (parent (car pair))
                        (key (cdr pair))
-                       (child (hash-ref parent key)))
-                  (when (and child (= (length (hash-keys child)) 0))
-                    (hash-remove! parent key))))
+                       (child (hash-ref (cdr parent) key)))
+                  (when
+                    (and child (null? (car child))
+                         (= (length (hash-keys (cdr child))) 0))
+                    (hash-remove! (cdr parent) key))))
               #t)))))))
 
 (defun trie-walk-to (root prefix)
@@ -171,19 +187,18 @@
         (len (length prefix))
         (found #t))
     (do ((i 0 (+ i 1))) ((or (>= i len) (not found)))
-      (let ((child (hash-ref node (substring prefix i (+ i 1)))))
+      (let ((child (hash-ref (cdr node) (substring prefix i (+ i 1)))))
         (if (null? child) (set! found #f) (set! node child))))
     (if found node nil)))
 
 (defun trie-collect (node)
   "DFS collect all leaf entries under node."
   (let ((acc '()))
-    (let ((leaf (hash-ref node "*"))) (when leaf (set! acc (cons leaf acc))))
-    (let ((keys (hash-keys node)))
+    (let ((leaf (car node))) (when leaf (set! acc (cons leaf acc))))
+    (let ((keys (hash-keys (cdr node))))
       (do ((remaining keys (cdr remaining))) ((null? remaining) acc)
-        (let ((key (car remaining)))
-          (when (not (string=? key "*"))
-            (set! acc (append (trie-collect (hash-ref node key)) acc))))))))
+        (set! acc
+         (append (trie-collect (hash-ref (cdr node) (car remaining))) acc))))))
 
 (defun merge-sort-by-seq-desc (lst)
   "Merge sort list of entries by seq number (index 1) descending."
@@ -246,7 +261,7 @@
           (if existing
             ;; DUPLICATE: update cached trie node directly (O(1), no trie walk)
             (let ((trie-node (list-ref existing 3)))
-              (hash-set! trie-node "*" leaf)
+              (set-car! trie-node leaf)
               (hash-set! *completion-words* lower
                (list word *completion-seq* slot trie-node)))
             ;; NEW WORD: walk trie once, cache the terminal node
@@ -283,16 +298,31 @@
   "Maximum text length for word collection. Texts longer than this are truncated.")
 
 (defun collect-words-from-text (text)
-  "Extract words from text and add them to completion store."
+  "Extract words from text and add them to completion store.
+   Scans character-by-character using string ports for O(1) access."
   (if (not (string? text))
     ()
-    (let ((input
-           (if (> (length text) *collect-words-max-length*)
-             (substring text 0 *collect-words-max-length*)
-             text)))
-      (let ((words (regex-find-all *word-extract-pattern* input)))
-        (do ((remaining words (cdr remaining))) ((null? remaining))
-          (add-word-to-store (car remaining)))))))
+    (let* ((input
+            (if (> (length text) *collect-words-max-length*)
+              (substring text 0 *collect-words-max-length*)
+              text))
+           (port (open-input-string input))
+           (src (port-source port))
+           (word-start -1))
+      (do () ((port-eof? port))
+        (let ((c (port-read-char port))
+              (pos (- (port-position port) 1)))
+          (if (word-break-char? c)
+            (when (>= word-start 0)
+              (when (>= (- pos word-start) 3)
+                (add-word-to-store (substring src word-start pos)))
+              (set! word-start -1))
+            (when (< word-start 0) (set! word-start pos)))))
+      ;; Flush trailing word
+      (when (>= word-start 0)
+        (let ((end (port-position port)))
+          (when (>= (- end word-start) 3)
+            (add-word-to-store (substring src word-start end))))))))
 
 ;; ============================================================================
 ;; HOOK WRAPPER FUNCTIONS
