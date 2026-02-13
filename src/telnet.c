@@ -107,7 +107,7 @@ static int telnet_open_log(Telnet *t, const char *log_dir) {
   }
 
   /* Check if logging is enabled via Lisp variable */
-  LispObject *enable_logging = env_lookup_sym(
+  LispObject *enable_logging = env_lookup(
       lisp_env, lisp_intern("*enable-telnet-logging*")->value.symbol);
   if (!enable_logging || enable_logging == NIL ||
       !lisp_is_truthy(enable_logging)) {
@@ -306,7 +306,7 @@ int telnet_connect(Telnet *t, const char *hostname, int port) {
   /* Enable TCP keepalive if configured via Lisp variable */
   Environment *keepalive_env = (Environment *)lisp_x_get_environment();
   if (keepalive_env) {
-    LispObject *enable_keepalive = env_lookup_sym(
+    LispObject *enable_keepalive = env_lookup(
         keepalive_env, lisp_intern("*tcp-keepalive-enabled*")->value.symbol);
     if (enable_keepalive && enable_keepalive != NIL &&
         lisp_is_truthy(enable_keepalive)) {
@@ -315,13 +315,13 @@ int telnet_connect(Telnet *t, const char *hostname, int port) {
       int keepalive_time = 60;
       int keepalive_interval = 10;
 
-      LispObject *time_obj = env_lookup_sym(
+      LispObject *time_obj = env_lookup(
           keepalive_env, lisp_intern("*tcp-keepalive-time*")->value.symbol);
       if (time_obj && time_obj->type == LISP_INTEGER) {
         keepalive_time = (int)time_obj->value.integer;
       }
 
-      LispObject *interval_obj = env_lookup_sym(
+      LispObject *interval_obj = env_lookup(
           keepalive_env, lisp_intern("*tcp-keepalive-interval*")->value.symbol);
       if (interval_obj && interval_obj->type == LISP_INTEGER) {
         keepalive_interval = (int)interval_obj->value.integer;
@@ -404,7 +404,7 @@ int telnet_connect(Telnet *t, const char *hostname, int port) {
   Environment *lisp_env = (Environment *)lisp_x_get_environment();
   const char *log_dir = "~/telnet-logs";
   if (lisp_env) {
-    LispObject *log_dir_obj = env_lookup_sym(
+    LispObject *log_dir_obj = env_lookup(
         lisp_env, lisp_intern("*telnet-log-directory*")->value.symbol);
     if (log_dir_obj && log_dir_obj->type == LISP_STRING) {
       log_dir = log_dir_obj->value.string;

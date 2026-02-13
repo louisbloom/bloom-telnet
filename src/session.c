@@ -73,7 +73,7 @@ Session *session_create(const char *name) {
 
   s->id = next_session_id++;
   s->name = GC_strdup(name ? name : "unnamed");
-  s->env = env_create_session(base_env);
+  s->env = env_create_user(base_env);
   s->telnet = NULL;
   s->connected = 0;
 

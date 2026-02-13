@@ -55,8 +55,7 @@ static LispObject *get_session_hooks(void) {
   if (!s || !s->env) {
     return NULL;
   }
-  LispObject *hooks =
-      env_lookup_sym(s->env, lisp_intern("*hooks*")->value.symbol);
+  LispObject *hooks = env_lookup(s->env, lisp_intern("*hooks*")->value.symbol);
   if (!hooks || hooks->type != LISP_HASH_TABLE) {
     return NULL;
   }
@@ -150,7 +149,7 @@ static void apply_default_hooks_to_table(LispObject *hooks_table) {
     return;
   }
   LispObject *defaults =
-      env_lookup_sym(base, lisp_intern("*default-hooks*")->value.symbol);
+      env_lookup(base, lisp_intern("*default-hooks*")->value.symbol);
   if (!defaults || defaults == NIL) {
     return;
   }
@@ -720,7 +719,8 @@ static LispObject *builtin_session_create(LispObject *args, Environment *env) {
 
   /* Give new session its own *hooks* table and populate from defaults */
   LispObject *hooks_table = lisp_make_hash_table();
-  env_define_sym(s->env, lisp_intern("*hooks*")->value.symbol, hooks_table);
+  env_define(s->env, lisp_intern("*hooks*")->value.symbol, hooks_table,
+             pkg_user);
   apply_default_hooks_to_table(hooks_table);
 
   /* Echo creation message to terminal */
@@ -894,7 +894,7 @@ static LispObject *builtin_add_hook(LispObject *args, Environment *env) {
       return lisp_make_error("add-hook: no base environment");
     }
     Symbol *default_hooks_sym = lisp_intern("*default-hooks*")->value.symbol;
-    LispObject *defaults = env_lookup_sym(base, default_hooks_sym);
+    LispObject *defaults = env_lookup(base, default_hooks_sym);
     if (!defaults) {
       defaults = NIL;
     }
@@ -903,7 +903,7 @@ static LispObject *builtin_add_hook(LispObject *args, Environment *env) {
         lisp_make_cons(fn_obj, lisp_make_integer(priority));
     LispObject *triple = lisp_make_cons(name_str, fn_and_prio);
     defaults = lisp_make_cons(triple, defaults);
-    env_set_sym(base, default_hooks_sym, defaults);
+    env_set(base, default_hooks_sym, defaults);
     return NIL;
   }
 
@@ -1058,8 +1058,8 @@ static LispObject *builtin_run_filter_hook(LispObject *args, Environment *env) {
 
 /* Helper: register a builtin using interned symbol */
 #define REG(name, func)                                                        \
-  env_define_sym(env, lisp_intern(name)->value.symbol,                         \
-                 lisp_make_builtin(func, name))
+  env_define(env, lisp_intern(name)->value.symbol,                             \
+             lisp_make_builtin(func, name), pkg_core)
 
 /* Register all builtins on the given environment */
 static void register_builtins(Environment *env) {
@@ -1194,17 +1194,34 @@ int lisp_x_init(void) {
   register_builtins(base_env);
 
   /* Version string accessible from Lisp */
-  env_define_sym(base_env, lisp_intern("*version*")->value.symbol,
-                 lisp_make_string(BLOOM_TELNET_VERSION));
+  env_define(base_env, lisp_intern("*version*")->value.symbol,
+             lisp_make_string(BLOOM_TELNET_VERSION), pkg_core);
 
   /* Initialize *default-hooks* in base env (collects hooks registered
    * during init.lisp before any session exists) */
-  env_define_sym(base_env, lisp_intern("*default-hooks*")->value.symbol, NIL);
+  env_define(base_env, lisp_intern("*default-hooks*")->value.symbol, NIL,
+             pkg_core);
 
   /* Default session is created later in lisp_x_load_init() once the
    * TUI is ready, so echo_callback can display the creation message */
 
   return 0;
+}
+
+/* Derive package name from filepath: strip directory and .lisp extension */
+static const char *derive_package_name(const char *filepath, char *buf,
+                                       size_t bufsize) {
+  const char *base = strrchr(filepath, '/');
+  base = base ? base + 1 : filepath;
+
+  const char *dot = strrchr(base, '.');
+  size_t len = dot ? (size_t)(dot - base) : strlen(base);
+  if (len >= bufsize)
+    len = bufsize - 1;
+
+  memcpy(buf, base, len);
+  buf[len] = '\0';
+  return buf;
 }
 
 /* Load additional Lisp file into the current session environment */
@@ -1214,19 +1231,35 @@ int lisp_x_load_file(const char *filepath) {
     return -1;
   }
 
+  /* Derive package name from filename and set *package* */
+  char pkg_name[256];
+  derive_package_name(filepath, pkg_name, sizeof(pkg_name));
+  LispObject *saved_pkg = env_lookup(env, sym_star_package_star->value.symbol);
+  env_set(env, sym_star_package_star->value.symbol, lisp_intern(pkg_name));
+
+  int ret;
+
   /* If path is absolute, load directly */
   if (path_is_absolute(filepath)) {
     LispObject *result = lisp_load_file(filepath, env);
     if (result && result->type == LISP_ERROR) {
       char *err_str = lisp_print(result);
       bloom_log(LOG_ERROR, "lisp", "Error loading %s: %s", filepath, err_str);
-      return -1;
+      ret = -1;
+    } else {
+      ret = 0;
     }
-    return 0;
+  } else {
+    /* Try standard search paths */
+    ret = load_lisp_system_file(filepath, env) ? 0 : -1;
   }
 
-  /* Try standard search paths */
-  return load_lisp_system_file(filepath, env) ? 0 : -1;
+  /* Restore *package* */
+  if (saved_pkg) {
+    env_set(env, sym_star_package_star->value.symbol, saved_pkg);
+  }
+
+  return ret;
 }
 
 /* Cleanup Lisp interpreter */
@@ -1280,7 +1313,7 @@ void lisp_x_call_telnet_input_hook(const char *text, size_t len) {
   }
 
   LispObject *hook =
-      env_lookup_sym(env, lisp_intern("telnet-input-hook")->value.symbol);
+      env_lookup(env, lisp_intern("telnet-input-hook")->value.symbol);
   if (!lisp_is_callable(hook)) {
     bloom_log(LOG_DEBUG, "hooks", "input-hook: hook not found or wrong type");
     return;
@@ -1313,7 +1346,7 @@ void lisp_x_run_timers(void) {
   if (!env)
     return;
 
-  LispObject *fn = env_lookup_sym(env, lisp_intern("run-timers")->value.symbol);
+  LispObject *fn = env_lookup(env, lisp_intern("run-timers")->value.symbol);
   if (!lisp_is_callable(fn))
     return;
 
@@ -1338,8 +1371,8 @@ const char *lisp_x_call_telnet_input_filter_hook(const char *text, size_t len,
     return text;
   }
 
-  LispObject *hook = env_lookup_sym(
-      env, lisp_intern("telnet-input-filter-hook")->value.symbol);
+  LispObject *hook =
+      env_lookup(env, lisp_intern("telnet-input-filter-hook")->value.symbol);
   if (!lisp_is_callable(hook)) {
     *out_len = len;
     return text;
@@ -1402,7 +1435,7 @@ const char *lisp_x_call_user_input_hook(const char *text, int cursor_pos) {
   }
 
   LispObject *hook =
-      env_lookup_sym(env, lisp_intern("user-input-hook")->value.symbol);
+      env_lookup(env, lisp_intern("user-input-hook")->value.symbol);
   if (!lisp_is_callable(hook)) {
     return text;
   }
@@ -1459,7 +1492,7 @@ int lisp_x_get_input_history_size(void) {
   }
 
   LispObject *value =
-      env_lookup_sym(env, lisp_intern("*input-history-size*")->value.symbol);
+      env_lookup(env, lisp_intern("*input-history-size*")->value.symbol);
   if (value && value->type == LISP_INTEGER) {
     int size = (int)value->value.integer;
     if (size > 0) {
@@ -1541,7 +1574,8 @@ void lisp_x_load_init(void) {
 
   /* Give the default session its own *hooks* table */
   LispObject *hooks_table = lisp_make_hash_table();
-  env_define_sym(s->env, lisp_intern("*hooks*")->value.symbol, hooks_table);
+  env_define(s->env, lisp_intern("*hooks*")->value.symbol, hooks_table,
+             pkg_user);
 
   /* Echo creation message to terminal */
   char msg[256];
@@ -1565,8 +1599,7 @@ const char *lisp_x_get_prompt(void) {
     return "> ";
   }
 
-  LispObject *value =
-      env_lookup_sym(env, lisp_intern("*prompt*")->value.symbol);
+  LispObject *value = env_lookup(env, lisp_intern("*prompt*")->value.symbol);
   if (value && value->type == LISP_STRING) {
     return value->value.string;
   }
@@ -1579,7 +1612,7 @@ int lisp_x_get_color(const char *var_name, int *r, int *g, int *b) {
   if (!env || !var_name || !r || !g || !b)
     return -1;
 
-  LispObject *val = env_lookup_sym(env, lisp_intern(var_name)->value.symbol);
+  LispObject *val = env_lookup(env, lisp_intern(var_name)->value.symbol);
   if (!val || val->type != LISP_CONS)
     return -1;
 
@@ -1613,7 +1646,7 @@ char **lisp_x_complete_prefix(const char *prefix) {
 
   /* Look up completion-hook */
   LispObject *hook =
-      env_lookup_sym(env, lisp_intern("completion-hook")->value.symbol);
+      env_lookup(env, lisp_intern("completion-hook")->value.symbol);
   if (!lisp_is_callable(hook)) {
     bloom_log(LOG_DEBUG, "completion", "hook not found or wrong type");
     return NULL;

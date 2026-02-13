@@ -30,8 +30,11 @@ AM_TESTS_ENVIRONMENT = \
 
 EXTRA_DIST = \
     run-test.sh \
+    run-bench.sh \
     test-helpers.lisp \
     test-loader.lisp \
+    bench-completion.lisp \
+    bench-trie-insert.lisp \
     tintin-colors.lisp \
     tintin-patterns.lisp \
     tintin-parsing.lisp \
