@@ -473,6 +473,9 @@ int main(int argc, char *argv[]) {
    * (needs terminal-echo, termcap, etc.) */
   lisp_x_load_init();
 
+  /* Update prompt now that init.lisp has set *prompt* */
+  telnet_app_set_prompt(g_app, lisp_x_get_prompt());
+
   /* Register telnet with the default session (must be after session creation)
    */
   lisp_x_register_telnet(g_telnet);
