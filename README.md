@@ -8,7 +8,7 @@ A terminal-based telnet client with Lisp scripting support, designed for MUD gam
 - TUI interface with readline-style input, history, and tab completion cycling
 - Lisp scripting via bloom-lisp integration
 - TinTin++ compatible MUD scripting (`#alias`, `#action`, `#highlight`, `#var`, `#if`/`#else`/`#elseif`)
-- Multi-session support with per-session Lisp environments and hook registries
+- Multi-session support with per-session hook registries and telnet connections
 - ANSI color support with truecolor detection
 - Statusbar with mode display and notifications
 - Speedwalk shorthand (e.g., `3n2e` expands to `n;n;n;e;e`)
@@ -89,7 +89,9 @@ When loaded with `--load tintin.lisp`, you get TinTin++ style commands at the pr
 
 ## Sessions
 
-bloom-telnet supports multiple sessions, each with its own Lisp environment and telnet connection. A default session is created on startup. Manage sessions via `:eval` or from Lisp scripts:
+bloom-telnet supports multiple sessions, each with its own telnet connection and hook registry. A default session is created on startup. All sessions share a single Lisp environment (the base environment loaded from `init.lisp`), so variables and functions are global. Hooks registered during `init.lisp` are automatically applied to each new session.
+
+Manage sessions via `:eval` or from Lisp scripts:
 
 ```lisp
 ;; Create a new session
@@ -113,13 +115,11 @@ bloom-telnet supports multiple sessions, each with its own Lisp environment and 
 (telnet-session-destroy 2)
 ```
 
-Each session has an isolated Lisp environment — variables, aliases, actions, and hooks defined in one session do not affect others. The base environment (builtins and `init.lisp` definitions) is shared across all sessions.
+Each session has its own hook registry — hooks added via `add-hook` apply only to the current session. The Lisp environment (variables, functions, macros) is shared across all sessions.
 
-### Saving and Restoring Sessions
+### Saving and Restoring
 
-There are two ways to save session state, depending on what you want to preserve:
-
-**TinTin++ state** (`#save` / `#load`) — saves aliases, actions, highlights, variables, and settings. This is the right choice for most MUD players:
+`#save` / `#load` saves and restores TinTin++ state — aliases, actions, highlights, variables, and settings:
 
 ```
 #save {~/my-mud}              Save TinTin++ state to ~/my-mud
@@ -127,15 +127,6 @@ There are two ways to save session state, depending on what you want to preserve
 ```
 
 The saved file contains `hash-set!` calls that repopulate the alias, action, highlight, and variable tables. Settings like speedwalk mode are also included. Loading merges into the current session — existing entries with the same keys are overwritten, but other entries are kept.
-
-**Full Lisp environment** (`session-save`) — saves every user-defined binding in the current session's Lisp environment (variables, functions, macros) as a loadable Lisp file:
-
-```lisp
-(session-save "~/my-session.lisp")   ; Save current session bindings
-(load "~/my-session.lisp")           ; Restore into any session
-```
-
-The saved file contains `define` and `defmacro` forms for each binding. Non-serializable values like file handles are skipped. This captures more than `#save` — all Lisp-level state, not just TinTin++ tables. Telnet connection state is not included.
 
 ## Lisp Scripting
 
@@ -172,10 +163,10 @@ The hook system (C builtins: `add-hook`, `remove-hook`, `run-hook`, `run-filter-
 - `contrib/practice.lisp` — practice mode automation for Carrion Fields
 - `contrib/spell-translator.lisp` — translate ROM 2.4 garbled spell utterances
 
+## Authors
+
+Thomas Christensen
+
 ## License
 
 MIT License - see [LICENSE](LICENSE) for details.
-
-## Author
-
-Thomas Christensen <thomasc1971@hotmail.com>
