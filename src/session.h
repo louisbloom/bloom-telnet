@@ -19,10 +19,10 @@ typedef struct Session {
   int connected;
 } Session;
 
-/* Initialize the session manager: create base env, register builtins,
- * load init.lisp. Must be called before any other session functions.
+/* Initialize the session manager with the given base environment.
+ * Must be called before any other session functions.
  * Returns 0 on success, -1 on failure. */
-int session_manager_init(void);
+int session_manager_init(Environment *env);
 
 /* Cleanup all sessions and the base environment */
 void session_manager_cleanup(void);

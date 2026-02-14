@@ -1156,19 +1156,18 @@ static void register_builtins(Environment *env) {
 
 /* Initialize Lisp interpreter and environment */
 int lisp_x_init(void) {
-  if (lisp_init() < 0) {
+  Environment *base_env = lisp_init();
+  if (!base_env) {
     bloom_log(LOG_ERROR, "lisp", "Failed to initialize Lisp interpreter");
     return -1;
   }
 
-  /* Create base environment via session manager */
-  if (session_manager_init() < 0) {
+  /* Initialize session manager with base environment */
+  if (session_manager_init(base_env) < 0) {
     bloom_log(LOG_ERROR, "lisp", "Failed to initialize session manager");
     lisp_cleanup();
     return -1;
   }
-
-  Environment *base_env = session_get_base_env();
 
   /* Allocate static buffers */
   ansi_strip_buffer_size = 4096;

@@ -14,16 +14,18 @@ static int session_count_val = 0;
 static Session *current_session = NULL;
 static int next_session_id = 1;
 
-int session_manager_init(void) {
+int session_manager_init(Environment *env) {
   if (base_env) {
     return 0; /* Already initialized */
   }
 
-  base_env = env_create_global();
-  if (!base_env) {
-    bloom_log(LOG_ERROR, "session", "Failed to create base environment");
+  if (!env) {
+    bloom_log(LOG_ERROR, "session",
+              "NULL environment passed to session_manager_init");
     return -1;
   }
+
+  base_env = env;
 
   memset(sessions, 0, sizeof(sessions));
   session_count_val = 0;
@@ -46,10 +48,7 @@ void session_manager_cleanup(void) {
   session_count_val = 0;
   current_session = NULL;
 
-  if (base_env) {
-    env_free(base_env);
-    base_env = NULL;
-  }
+  base_env = NULL; /* Owned by caller */
 }
 
 Environment *session_get_base_env(void) { return base_env; }
@@ -73,7 +72,11 @@ Session *session_create(const char *name) {
 
   s->id = next_session_id++;
   s->name = GC_strdup(name ? name : "unnamed");
-  s->env = env_create_user(base_env);
+  s->env = env_create(base_env);
+  s->env->call_stack = base_env->call_stack;
+  s->env->handler_stack = base_env->handler_stack;
+  env_define(s->env, sym_star_package_star->value.symbol, lisp_intern("user"),
+             pkg_core);
   s->telnet = NULL;
   s->connected = 0;
 
