@@ -133,18 +133,17 @@ The saved file contains `hash-set!` calls that repopulate the alias, action, hig
 Under the hood, everything is Lisp. TinTin++ commands are sugar over Lisp data structures — aliases, actions, highlights, and variables all live in hash tables in the Lisp environment. You can script directly in Lisp for more power:
 
 ```lisp
-;; React to server text with pattern matching
-(action "^(\\w+) attacks you"
-  (lambda (mob)
-    (if (string=? mob "dragon")
-      "flee"
-      (string-append "kill " mob))))
+;; Add an action trigger via the hash table directly
+(hash-set! *tintin-actions* "%0 arrives." '("look" 5))
 
-;; Custom tab completion
-(add-hook 'completion-hook
-  (lambda (prefix)
-    (filter (lambda (w) (string-prefix? prefix w))
-            '("north" "south" "east" "west"))))
+;; React to server text with a hook
+(add-hook 'telnet-input-hook
+  (lambda (text)
+    (if (string-contains? text "You are hungry")
+      (telnet-send "eat bread"))))
+
+;; Add a custom word to tab completion
+(add-word-to-store "cast 'magic missile'")
 ```
 
 ### Hooks
