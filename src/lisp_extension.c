@@ -49,17 +49,13 @@ static void update_terminal_title(void) {
  * Value = sorted list of (fn . priority) cons cells.
  * ======================================================================== */
 
-/* Get the *hooks* hash table from the current session's env, or NULL */
+/* Get the *hooks* hash table from the current session's C struct, or NULL */
 static LispObject *get_session_hooks(void) {
   Session *s = session_get_current();
-  if (!s || !s->env) {
+  if (!s || !s->hooks || s->hooks->type != LISP_HASH_TABLE) {
     return NULL;
   }
-  LispObject *hooks = env_lookup(s->env, lisp_intern("*hooks*")->value.symbol);
-  if (!hooks || hooks->type != LISP_HASH_TABLE) {
-    return NULL;
-  }
-  return hooks;
+  return s->hooks;
 }
 
 /* Check if fn already exists in a hook entry list (by pointer identity) */
@@ -195,14 +191,8 @@ static size_t telnet_filter_temp_buffer_size = 0;
 static char *user_input_hook_buffer = NULL;
 static size_t user_input_hook_buffer_size = 0;
 
-/* Helper: get the current session's environment, falling back to base env */
-static Environment *get_current_env(void) {
-  Session *s = session_get_current();
-  if (s && s->env) {
-    return s->env;
-  }
-  return session_get_base_env();
-}
+/* Helper: get the environment for Lisp evaluation (always base env) */
+static Environment *get_current_env(void) { return session_get_base_env(); }
 
 /* Utility function to ensure a buffer is large enough */
 static int ensure_buffer_size(char **buffer, size_t *buffer_size,
@@ -717,11 +707,8 @@ static LispObject *builtin_session_create(LispObject *args, Environment *env) {
     return lisp_make_error("telnet-session-create: failed to create session");
   }
 
-  /* Give new session its own *hooks* table and populate from defaults */
-  LispObject *hooks_table = lisp_make_hash_table();
-  env_define(s->env, lisp_intern("*hooks*")->value.symbol, hooks_table,
-             pkg_user);
-  apply_default_hooks_to_table(hooks_table);
+  /* Populate session's hooks table from defaults */
+  apply_default_hooks_to_table(s->hooks);
 
   /* Echo creation message to terminal */
   char msg[256];
@@ -1512,7 +1499,7 @@ void lisp_x_register_telnet(Telnet *t) {
 /* Register statusbar instance */
 void lisp_x_register_statusbar(TuiStatusBar *sb) { registered_statusbar = sb; }
 
-/* Get lisp environment (current session's env) */
+/* Get lisp environment (base env, shared across all sessions) */
 void *lisp_x_get_environment(void) { return get_current_env(); }
 
 /* Evaluate Lisp code and echo results */
@@ -1571,11 +1558,6 @@ void lisp_x_load_init(void) {
   session_set_current(s);
   update_terminal_title();
 
-  /* Give the default session its own *hooks* table */
-  LispObject *hooks_table = lisp_make_hash_table();
-  env_define(s->env, lisp_intern("*hooks*")->value.symbol, hooks_table,
-             pkg_user);
-
   /* Echo creation message to terminal */
   char msg[256];
   snprintf(msg, sizeof(msg), "Created session %d: \"%s\"\r\n", s->id, s->name);
@@ -1587,8 +1569,9 @@ void lisp_x_load_init(void) {
   Environment *base_env = session_get_base_env();
   load_lisp_system_file("init.lisp", base_env);
 
-  /* Apply default hooks (registered during init.lisp) to current session */
-  apply_default_hooks_to_table(hooks_table);
+  /* Apply default hooks (registered during init.lisp) to session's hooks table
+   */
+  apply_default_hooks_to_table(s->hooks);
 }
 
 /* Get prompt string from Lisp config */

@@ -1,8 +1,9 @@
 /* Session management for bloom-telnet
  *
- * A Session wraps a child Lisp environment (inheriting from a shared base env)
- * and an optional telnet connection. The base env holds builtins and init.lisp
- * definitions; each session env holds user-created bindings.
+ * A Session holds a per-session hooks hash table and an optional telnet
+ * connection. All Lisp evaluation uses the shared base environment; sessions
+ * provide hook isolation (each session has its own set of registered hooks)
+ * while sharing Lisp state with soft package boundaries.
  */
 
 #ifndef SESSION_H
@@ -14,8 +15,8 @@
 typedef struct Session {
   int id;
   char *name;
-  Environment *env; /* Child of base_env — user state lives here */
-  Telnet *telnet;   /* Telnet connection (can be NULL) */
+  LispObject *hooks; /* Per-session hooks hash table */
+  Telnet *telnet;    /* Telnet connection (can be NULL) */
   int connected;
 } Session;
 
@@ -30,7 +31,7 @@ void session_manager_cleanup(void);
 /* Get the shared base environment (builtins + init.lisp) */
 Environment *session_get_base_env(void);
 
-/* Create a new session with a child environment. Returns the session,
+/* Create a new session with a hooks table. Returns the session,
  * or NULL on failure. The session is automatically added to the manager. */
 Session *session_create(const char *name);
 

@@ -72,17 +72,9 @@ Session *session_create(const char *name) {
 
   s->id = next_session_id++;
   s->name = GC_strdup(name ? name : "unnamed");
-  s->env = env_create(base_env);
-  s->env->call_stack = base_env->call_stack;
-  s->env->handler_stack = base_env->handler_stack;
-  env_define(s->env, sym_star_package_star->value.symbol, lisp_intern("user"),
-             pkg_core);
+  s->hooks = lisp_make_hash_table();
   s->telnet = NULL;
   s->connected = 0;
-
-  if (!s->env) {
-    return NULL;
-  }
 
   sessions[session_count_val++] = s;
 
