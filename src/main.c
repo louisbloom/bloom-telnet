@@ -476,6 +476,12 @@ int main(int argc, char *argv[]) {
   /* Update prompt now that init.lisp has set *prompt* */
   telnet_app_set_prompt(g_app, lisp_x_get_prompt());
 
+  /* Set word chars from Lisp *word-chars* (single source of truth) */
+  const char *word_chars = lisp_x_get_word_chars();
+  if (word_chars) {
+    tui_textinput_set_word_chars(g_textinput, word_chars);
+  }
+
   /* Register telnet with the default session (must be after session creation)
    */
   lisp_x_register_telnet(g_telnet);

@@ -69,7 +69,6 @@ static TuiInitResult telnet_app_init(void *cfg) {
     if (config->history_size > 0) {
       tui_textinput_set_history_size(app->textinput, config->history_size);
     }
-    tui_textinput_set_word_delimiters(app->textinput, " \t()'`");
   }
 
   return tui_init_result_none((TuiModel *)app);

@@ -1,11 +1,10 @@
 (load "tests/test-helpers.lisp")
 
-;; Word break characters and scanner (from init.lisp)
-(define *word-break-chars* ".,;:!?()[]{}'\"-")
+;; Word character set (whitelist, from init.lisp)
+(define *word-chars* "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_-")
 
-(defun word-break-char? (c)
-  (or (char-whitespace? c)
-      (string-index *word-break-chars* (char->string c))))
+(defun word-char? (c)
+  (string-index *word-chars* (char->string c)))
 
 ;; Standalone extract-words for testing (same logic as collect-words-from-text
 ;; but returns a list instead of calling add-word-to-store)
@@ -19,13 +18,13 @@
       (do () ((port-eof? port))
         (let ((c (port-read-char port))
               (pos (- (port-position port) 1)))
-          (if (word-break-char? c)
+          (if (word-char? c)
+            (when (< word-start 0)
+              (set! word-start pos))
             (when (>= word-start 0)
               (when (>= (- pos word-start) 3)
                 (set! result (cons (substring src word-start pos) result)))
-              (set! word-start -1))
-            (when (< word-start 0)
-              (set! word-start pos)))))
+              (set! word-start -1)))))
       ;; Flush trailing word
       (when (>= word-start 0)
         (let ((end (port-position port)))
@@ -74,9 +73,12 @@
 (print "Test 6 passed: punctuation stripped")
 
 ;; Test 7: Mixed content with ASCII art
+;; With whitelist, $ and ! are non-word chars, so "HMM$$$$W" splits into "HMM" (3 chars collected)
+;; and "W" (1 char, excluded). Numbers and special chars break words.
 (define art-text "<!X!!!!HMM$$$$W. The Carrion Fields")
 (define art-words (extract-words art-text))
 (print art-words)
+(assert-true (member? "HMM" art-words) "HMM in results")
 (assert-true (member? "The" art-words) "The in results")
 (assert-true (member? "Carrion" art-words) "Carrion in results")
 (assert-true (member? "Fields" art-words) "Fields in results")
@@ -96,13 +98,15 @@
 (print "Test 10 passed: tabs and newlines")
 
 ;; Test 11: Full welcome screen from carrionfields.net
+;; With whitelist, "Playerkilling/Roleplaying" splits on '/' into two words
 (define full-text "                          ::x.\r\n                    <!X!!!!HMM$$$$W.\r\n               ---!H8MMH?M$$$$$$$$$8X.\r\n              -<!!!MMM$$$$$$$$$$$$$$$$X!:           The Carrion Fields\r\n            !----!!M?M$$$$$$$$$$$$$$$$MM!!<\r\n          '<M!  !!!MMM$$$$$$$$$$$$$$$MMMX!X!\r\n           !M!--!!!MMM$$$$$$$$$$$$$$$MMM!X$!    A Playerkilling/Roleplaying\r\n           -!8!:!!!MMMMM$$$$$$$$$$$$RMMMX8RX-               MUD\r\nBy what name do you wish to be mourned? ")
 (define full-words (extract-words full-text))
 (print full-words)
 (assert-true (member? "mourned" full-words) "mourned in full text")
 (assert-true (member? "Carrion" full-words) "Carrion in full text")
 (assert-true (member? "Fields" full-words) "Fields in full text")
-(assert-true (member? "Playerkilling/Roleplaying" full-words) "compound word preserved")
+(assert-true (member? "Playerkilling" full-words) "Playerkilling in full text")
+(assert-true (member? "Roleplaying" full-words) "Roleplaying in full text")
 (print "Test 11 passed: full welcome screen")
 
 (print "All word scan tests passed!")

@@ -1574,6 +1574,19 @@ void lisp_x_load_init(void) {
   apply_default_hooks_to_table(s->hooks);
 }
 
+/* Get word-chars string from Lisp config */
+const char *lisp_x_get_word_chars(void) {
+  Environment *env = get_current_env();
+  if (!env)
+    return NULL;
+
+  LispObject *value =
+      env_lookup(env, lisp_intern("*word-chars*")->value.symbol);
+  if (value && value->type == LISP_STRING)
+    return value->value.string;
+  return NULL;
+}
+
 /* Get prompt string from Lisp config */
 const char *lisp_x_get_prompt(void) {
   Environment *env = get_current_env();

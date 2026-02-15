@@ -61,13 +61,16 @@
    "completion-hook 'm' includes mourned"))
 
 ;; ============================================================================
-;; '*' in words is safe — cons-cell trie has no sentinel collision
+;; '*' splits words — whitelist only allows letters, underscore, hyphen
 ;; ============================================================================
 (reset-completion-store 50000)
 (collect-words-from-text "hello*world")
 (let ((results (get-completions-from-store "h")))
-  (assert-equal (length results) 1 "hello*world stored as one word")
-  (assert-equal (car results) "hello*world" "word contains *"))
+  (assert-equal (length results) 1 "hello stored as word")
+  (assert-equal (car results) "hello" "hello split from hello*world"))
+(let ((results (get-completions-from-store "w")))
+  (assert-equal (length results) 1 "world stored as word")
+  (assert-equal (car results) "world" "world split from hello*world"))
 
 ;; ============================================================================
 ;; Direct trie test: add-word-to-store with '*' in word still works

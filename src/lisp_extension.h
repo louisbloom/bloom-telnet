@@ -62,6 +62,9 @@ int lisp_x_eval_and_echo(const char *code, DynamicBuffer *buf);
  * terminal-echo, script-echo, termcap etc. work during loading. */
 void lisp_x_load_init(void);
 
+/* Get word-chars string from Lisp *word-chars* (NULL if not set) */
+const char *lisp_x_get_word_chars(void);
+
 /* Get prompt string from Lisp config (default: "> ") */
 const char *lisp_x_get_prompt(void);
 

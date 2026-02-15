@@ -111,14 +111,14 @@
   (termcap 'fg-color (car rgb) (car (cdr rgb)) (car (cdr (cdr rgb)))))
 
 ;; ============================================================================
-;; WORD EXTRACTION (string port scanner)
+;; WORD CHARACTER SET (whitelist)
 ;; ============================================================================
-;; Characters that break words (whitespace handled separately via char-whitespace?)
-(define *word-break-chars* ".,;:!?()[]{}'\"-")
+(defvar *word-chars* "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_-"
+  "Characters that form words for completion and word movement.")
 
-(defun word-break-char? (c)
-  "Return #t if character is a word boundary (whitespace or punctuation)."
-  (or (char-whitespace? c) (string-index *word-break-chars* (char->string c))))
+(defun word-char? (c)
+  "Return #t if character is part of a word."
+  (string-index *word-chars* (char->string c)))
 
 ;; ============================================================================
 ;; TRIE FUNCTIONS
@@ -312,12 +312,12 @@
       (do () ((port-eof? port))
         (let ((c (port-read-char port))
               (pos (- (port-position port) 1)))
-          (if (word-break-char? c)
+          (if (word-char? c)
+            (when (< word-start 0) (set! word-start pos))
             (when (>= word-start 0)
               (when (>= (- pos word-start) 3)
                 (add-word-to-store (substring src word-start pos)))
-              (set! word-start -1))
-            (when (< word-start 0) (set! word-start pos)))))
+              (set! word-start -1)))))
       ;; Flush trailing word
       (when (>= word-start 0)
         (let ((end (port-position port)))
