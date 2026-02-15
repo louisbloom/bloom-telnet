@@ -1,57 +1,38 @@
-;; tests/practice.lisp - Tests for practice mode multiline commands
+;; tests/practice.lisp - Tests for practice mode
 (load "tests/test-helpers.lisp")
-
-(defvar *sent-commands* '() "Commands sent via practice-send-one")
 
 ;; Load practice.lisp (will use our mocks)
 (load "lisp/contrib/practice.lisp")
 
-;; Override practice-send-one to capture sent commands
-(defun practice-send-one (cmd)
-  "Mock: capture command instead of sending"
-  (set! *sent-commands* (append *sent-commands* (list cmd))))
-
-(defun reset-sent-commands ()
-  (set! *sent-commands* '()))
-
 ;; ============================================================================
-;; practice-send - multiline command splitting
+;; practice-send - delegates to send-input
 ;; ============================================================================
 
-;; Single command (no semicolon)
-(reset-sent-commands)
+;; Single command
+(set! *sent-inputs* '())
 (practice-send "cast fireball")
-(assert-equal *sent-commands* '("cast fireball")
-  "practice-send single command")
+(assert-equal *sent-inputs* '("cast fireball")
+  "practice-send passes command to send-input")
 
-;; Two commands separated by semicolon
-(reset-sent-commands)
+;; Multiline command (semicolons preserved for input pipeline to handle)
+(set! *sent-inputs* '())
 (practice-send "cast heal;cast armor")
-(assert-equal *sent-commands* '("cast heal" "cast armor")
-  "practice-send two commands")
+(assert-equal *sent-inputs* '("cast heal;cast armor")
+  "practice-send preserves semicolons for input pipeline")
 
-;; Three commands
-(reset-sent-commands)
-(practice-send "c heal;c armor;c bless")
-(assert-equal *sent-commands* '("c heal" "c armor" "c bless")
-  "practice-send three commands")
+;; ============================================================================
+;; practice-command? - /practice prefix matching
+;; ============================================================================
 
-;; Commands with spaces around semicolon
-(reset-sent-commands)
-(practice-send "cast heal ; cast armor")
-(assert-equal *sent-commands* '("cast heal" "cast armor")
-  "practice-send trims whitespace")
-
-;; Empty parts should be skipped
-(reset-sent-commands)
-(practice-send "cast heal;;cast armor")
-(assert-equal *sent-commands* '("cast heal" "cast armor")
-  "practice-send skips empty parts")
-
-;; Leading/trailing semicolons
-(reset-sent-commands)
-(practice-send ";cast heal;")
-(assert-equal *sent-commands* '("cast heal")
-  "practice-send handles leading/trailing semicolons")
+(assert-equal (practice-command? "/p stop") "stop"
+  "/p stop returns args")
+(assert-equal (practice-command? "/practice stop") "stop"
+  "/practice stop returns args")
+(assert-equal (practice-command? "/pr c heal") "c heal"
+  "/pr with args returns args")
+(assert-equal (practice-command? "/p") ""
+  "/p alone returns empty string")
+(assert-nil (practice-command? "hello") "/practice rejects non-slash input")
+(assert-nil (practice-command? "/pizza") "/pizza is not a practice command")
 
 (print "All practice.lisp tests passed!")

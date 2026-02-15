@@ -8,7 +8,6 @@
 ;; Usage:
 ;;   :load practice.lisp       ; Load the script
 ;;   /p c lightb               ; Start practicing (or /practice, /pr, etc.)
-;;   /p c heal;c armor         ; Multiline: ';' separates commands (TinTin++ style)
 ;;   /p stop                   ; Stop practice mode
 ;;   /p                        ; Show current status
 ;;
@@ -70,18 +69,9 @@
   "Echo a practice status message to the terminal."
   (terminal-echo (concat "\r\n\033[36m[Practice]\033[0m " msg "\r\n")))
 
-(defun practice-send-one (cmd)
-  "Send a single command to telnet with echo."
-  ;; Echo the command in cyan (same color as [Practice] tag)
-  (terminal-echo (concat "\033[36m" cmd "\033[0m\r\n"))
-  ;; Send to server
-  (telnet-send cmd))
-
 (defun practice-send (cmd)
-  "Send command(s) to telnet. Splits on ';' (TinTin++ style) for multiline."
-  (do ((parts (string-split cmd ";") (cdr parts))) ((null? parts))
-    (let ((trimmed (string-trim (car parts))))
-      (when (> (length trimmed) 0) (practice-send-one trimmed)))))
+  "Send command through the input pipeline (handles multiline, aliases, etc.)."
+  (send-input cmd))
 
 (defun practice-extract-mana (text)
   "Extract mana percentage from prompt text. Returns number or nil."
@@ -255,8 +245,8 @@
 ;; ============================================================================
 ;; INITIALIZATION MESSAGE
 ;; ============================================================================
-(script-echo "Practice mode" :section
- "Usage\n/p <command> | /p stop | /p (status)" :section
- "Features\nMultiline: use ';' to separate commands\nRetries on failure\nSleeps when mana low, wakes at 100%\nQuits on hunger/thirst damage"
+(script-echo "Practice mode" :section "Usage\n/p <command> | /p stop | /p"
+ :section
+ "Features\nRetries on failure\nSleeps when mana low, wakes at 100%\nQuits on hunger/thirst damage"
  :section "Config\n(practice-add-retry-pattern \"pattern\")")
 

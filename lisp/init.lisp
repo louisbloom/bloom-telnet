@@ -500,13 +500,10 @@ Colors: header=pale pink, desc=pale cyan, section=lavender, details=slate blue"
     (do ((rest args (cdr rest))) ((null? rest))
       (let ((item (car rest)))
         (cond
-          ((eq? item :desc)
-           (set! rest (cdr rest))
+          ((eq? item :desc) (set! rest (cdr rest))
            (when rest (set! desc (car rest))))
-          ((eq? item :section)
-           (set! rest (cdr rest))
-           (when rest
-             (set! sections (cons (car rest) sections)))))))
+          ((eq? item :section) (set! rest (cdr rest))
+           (when rest (set! sections (cons (car rest) sections)))))))
     (set! sections (reverse sections))
     ;; Output header line
     (terminal-echo (concat c-header title reset))
@@ -523,8 +520,7 @@ Colors: header=pale pink, desc=pale cyan, section=lavender, details=slate blue"
           (progn
             (terminal-echo (concat "  " c-section (car lines) reset "\r\n"))
             (do ((dlist (cdr lines) (cdr dlist))) ((null? dlist))
-              (terminal-echo
-               (concat "    " c-detail (car dlist) reset "\r\n")))))))))
+              (terminal-echo (concat "    " c-detail (car dlist) reset "\r\n")))))))))
 
 ;; ============================================================================
 ;; STATUSBAR MODE REGISTRY
@@ -649,7 +645,6 @@ Colors: header=pale pink, desc=pale cyan, section=lavender, details=slate blue"
          (if (and (string? encoding) (not (string=? encoding "ASCII")))
            (concat sep encoding)
            ""))))
-  (script-echo (concat "bloom-telnet " *version*)
-   :desc ":help for commands"
+  (script-echo (concat "bloom-telnet " *version*) :desc ":help for commands"
    :section (concat "Terminal\n" term-info)))
 
