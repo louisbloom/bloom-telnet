@@ -26,6 +26,9 @@
 ;; App-level mocks for C builtins
 (defun terminal-echo (msg) nil)
 (defun telnet-send (msg) nil)
+(defvar *sent-inputs* '())
+(defun send-input (text)
+  (set! *sent-inputs* (append *sent-inputs* (list text))))
 (defun script-echo (title &rest args) nil)
 (defun run-at-time (delay repeat func) nil)
 (defun cancel-timer (timer) nil)

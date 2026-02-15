@@ -1048,11 +1048,47 @@ static LispObject *builtin_run_filter_hook(LispObject *args, Environment *env) {
   env_define(env, lisp_intern(name)->value.symbol,                             \
              lisp_make_builtin(func, name), pkg_core)
 
+/* Callback for send-input: process text through user-input-hook and send */
+static TuiMsg send_input_callback(void *data) {
+  char *text = (char *)data;
+  Session *s = session_get_current();
+  if (s && s->telnet) {
+    const char *processed = lisp_x_call_user_input_hook(text, strlen(text));
+    if (processed) {
+      telnet_send_with_crlf(s->telnet, processed, strlen(processed));
+    }
+  }
+  return tui_msg_none();
+}
+
+/* Builtin: send-input - Queue text for processing through the input pipeline.
+ * Async: returns immediately, event loop processes on next iteration.
+ * Does NOT affect text input history or state. */
+static LispObject *builtin_send_input(LispObject *args, Environment *env) {
+  (void)env;
+  if (args == NIL)
+    return lisp_make_error("send-input requires a string argument");
+  LispObject *text_obj = lisp_car(args);
+  if (!text_obj || text_obj->type != LISP_STRING)
+    return lisp_make_error("send-input: argument must be a string");
+  if (!registered_runtime)
+    return lisp_make_error("send-input: no runtime registered");
+
+  char *text = strdup(text_obj->value.string);
+  if (!text)
+    return lisp_make_error("send-input: out of memory");
+
+  tui_runtime_schedule(registered_runtime,
+                       tui_cmd_custom(send_input_callback, text, free));
+  return NIL;
+}
+
 /* Register all builtins on the given environment */
 static void register_builtins(Environment *env) {
   REG("strip-ansi", builtin_strip_ansi);
   REG("terminal-echo", builtin_terminal_echo);
   REG("telnet-send", builtin_telnet_send);
+  REG("send-input", builtin_send_input);
 
   /* Terminal capability builtin */
   lisp_set_docstring(
