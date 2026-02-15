@@ -34,6 +34,7 @@
 (defun cancel-timer (timer) nil)
 (defun statusbar-mode-set (sym text prio) nil)
 (defun statusbar-mode-remove (sym) nil)
+(defun strip-ansi (text) text)
 
 ;; ============================================================================
 ;; Hook System Mock (backed by *hooks* hash table, matches C implementation)

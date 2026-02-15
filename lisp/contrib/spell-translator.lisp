@@ -112,7 +112,8 @@
 (defun spell-remove-known (word)
   "Remove a known spell word: (spell-remove-known \"word\")"
   (let ((before (length *known-spell-words*)))
-    (set! *known-spell-words* (filter (lambda (w) (not (string=? w word))) *known-spell-words*))
+    (set! *known-spell-words*
+     (filter (lambda (w) (not (string=? w word))) *known-spell-words*))
     (if (< (length *known-spell-words*) before)
       (terminal-echo (concat "Removed known word: " word))
       (terminal-echo (concat "Not found: " word)))
@@ -247,5 +248,6 @@
 ;; Startup message
 (script-echo "Spell translator active" :section
  "Commands\n(spell-add \"garbled\" \"correct\")\n(spell-remove \"garbled\")\n(spell-add-known \"word\")\n(spell-remove-known \"word\")"
- :section "Data\n*spell-dictionary* — garbled word overrides\n*known-spell-words* — words that skip translation")
+ :section
+ "Data\n*spell-dictionary* — garbled word overrides\n*known-spell-words* — words that skip translation")
 
