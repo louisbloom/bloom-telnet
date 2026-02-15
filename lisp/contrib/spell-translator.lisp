@@ -101,15 +101,28 @@
 (hash-set! *spell-dictionary* "izoahuzz" "negative") ; negatiee → negative
 (hash-set! *spell-dictionary* "saguhuzz" "positive") ; pasitiee → positive
 
+;; Add a known spell word (skips translation when seen)
+(defun spell-add-known (word)
+  "Add a known spell word: (spell-add-known \"word\")"
+  (set! *known-spell-words* (cons word *known-spell-words*))
+  (terminal-echo (concat "Added known word: " word))
+  word)
+
+;; Remove a known spell word
+(defun spell-remove-known (word)
+  "Remove a known spell word: (spell-remove-known \"word\")"
+  (let ((before (length *known-spell-words*)))
+    (set! *known-spell-words* (filter (lambda (w) (not (string=? w word))) *known-spell-words*))
+    (if (< (length *known-spell-words*) before)
+      (terminal-echo (concat "Removed known word: " word))
+      (terminal-echo (concat "Not found: " word)))
+    word))
+
 ;; Add a custom word override
 (defun spell-add (garbled correct)
   "Add a dictionary override: (spell-add \"garbled\" \"correct\")"
   (hash-set! *spell-dictionary* garbled correct)
-  (princ "Added: ")
-  (princ garbled)
-  (princ " -> ")
-  (princ correct)
-  (terpri)
+  (terminal-echo (concat "Added: " garbled " -> " correct))
   correct)
 
 ;; Remove a word override
@@ -233,5 +246,6 @@
 
 ;; Startup message
 (script-echo "Spell translator active" :section
- "Commands\n(spell-add \"garbled\" \"correct\")\n(spell-remove \"garbled\")")
+ "Commands\n(spell-add \"garbled\" \"correct\")\n(spell-remove \"garbled\")\n(spell-add-known \"word\")\n(spell-remove-known \"word\")"
+ :section "Data\n*spell-dictionary* — garbled word overrides\n*known-spell-words* — words that skip translation")
 
