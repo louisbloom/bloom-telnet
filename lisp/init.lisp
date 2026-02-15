@@ -477,13 +477,15 @@
 (defun script-echo (title &rest args)
   "Print a styled script startup banner with optional description and sections.
 
+Each keyword takes exactly one string argument. Use newlines for multiline content.
+
 Usage:
   (script-echo \"Title\")
   (script-echo \"Title\" :desc \"short description\")
   (script-echo \"Title\"
     :desc \"description\"
-    :section \"Usage\" \"cmd1\" \"cmd2\"
-    :section \"Features\" \"feature1\" \"feature2\")
+    :section \"Usage\\ncmd1\\ncmd2\"
+    :section \"Features\\nfeature1\\nfeature2\")
 
 Colors: header=pale pink, desc=pale cyan, section=lavender, details=slate blue"
   (let ((c-header (color->fg *color-script-header*))
@@ -493,31 +495,18 @@ Colors: header=pale pink, desc=pale cyan, section=lavender, details=slate blue"
         (c-mdash (color->fg *color-script-mdash*))
         (reset (termcap 'reset))
         (desc nil)
-        (sections nil)
-        (current-section nil))
-    ;; Parse args: extract :desc and :section markers
+        (sections nil))
+    ;; Parse args: each keyword takes exactly one string argument
     (do ((rest args (cdr rest))) ((null? rest))
       (let ((item (car rest)))
         (cond
-          ((eq? item :desc) (set! rest (cdr rest))
+          ((eq? item :desc)
+           (set! rest (cdr rest))
            (when rest (set! desc (car rest))))
           ((eq? item :section)
-           ;; Save previous section if any
-           (when current-section
-             (set! sections (cons (reverse current-section) sections)))
-           ;; Start new section with title
            (set! rest (cdr rest))
-           (set! current-section (if rest (list (car rest)) nil)))
-          (current-section
-           ;; Add to current section's details
-           (set! current-section (cons item current-section)))
-          (#t
-           ;; Backward compat: plain strings become anonymous section details
-           (unless current-section (set! current-section '()))
-           (set! current-section (cons item current-section))))))
-    ;; Save final section
-    (when current-section
-      (set! sections (cons (reverse current-section) sections)))
+           (when rest
+             (set! sections (cons (car rest) sections)))))))
     (set! sections (reverse sections))
     ;; Output header line
     (terminal-echo (concat c-header title reset))
@@ -525,21 +514,17 @@ Colors: header=pale pink, desc=pale cyan, section=lavender, details=slate blue"
     (terminal-echo "\r\n")
     ;; Output sections
     (do ((slist sections (cdr slist))) ((null? slist))
-      (let ((section (car slist)))
-        (when section
-          (let ((sec-title (car section))
-                (details (cdr section)))
-            ;; Section title (if it looks like a title, not just a detail)
-            (when (and sec-title (or details (not (null? (cdr sections)))))
-              (terminal-echo (concat "  " c-section sec-title reset "\r\n")))
-            ;; Section details
-            (if details
-              (do ((dlist details (cdr dlist))) ((null? dlist))
-                (terminal-echo
-                 (concat "    " c-detail (car dlist) reset "\r\n")))
-              ;; Single item section (backward compat): treat title as detail
-              (when (and sec-title (null? details) (null? (cdr sections)))
-                (terminal-echo (concat "  " c-detail sec-title reset "\r\n"))))))))))
+      (let* ((text (car slist))
+             (lines (string-split text "\n")))
+        (if (null? (cdr lines))
+          ;; Single line section: render as detail
+          (terminal-echo (concat "  " c-detail (car lines) reset "\r\n"))
+          ;; Multi-line: first line is title, rest are details
+          (progn
+            (terminal-echo (concat "  " c-section (car lines) reset "\r\n"))
+            (do ((dlist (cdr lines) (cdr dlist))) ((null? dlist))
+              (terminal-echo
+               (concat "    " c-detail (car dlist) reset "\r\n")))))))))
 
 ;; ============================================================================
 ;; STATUSBAR MODE REGISTRY
@@ -664,6 +649,7 @@ Colors: header=pale pink, desc=pale cyan, section=lavender, details=slate blue"
          (if (and (string? encoding) (not (string=? encoding "ASCII")))
            (concat sep encoding)
            ""))))
-  (script-echo (concat "bloom-telnet " *version*) :desc ":help for commands"
-   :section "Terminal" term-info))
+  (script-echo (concat "bloom-telnet " *version*)
+   :desc ":help for commands"
+   :section (concat "Terminal\n" term-info)))
 

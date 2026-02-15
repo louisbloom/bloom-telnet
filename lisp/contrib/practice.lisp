@@ -255,9 +255,8 @@
 ;; ============================================================================
 ;; INITIALIZATION MESSAGE
 ;; ============================================================================
-(script-echo "Practice mode" :section "Usage"
- "/p <command> | /p stop | /p (status)" :section "Features"
- "Multiline: use ';' to separate commands" "Retries on failure"
- "Sleeps when mana low, wakes at 100%" "Quits on hunger/thirst damage" :section
- "Config" "(practice-add-retry-pattern \"pattern\")")
+(script-echo "Practice mode" :section
+ "Usage\n/p <command> | /p stop | /p (status)" :section
+ "Features\nMultiline: use ';' to separate commands\nRetries on failure\nSleeps when mana low, wakes at 100%\nQuits on hunger/thirst damage"
+ :section "Config\n(practice-add-retry-pattern \"pattern\")")
 

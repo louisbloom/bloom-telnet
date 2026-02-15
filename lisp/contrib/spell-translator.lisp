@@ -232,6 +232,6 @@
 (add-hook 'telnet-input-filter-hook spell-translator-filter)
 
 ;; Startup message
-(script-echo "Spell translator active" :section "Commands"
- "(spell-add \"garbled\" \"correct\")" "(spell-remove \"garbled\")")
+(script-echo "Spell translator active" :section
+ "Commands\n(spell-add \"garbled\" \"correct\")\n(spell-remove \"garbled\")")
 

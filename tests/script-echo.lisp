@@ -72,11 +72,11 @@
     "Description has cyan color"))
 
 ;; ============================================================================
-;; Test: Title with single section
+;; Test: Title with single section (multiline string)
 ;; ============================================================================
 (reset-output)
 (script-echo "My Script"
-  :section "Usage" "command1" "command2")
+  :section "Usage\ncommand1\ncommand2")
 (let ((out (get-output)))
   (assert-true (contains? out "[fg:189,147,249]Usage[reset]")
     "Section title has lavender color")
@@ -91,9 +91,9 @@
 (reset-output)
 (script-echo "My Script"
   :desc "description"
-  :section "Usage" "cmd1"
-  :section "Features" "feat1" "feat2"
-  :section "Config" "cfg1")
+  :section "Usage\ncmd1"
+  :section "Features\nfeat1\nfeat2"
+  :section "Config\ncfg1")
 (let ((out (get-output)))
   (assert-true (contains? out "Usage") "Has Usage section")
   (assert-true (contains? out "Features") "Has Features section")
@@ -104,36 +104,22 @@
   (assert-true (contains? out "cfg1") "Has cfg1 detail"))
 
 ;; ============================================================================
-;; Test: Backward compatibility - plain strings without keywords
+;; Test: Simple title (no sections)
 ;; ============================================================================
 (reset-output)
 (script-echo "TinTin++ active")
 (let ((out (get-output)))
   (assert-true (contains? out "[fg:255,177,182]TinTin++ active[reset]")
-    "Simple title backward compat"))
+    "Simple title renders"))
 
 ;; ============================================================================
-;; Test: Backward compatibility - title with detail lines (old style)
-;; ============================================================================
-(reset-output)
-(script-echo "Old Style" "detail line 1" "detail line 2")
-(let ((out (get-output)))
-  (assert-true (contains? out "[fg:255,177,182]Old Style[reset]")
-    "Old style shows header")
-  (assert-true (contains? out "detail line 1")
-    "Old style shows detail 1")
-  (assert-true (contains? out "detail line 2")
-    "Old style shows detail 2"))
-
-;; ============================================================================
-;; Test: Section with single item (no separate title line)
+;; Test: Single-line section renders as detail
 ;; ============================================================================
 (reset-output)
 (script-echo "App" :section "Single item section")
 (let ((out (get-output)))
-  ;; Single item in single section should render as detail, not title
-  (assert-true (contains? out "Single item section")
-    "Single item section renders"))
+  (assert-true (contains? out "[fg:100,100,156]Single item section[reset]")
+    "Single-line section renders as detail"))
 
 ;; ============================================================================
 ;; Test: Empty args (just title)
@@ -151,7 +137,7 @@
 ;; ============================================================================
 (reset-output)
 (script-echo "App"
-  :section "Section" "detail")
+  :section "Section\ndetail")
 (let ((out (get-output)))
   (assert-true (contains? out "  [fg:189,147,249]Section")
     "Section has 2-space indent")
@@ -164,7 +150,7 @@
 (reset-output)
 (script-echo "bloom-telnet 1.0"
   :desc ":help for commands"
-  :section "Terminal" "xterm-256color")
+  :section "Terminal\nxterm-256color")
 (let ((out (get-output)))
   (assert-true (contains? out "bloom-telnet 1.0")
     "Has title")
