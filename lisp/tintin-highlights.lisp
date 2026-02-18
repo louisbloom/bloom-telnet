@@ -241,8 +241,11 @@
         (do ((remaining ansi-seqs (cdr remaining))) ((null? remaining))
           (let ((seq (car remaining)))
             (set! server-state (tintin-update-server-state server-state seq))
-            ;; Only emit server ANSI when not inside a highlight
-            (if (not current-highlight) (set! result (concat result seq))))))
+            ;; Always emit server ANSI (server colors punch through highlights)
+            (set! result (concat result seq))
+            ;; After a server reset inside a highlight, re-apply highlight color
+            (if (and current-highlight (tintin-is-reset-code? seq))
+              (set! result (concat result (car current-highlight)))))))
       ;; Determine winning highlight at this position
       (let ((winner (tintin-winning-highlight-at pos match-ranges)))
         (cond

@@ -117,3 +117,207 @@
 ;; Clean up
 (hash-remove! *tintin-highlights* "world")
 (set! *tintin-highlights-dirty* #t)
+
+;; ============================================================================
+;; Server ANSI punches through highlights
+;; ============================================================================
+
+;; A. Server color punches through wildcard highlight
+(hash-set! *tintin-highlights* "^%* vicious attack %*" '("green" nil 5))
+(set! *tintin-highlights-dirty* #t)
+
+(let ((result (tintin-highlight-line
+               "Paersos's vicious attack \033[31mmaims\033[0m Whulian!")))
+  ;; Server red should punch through the green highlight
+  (assert-true (string-contains? result "\033[31m")
+   "server-punch-through server red preserved inside highlight")
+  ;; Green highlight should resume after server reset
+  (assert-true (string-contains? result "\033[32m")
+   "server-punch-through green highlight resumes after reset"))
+
+;; B. Whole-line server color punches through highlight
+(let ((result (tintin-highlight-line
+               "\033[36mSomeone's vicious attack hurts you!\033[0m")))
+  ;; Server cyan should appear in output
+  (assert-true (string-contains? result "\033[36m")
+   "server-punch-through whole-line server cyan preserved"))
+
+;; C. Server bold+red punches through
+(hash-set! *tintin-highlights* "^%* pierce %*" '("yellow" nil 5))
+(set! *tintin-highlights-dirty* #t)
+
+(let ((result (tintin-highlight-line
+               "An ugruk hunter's pierce \033[31;1mdecimates\033[0m you!")))
+  (assert-true (string-contains? result "\033[31;1m")
+   "server-punch-through bold+red preserved inside highlight"))
+
+(hash-remove! *tintin-highlights* "^%* pierce %*")
+(set! *tintin-highlights-dirty* #t)
+
+;; D. Multiple server colors in one highlighted line
+(hash-set! *tintin-highlights* "^%* searing cut %*" '("cyan" nil 5))
+(set! *tintin-highlights-dirty* #t)
+
+(let ((result (tintin-highlight-line
+               "A troll's searing cut \033[31mmaims\033[0m and \033[33mburns\033[0m you!")))
+  (assert-true (string-contains? result "\033[31m")
+   "server-punch-through first server color preserved")
+  (assert-true (string-contains? result "\033[33m")
+   "server-punch-through second server color preserved"))
+
+(hash-remove! *tintin-highlights* "^%* searing cut %*")
+(set! *tintin-highlights-dirty* #t)
+
+;; E. Skill improvement line (server bold yellow, highlight red)
+(hash-set! *tintin-highlights* "You have become better" '("red" nil 5))
+(set! *tintin-highlights-dirty* #t)
+
+(let ((result (tintin-highlight-line
+               "\033[33;1mYou have become better at truesight (82%)!\033[0m")))
+  ;; The highlight should apply red to the matched portion
+  (assert-true (string-contains? result "\033[31m")
+   "server-punch-through skill line highlight red applied")
+  ;; Server bold yellow should also appear (punches through)
+  (assert-true (string-contains? result "\033[33;1m")
+   "server-punch-through skill line server bold yellow preserved"))
+
+(hash-remove! *tintin-highlights* "You have become better")
+(set! *tintin-highlights-dirty* #t)
+
+;; F. No server ANSI - highlight unchanged (regression check)
+(let ((result (tintin-highlight-line
+               "Paersos's vicious attack maims Whulian!")))
+  ;; Only green highlight code should be present
+  (assert-true (string-contains? result "\033[32m")
+   "no-server-ansi green highlight applied")
+  ;; No server red should appear since input has none
+  (assert-false (string-contains? result "\033[31m")
+   "no-server-ansi no unexpected red code"))
+
+;; G. Server color without reset inside highlight
+(let ((result (tintin-highlight-line
+               "Paersos's vicious attack \033[31mmaims Whulian!")))
+  ;; Server red should still appear
+  (assert-true (string-contains? result "\033[31m")
+   "server-no-reset server color preserved without reset"))
+
+;; H. Non-wildcard pattern still works (regression)
+(hash-remove! *tintin-highlights* "^%* vicious attack %*")
+(hash-set! *tintin-highlights* "orc" '("red" nil 5))
+(set! *tintin-highlights-dirty* #t)
+
+(let ((result (tintin-highlight-line "an orc appears")))
+  (assert-true (string-contains? result "\033[31m")
+   "non-wildcard highlight red applied to orc"))
+
+;; Clean up
+(hash-remove! *tintin-highlights* "orc")
+(set! *tintin-highlights-dirty* #t)
+
+;; ============================================================================
+;; Nested user highlights on top of server ANSI
+;; ============================================================================
+
+;; I. Two user highlights, higher-priority one overlaps server color region
+;;    "maims" is server red, "vicious attack" is green (pri 5),
+;;    "maims" also has a higher-priority yellow highlight (pri 10)
+(hash-set! *tintin-highlights* "^%* vicious attack %*" '("green" nil 5))
+(hash-set! *tintin-highlights* "maims" '("yellow" nil 10))
+(set! *tintin-highlights-dirty* #t)
+
+(let ((result (tintin-highlight-line
+               "Paersos's vicious attack \033[31mmaims\033[0m Whulian!")))
+  ;; Yellow highlight (pri 10) should win over green for "maims"
+  (assert-true (string-contains? result "\033[33m")
+   "nested-highlights yellow highlight wins for maims")
+  ;; Green highlight should be present for the rest of the match
+  (assert-true (string-contains? result "\033[32m")
+   "nested-highlights green highlight on surrounding text")
+  ;; Server red should punch through (emitted before highlight transition)
+  (assert-true (string-contains? result "\033[31m")
+   "nested-highlights server red still emitted"))
+
+(hash-remove! *tintin-highlights* "^%* vicious attack %*")
+(hash-remove! *tintin-highlights* "maims")
+(set! *tintin-highlights-dirty* #t)
+
+;; J. Lower-priority highlight does not override higher inside server color
+;;    "attack maims" is blue (pri 3), whole line is green (pri 5)
+(hash-set! *tintin-highlights* "^%* vicious attack %*" '("green" nil 5))
+(hash-set! *tintin-highlights* "attack maims" '("blue" nil 3))
+(set! *tintin-highlights-dirty* #t)
+
+(let ((result (tintin-highlight-line
+               "Paersos's vicious attack \033[31mmaims\033[0m Whulian!")))
+  ;; Green (pri 5) should win over blue (pri 3) in the overlap
+  (assert-true (string-contains? result "\033[32m")
+   "nested-lower-pri green wins over blue")
+  ;; Server red still punches through
+  (assert-true (string-contains? result "\033[31m")
+   "nested-lower-pri server red preserved"))
+
+(hash-remove! *tintin-highlights* "^%* vicious attack %*")
+(hash-remove! *tintin-highlights* "attack maims")
+(set! *tintin-highlights-dirty* #t)
+
+;; K. Adjacent user highlights with server color at the boundary
+;;    "attack" is green (pri 5), "maims" is red highlight (pri 5)
+;;    Server sends bold on "maims"
+(hash-set! *tintin-highlights* "attack" '("green" nil 5))
+(hash-set! *tintin-highlights* "maims" '("red" nil 5))
+(set! *tintin-highlights-dirty* #t)
+
+(let ((result (tintin-highlight-line
+               "Your attack \033[1mmaims\033[0m the orc")))
+  ;; Green highlight on "attack"
+  (assert-true (string-contains? result "\033[32m")
+   "adjacent-highlights green on attack")
+  ;; Red highlight on "maims"
+  (assert-true (string-contains? result "\033[31m")
+   "adjacent-highlights red on maims")
+  ;; Server bold should punch through
+  (assert-true (string-contains? result "\033[1m")
+   "adjacent-highlights server bold preserved"))
+
+(hash-remove! *tintin-highlights* "attack")
+(hash-remove! *tintin-highlights* "maims")
+(set! *tintin-highlights-dirty* #t)
+
+;; L. High-priority highlight fully inside server-colored region
+;;    Server sends entire line cyan, user highlights "decimates" red (pri 10)
+(hash-set! *tintin-highlights* "decimates" '("red" nil 10))
+(set! *tintin-highlights-dirty* #t)
+
+(let ((result (tintin-highlight-line
+               "\033[36mThe troll's attack decimates you!\033[0m")))
+  ;; Red highlight should apply to "decimates"
+  (assert-true (string-contains? result "\033[31m")
+   "highlight-inside-server-color red highlight applied")
+  ;; Server cyan should appear for text outside the highlight
+  (assert-true (string-contains? result "\033[36m")
+   "highlight-inside-server-color server cyan preserved"))
+
+(hash-remove! *tintin-highlights* "decimates")
+(set! *tintin-highlights-dirty* #t)
+
+;; M. Three-layer: server color + low-pri highlight + high-pri highlight
+;;    Server sends bold, whole line has green (pri 3), "critical" has red (pri 8)
+(hash-set! *tintin-highlights* "^%*critical%*" '("green" nil 3))
+(hash-set! *tintin-highlights* "critical" '("red" nil 8))
+(set! *tintin-highlights-dirty* #t)
+
+(let ((result (tintin-highlight-line
+               "\033[1mYou land a critical hit!\033[0m")))
+  ;; Red (pri 8) should win on "critical"
+  (assert-true (string-contains? result "\033[31m")
+   "three-layer red highlight on critical")
+  ;; Green (pri 3) should appear on surrounding text
+  (assert-true (string-contains? result "\033[32m")
+   "three-layer green highlight on surrounding")
+  ;; Server bold should punch through both
+  (assert-true (string-contains? result "\033[1m")
+   "three-layer server bold preserved"))
+
+(hash-remove! *tintin-highlights* "^%*critical%*")
+(hash-remove! *tintin-highlights* "critical")
+(set! *tintin-highlights-dirty* #t)
