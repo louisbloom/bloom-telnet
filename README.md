@@ -42,7 +42,7 @@ Build output goes to `build/`.
 ./build/src/bloom-telnet --load tintin.lisp mud.example.com 4000
 
 # Multiple load files
-./build/src/bloom-telnet -l tintin.lisp -l contrib/practice.lisp mud.example.com 4000
+./build/src/bloom-telnet -l tintin.lisp -l practice.lisp mud.example.com 4000
 
 # Enable debug logging (module:LEVEL or *:LEVEL for all)
 ./build/src/bloom-telnet -L 'completion:DEBUG,*:WARN' mud.example.com 4000
@@ -52,7 +52,7 @@ Build output goes to `build/`.
 ./build/src/bloom-telnet --version
 ```
 
-Note: The `-l`/`--load` option expects just the filename (e.g., `tintin.lisp`), not a path. The system searches `lisp/` automatically.
+Note: The `-l`/`--load` option expects just the filename (e.g., `tintin.lisp`), not a path. The system searches `lisp/` and `lisp/contrib/` automatically.
 
 ## Commands
 
@@ -148,11 +148,11 @@ Under the hood, everything is Lisp. TinTin++ commands are sugar over Lisp data s
 
 ### Hooks
 
-The hook system (C builtins: `add-hook`, `remove-hook`, `run-hook`, `run-filter-hook`) drives the data flow between telnet, user input, and the display:
+The hook system (C builtins: `add-hook`, `remove-hook`, `run-hook`, `run-transform-hook`) drives the data flow between telnet, user input, and the display:
 
-- `telnet-input-hook` — called with ANSI-stripped text from the server (e.g., for word collection)
-- `telnet-input-filter-hook` — transform server output before display (filter hook: return modified text)
-- `user-input-hook` — transform user input before sending to the server
+- `telnet-input-hook` — called with ANSI-stripped text from the server (e.g., for word collection). Event hook: side effects only.
+- `telnet-input-transform-hook` — transform server output before display. Each handler receives text and returns modified text.
+- `user-input-transform-hook` — transform user input before sending to the server. Pipeline: handlers run in priority order, each receiving the previous handler's output. Return nil to consume input.
 - `completion-hook` — provide tab completion candidates for the current input prefix
 
 ### Lisp Files
