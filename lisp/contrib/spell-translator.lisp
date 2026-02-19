@@ -1,5 +1,7 @@
 ;;; spell-translator.lisp --- Translate garbled spell utterances (ROM 2.4 cipher)
 ;;;
+;;; This script was created for Carrion Fields MUD (https://carrionfields.net/)
+;;;
 ;;; Usage:
 ;;;   (load "contrib/spell-translator.lisp")
 ;;;
