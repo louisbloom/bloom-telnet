@@ -237,7 +237,7 @@ static void process_line(const char *line) {
         }
         p++;
       }
-      if (p > start)
+      if (p >= start)
         telnet_send_with_crlf(g_telnet, start, p - start);
     }
   } else if (line[0] != '\0') {

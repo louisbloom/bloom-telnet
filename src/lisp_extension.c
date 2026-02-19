@@ -1088,7 +1088,7 @@ static TuiMsg send_input_callback(void *data) {
         }
         p++;
       }
-      if (p > start)
+      if (p >= start)
         telnet_send_with_crlf(s->telnet, start, p - start);
     }
   }
