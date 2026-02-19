@@ -301,7 +301,7 @@ class TestServer:
             print(f"Error accepting connection: {e}")
 
     def _gradient_line(self, width):
-        """Generate a full-width pink-to-purple gradient bar using truecolor."""
+        """Generate a full-width pink-to-purple gradient line using truecolor."""
         # Pink (255, 105, 180) -> Purple (128, 0, 255)
         r_start, g_start, b_start = 255, 105, 180
         r_end, g_end, b_end = 128, 0, 255
@@ -311,7 +311,7 @@ class TestServer:
             r = int(r_start + (r_end - r_start) * t)
             g = int(g_start + (g_end - g_start) * t)
             b = int(b_start + (b_end - b_start) * t)
-            parts.append(f"\033[48;2;{r};{g};{b}m ")
+            parts.append(f"\033[38;2;{r};{g};{b}m\u2500")
         parts.append("\033[0m")
         return "".join(parts)
 
