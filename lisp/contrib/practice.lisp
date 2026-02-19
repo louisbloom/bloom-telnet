@@ -67,7 +67,7 @@
 ;; ============================================================================
 (defun practice-echo (msg)
   "Echo a practice status message to the terminal."
-  (terminal-echo (concat "\r\n\033[36m[Practice]\033[0m " msg "\r\n")))
+  (terminal-echo (concat "\r\n\033[36m[🤹 Practice]\033[0m " msg "\r\n")))
 
 (defun practice-send (cmd)
   "Send command through the input pipeline (handles multiline, aliases, etc.)."
