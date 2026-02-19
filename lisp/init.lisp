@@ -575,6 +575,28 @@ Colors: header=pale pink, desc=pale cyan, section=lavender, details=slate blue"
   nil)
 
 ;; ============================================================================
+;; F-KEY BINDING SYSTEM
+;; ============================================================================
+;; Generic system for binding F1–F12 to Lisp functions.
+;; C intercepts F-key presses and calls (run-hook 'fkey-hook N).
+(defvar *fkey-bindings* (make-hash-table)
+  "Hash table mapping F-key number (1-12) to function.")
+
+(defun fkey-handler (n)
+  "Dispatch F-key press to bound function, if any."
+  (let ((fn (hash-ref *fkey-bindings* n))) (if fn (fn))))
+
+(add-hook 'fkey-hook fkey-handler 50)
+
+(defun bind-fkey (n fn)
+  "Bind F-key N (1-12) to function FN."
+  (hash-set! *fkey-bindings* n fn))
+
+(defun unbind-fkey (n)
+  "Unbind F-key N (1-12)."
+  (hash-remove! *fkey-bindings* n))
+
+;; ============================================================================
 ;; STATUSBAR NOTIFICATION WRAPPER
 ;; ============================================================================
 (defvar *notify-timer* nil "Timer for auto-clearing notifications.")

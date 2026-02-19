@@ -1782,3 +1782,15 @@ void lisp_x_register_echo_callback(TerminalEchoCallback callback) {
 void lisp_x_register_runtime(TuiRuntime *runtime) {
   registered_runtime = runtime;
 }
+
+/* Dispatch F-key press to Lisp fkey-hook */
+void lisp_x_call_fkey_hook(int fkey_num) {
+  Environment *env = get_current_env();
+  if (!env)
+    return;
+
+  LispObject *args =
+      lisp_make_cons(lisp_intern("fkey-hook"),
+                     lisp_make_cons(lisp_make_integer(fkey_num), NIL));
+  builtin_run_hook(args, env);
+}

@@ -1,17 +1,9 @@
 ;; tests/bench-completion.lisp - Benchmark tab completion performance
 (load "tests/test-helpers.lisp")
-(defvar *version* "1.0.0-test")
 (load "lisp/init.lisp")
 
-;; Helper to reset store at a given capacity
-(defun reset-store (capacity)
-  (set! *completion-trie* (cons nil (make-hash-table)))
-  (set! *completion-words* (make-hash-table))
-  (set! *completion-seq* 0)
-  (set! *completion-word-order* (make-vector capacity nil))
-  (set! *completion-word-store-size* capacity)
-  (set! *completion-word-order-index* 0)
-  (set! *completion-word-count* 0))
+;; Alias for convenience
+(defun reset-store (capacity) (reset-completion-store capacity))
 
 ;; Helper to fill store with N words using a prefix
 (defun fill-store (n prefix)

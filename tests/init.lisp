@@ -3,12 +3,6 @@
 (load "tests/test-helpers.lisp")
 
 ;; ============================================================================
-;; Mock builtins required by init.lisp
-;; ============================================================================
-;; termcap is provided by test-helpers.lisp
-(defvar *version* "1.0.0-test")
-
-;; ============================================================================
 ;; Load init.lisp (this verifies it parses correctly)
 ;; ============================================================================
 (load "lisp/init.lisp")
@@ -63,16 +57,6 @@
 ;; ============================================================================
 ;; Test: completion word store
 ;; ============================================================================
-
-;; Helper to reset completion store for testing
-(defun reset-completion-store (capacity)
-  (set! *completion-trie* (cons nil (make-hash-table)))
-  (set! *completion-words* (make-hash-table))
-  (set! *completion-seq* 0)
-  (set! *completion-word-store-size* capacity)
-  (set! *completion-word-order* (make-vector capacity nil))
-  (set! *completion-word-order-index* 0)
-  (set! *completion-word-count* 0))
 
 ;; Reset store for testing
 (reset-completion-store 10)

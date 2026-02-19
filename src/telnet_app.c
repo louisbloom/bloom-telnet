@@ -8,6 +8,7 @@
  */
 
 #include "telnet_app.h"
+#include "lisp_extension.h"
 #include <bloom-boba/ansi_sequences.h>
 #include <bloom-boba/cmd.h>
 #include <stdio.h>
@@ -124,6 +125,13 @@ static TuiUpdateResult telnet_app_update(TuiModel *model, TuiMsg msg) {
       return tui_update_result_none();
     } else if (msg.data.key.key == TUI_KEY_PAGE_DOWN) {
       telnet_app_page_down(app);
+      return tui_update_result_none();
+    }
+
+    /* Handle F-keys: dispatch to Lisp via fkey-hook */
+    if (msg.data.key.key >= TUI_KEY_F1 && msg.data.key.key <= TUI_KEY_F12) {
+      int fkey_num = msg.data.key.key - TUI_KEY_F1 + 1;
+      lisp_x_call_fkey_hook(fkey_num);
       return tui_update_result_none();
     }
 

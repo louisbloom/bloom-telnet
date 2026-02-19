@@ -90,4 +90,7 @@ struct TuiRuntime;
 /* Register runtime for terminal control commands (e.g. window title) */
 void lisp_x_register_runtime(struct TuiRuntime *runtime);
 
+/* Dispatch F-key press to Lisp fkey-hook */
+void lisp_x_call_fkey_hook(int fkey_num);
+
 #endif /* BLOOM_TELNET_LISP_H */

@@ -24,6 +24,7 @@
     (#t "")))
 
 ;; App-level mocks for C builtins
+(defvar *version* "1.0.0-test")
 (defun terminal-echo (msg) nil)
 (defun telnet-send (msg) nil)
 (defvar *sent-inputs* '())
@@ -32,6 +33,10 @@
 (defun script-echo (title &rest args) nil)
 (defun run-at-time (delay repeat func) nil)
 (defun cancel-timer (timer) nil)
+(defun bloom-log (level category message) nil)
+(defun statusbar-set-mode (&optional text) nil)
+(defun statusbar-notify (msg) nil)
+(defun statusbar-clear () nil)
 (defun statusbar-mode-set (sym text prio) nil)
 (defun statusbar-mode-remove (sym) nil)
 (defun strip-ansi (text) text)
@@ -108,6 +113,22 @@
         initial-value))))
 
 ;; ============================================================================
+;; Stdlib Mocks (from init.lisp)
+;; ============================================================================
+;; Word character set
+(defvar *word-chars* "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_-")
+(defun word-char? (c) (string-index *word-chars* (char->string c)))
+
+;; F-key binding system
+(defvar *fkey-bindings* (make-hash-table))
+(defun fkey-handler (n)
+  (let ((fn (hash-ref *fkey-bindings* n)))
+    (if fn (fn))))
+(add-hook 'fkey-hook fkey-handler 50)
+(defun bind-fkey (n fn) (hash-set! *fkey-bindings* n fn))
+(defun unbind-fkey (n) (hash-remove! *fkey-bindings* n))
+
+;; ============================================================================
 ;; Session Mock System
 ;; ============================================================================
 ;; Simulates session isolation using hash tables as per-session variable stores.
@@ -177,6 +198,29 @@
   "Get a variable from the current mock session's variable store."
   (let ((entry (hash-ref *mock-sessions* (mock-session-key *mock-current-session*))))
     (hash-ref (cdr entry) key)))
+;; ============================================================================
+;; Common Test Utilities
+;; ============================================================================
+(defun member? (item lst)
+  "Return #t if item is in lst (by equal?)."
+  (cond ((null? lst) #f)
+        ((equal? (car lst) item) #t)
+        (#t (member? item (cdr lst)))))
+
+(defun reset-completion-store (capacity)
+  "Reset the completion word store to empty with given capacity.
+   Only works in tests that load init.lisp."
+  (set! *completion-trie* (cons nil (make-hash-table)))
+  (set! *completion-words* (make-hash-table))
+  (set! *completion-seq* 0)
+  (set! *completion-word-store-size* capacity)
+  (set! *completion-word-order* (make-vector capacity nil))
+  (set! *completion-word-order-index* 0)
+  (set! *completion-word-count* 0))
+
+;; ============================================================================
+;; Assertion Macros
+;; ============================================================================
 ;; Assert that actual equals expected (handles numbers and structural equality)
 ;; Usage: (assert-equal actual expected "description")
 ;; Returns: nil on success, aborts test with error on failure

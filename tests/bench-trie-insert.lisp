@@ -2,7 +2,6 @@
 ;; Uses clean text extracted from telnet log RECV payloads.
 ;; Run: ./tests/run-test.sh tests/bench-trie-insert.lisp
 (load "tests/test-helpers.lisp")
-(defvar *version* "1.0.0-test")
 (load "lisp/init.lisp")
 
 ;; ============================================================================
@@ -16,17 +15,8 @@
       ((null? line) (close f) acc)
       (set! acc (string-append acc line "\n")))))
 
-;; ============================================================================
-;; Reset helper
-;; ============================================================================
-(defun reset-store (capacity)
-  (set! *completion-trie* (cons nil (make-hash-table)))
-  (set! *completion-words* (make-hash-table))
-  (set! *completion-seq* 0)
-  (set! *completion-word-order* (make-vector capacity nil))
-  (set! *completion-word-store-size* capacity)
-  (set! *completion-word-order-index* 0)
-  (set! *completion-word-count* 0))
+;; Alias for convenience
+(defun reset-store (capacity) (reset-completion-store capacity))
 
 ;; ============================================================================
 ;; Load payloads

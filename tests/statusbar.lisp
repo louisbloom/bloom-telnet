@@ -4,33 +4,29 @@
 (load "tests/test-helpers.lisp")
 
 ;; ============================================================================
-;; Mock raw C API builtins for testing
+;; Override C builtin mocks with capturing versions for testing
 ;; ============================================================================
 (defvar *statusbar-mode* "" "Captured composed mode text from raw API")
 (defvar *statusbar-notification* "" "Captured notification from raw API")
 
 (defun statusbar-set-mode (&optional text)
-  "Mock raw C API: Set mode text directly"
+  "Mock raw C API: capture mode text"
   (set! *statusbar-mode* (if text text ""))
   nil)
 
 (defun statusbar-notify (msg)
-  "Mock raw C API: Set notification"
+  "Mock raw C API: capture notification"
   (set! *statusbar-notification* msg)
   nil)
 
 (defun statusbar-clear ()
-  "Mock raw C API: Clear notification"
+  "Mock raw C API: clear captured notification"
   (set! *statusbar-notification* "")
   nil)
-
-;; Mock terminal-echo for init.lisp
-(defun terminal-echo (msg) nil)
 
 ;; ============================================================================
 ;; Load init.lisp to get Lisp-side statusbar functions
 ;; ============================================================================
-(defvar *version* "1.0.0-test")
 (load "lisp/init.lisp")
 
 ;; Helper to reset registry state between tests

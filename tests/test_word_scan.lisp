@@ -1,11 +1,5 @@
 (load "tests/test-helpers.lisp")
 
-;; Word character set (whitelist, from init.lisp)
-(define *word-chars* "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_-")
-
-(defun word-char? (c)
-  (string-index *word-chars* (char->string c)))
-
 ;; Standalone extract-words for testing (same logic as collect-words-from-text
 ;; but returns a list instead of calling add-word-to-store)
 (defun extract-words (text)
@@ -53,11 +47,6 @@
 (define cf-words (extract-words cf-prompt))
 (print cf-words)
 (assert-true (not (null? cf-words)) "should find words")
-
-(defun member? (item lst)
-  (cond ((null? lst) #f)
-        ((equal? (car lst) item) #t)
-        (#t (member? item (cdr lst)))))
 
 (assert-true (member? "mourned" cf-words) "mourned in results")
 (assert-true (member? "what" cf-words) "what in results")

@@ -9,23 +9,7 @@
 ;; Fix: Trie nodes are now (leaf . children-hash) cons cells. Leaf data is
 ;; stored in car (structurally separate), so no sentinel key is needed.
 (load "tests/test-helpers.lisp")
-
-(defvar *version* "1.0.0-test")
 (load "lisp/init.lisp")
-
-(defun member? (item lst)
-  (cond ((null? lst) #f)
-        ((equal? (car lst) item) #t)
-        (#t (member? item (cdr lst)))))
-
-(defun reset-completion-store (capacity)
-  (set! *completion-trie* (cons nil (make-hash-table)))
-  (set! *completion-words* (make-hash-table))
-  (set! *completion-seq* 0)
-  (set! *completion-word-store-size* capacity)
-  (set! *completion-word-order* (make-vector capacity nil))
-  (set! *completion-word-order-index* 0)
-  (set! *completion-word-count* 0))
 
 ;; ============================================================================
 ;; Regression: carrionfields.net banner — m<tab> must find "mourned"
