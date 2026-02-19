@@ -11,6 +11,7 @@ A terminal-based telnet client with Lisp scripting support, designed for MUD gam
 - Multi-session support with per-session hook registries and telnet connections
 - ANSI color support with truecolor detection
 - Statusbar with mode display and notifications
+- F-key bindings (F1–F12) configurable from Lisp
 - Speedwalk shorthand (e.g., `3n2e` expands to `n;n;n;e;e`)
 - Configurable log filtering by module and level
 
@@ -154,7 +155,19 @@ The hook system (C builtins: `add-hook`, `remove-hook`, `run-hook`, `run-transfo
 - `telnet-input-transform-hook` — transform server output before display. Each handler receives text and returns modified text.
 - `user-input-transform-hook` — transform user input before sending to the server. Pipeline: handlers run in priority order, each receiving the previous handler's output. Return nil to consume input.
 - `completion-hook` — provide tab completion candidates for the current input prefix
+- `fkey-hook` — called with the F-key number (1–12) when an F-key is pressed
 
+### F-Key Bindings
+
+F1–F12 can be bound to Lisp functions:
+
+```lisp
+;; Bind F2 to send "look"
+(bind-fkey 2 (lambda () (send-input "look")))
+
+;; Unbind F2
+(unbind-fkey 2)
+```
 ### Lisp Files
 
 - `init.lisp` — loaded at startup; completion, timers, hooks, color config, telnet I/O logging, TCP keepalive
