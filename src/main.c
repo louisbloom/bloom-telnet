@@ -481,6 +481,11 @@ int main(int argc, char *argv[]) {
   /* Now that viewport is available, route log messages there */
   bloom_log_set_echo(echo_to_viewport);
 
+  /* Enter alt screen before loading scripts so their output
+   * (script-echo banners, log lines) goes to the alt buffer,
+   * not the main screen that gets restored on exit */
+  tui_runtime_start(g_runtime);
+
   /* Create default session and load init.lisp now that TUI is ready
    * (needs terminal-echo, termcap, etc.) */
   lisp_x_load_init();
