@@ -1,5 +1,5 @@
 ;; Hook system tests for bloom-telnet
-;; Tests add-hook, remove-hook, run-hook, and run-filter-hook backed
+;; Tests add-hook, remove-hook, run-hook, and run-transform-hook backed
 ;; by the *hooks* hash table.
 
 (load "tests/test-helpers.lisp")
@@ -118,7 +118,7 @@
 (print "Test 6 passed: run-hook passes arguments")
 
 ;; ============================================================================
-;; Test 7: run-filter-hook threads value through fns
+;; Test 7: run-transform-hook threads value through fns
 ;; ============================================================================
 (set! *hooks* (make-hash-table))
 
@@ -129,10 +129,10 @@
 (add-hook 'filter-hook double-it 50)
 
 ;; Should: 5 -> add-ten -> 15 -> double-it -> 30
-(let ((result (run-filter-hook 'filter-hook 5)))
-  (assert-equal result 30 "run-filter-hook threads value: 5 -> +10 -> *2 = 30"))
+(let ((result (run-transform-hook 'filter-hook 5)))
+  (assert-equal result 30 "run-transform-hook threads value: 5 -> +10 -> *2 = 30"))
 
-(print "Test 7 passed: run-filter-hook threading")
+(print "Test 7 passed: run-transform-hook threading")
 
 ;; ============================================================================
 ;; Test 8: Empty/nonexistent hooks
@@ -140,8 +140,8 @@
 (set! *hooks* (make-hash-table))
 
 (assert-nil (run-hook 'nonexistent-hook) "run-hook on nonexistent hook returns nil")
-(assert-equal (run-filter-hook 'nonexistent-hook "initial")
-  "initial" "run-filter-hook on nonexistent hook returns initial value")
+(assert-equal (run-transform-hook 'nonexistent-hook "initial")
+  "initial" "run-transform-hook on nonexistent hook returns initial value")
 
 (print "Test 8 passed: Empty/nonexistent hooks")
 

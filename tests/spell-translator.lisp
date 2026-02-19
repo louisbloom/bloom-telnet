@@ -156,8 +156,8 @@
 ;; Hook registration
 ;; ============================================================================
 
-(let ((hooks (hash-ref *hooks* "telnet-input-filter-hook")))
-  (assert-true hooks "spell-translator-filter registered on telnet-input-filter-hook")
+(let ((hooks (hash-ref *hooks* "telnet-input-transform-hook")))
+  (assert-true hooks "spell-translator-filter registered on telnet-input-transform-hook")
   (assert-true (hooks--has-fn? hooks spell-translator-filter)
     "spell-translator-filter is in hook list"))
 

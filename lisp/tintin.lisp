@@ -105,62 +105,32 @@
 ;; ============================================================================
 ;; USER INPUT HOOK
 ;; ============================================================================
-;; Hook function for user-input-hook integration
-;; Signature: (lambda (text cursor-pos) -> string|nil)
-;; - text: User input text
-;; - cursor-pos: Cursor position (ignored for TinTin++ processing)
-;; Returns: nil (hook handles echo/send) or text (when disabled)
+;; Hook function for user-input-transform-hook integration
+;; Signature: (lambda (text) -> string|nil)
+;; - text: User input text (or nil if consumed by earlier hook)
+;; Returns: Expanded text (semicolon-separated), or nil if only #commands
 ;;
-;; Hook Contract: Returns nil to indicate all echo/send handled by hook.
-;; This hook processes TinTin++ commands and sends each one separately.
-;; For example, "s;s" becomes two separate telnet sends: "s" and "s"
-(defun tintin-user-input-hook (text cursor-pos)
-  ;; Process with TinTin++ if enabled and not already handled by a higher-priority hook
-  (if (or (not *tintin-enabled*) *user-input-handled*)
-    () ;; TinTin++ disabled or already handled
-    ;; Empty input - don't handle, let C send blank line to server
-    (if (or (not (string? text)) (string=? text ""))
-      ()
-      (progn
-        ;; Note: main.c already echoes the original input, so we don't echo it here
-        (let ((processed (tintin-process-input text))
-              (commands nil))
-          ;; Split processed output by semicolons
-          (set! commands (tintin-split-commands processed))
-          ;; Send each command separately
+;; Pure transformer: receives text, returns transformed text.
+;; C caller splits result by ';' and sends each part separately.
+(defun tintin-user-input-hook (text)
+  (if (or (not *tintin-enabled*) (not (string? text)) (string=? text ""))
+    text ;; pass through
+    (let ((processed (tintin-process-input text)))
+      ;; Echo expanded commands if different from original
+      (if
+        (and (string? processed) (not (string=? processed ""))
+             (not (string=? processed text)))
+        (let ((commands (tintin-split-commands processed)))
           (do ((i 0 (+ i 1))) ((>= i (length commands)))
             (let ((cmd (list-ref commands i)))
-              (if (and (string? cmd) (not (string=? cmd "")))
-                (progn
-                  ;; Echo expanded command to terminal (if different from original)
-                  (if
-                    (and (string? cmd) (string? text) (not (string=? cmd text)))
-                    (terminal-echo (concat cmd "\r\n")))
-                  ;; Send to telnet server with error handling
-                  (condition-case err
-                    (progn
-                      ;; Check if we can send (connected or test mode)
-                      (let ((can-send
-                             (condition-case err2
-                               ;; Try to check connection mode
-                               (or (eq? *connection-mode* 'conn)
-                                   ;; If *connection-mode* undefined (test mode), check if telnet-send exists
-                                   (and (symbol? 'telnet-send) #t))
-                               ;; If *connection-mode* not defined, we're in test mode
-                               (error #t))))
-                        (if can-send
-                          ;; Send the command
-                          (telnet-send cmd)
-                          ;; Not connected
-                          (terminal-echo "\r\n*** Not connected ***\r\n"))))
-                    ;; Catch any send errors
-                    (error
-                     (terminal-echo
-                      (concat "\r\n*** Send failed: " (error-message err)
-                       " ***\r\n")))))))))
-        ;; Mark as handled via hook system
-        (set! *user-input-handled* #t)
-        (set! *user-input-result* nil)))))
+              (if
+                (and (string? cmd) (not (string=? cmd ""))
+                     (not (string=? cmd text)))
+                (terminal-echo (concat cmd "\r\n")))))))
+      ;; Return expanded text (or nil if only #commands were processed)
+      (if (and (string? processed) (not (string=? processed "")))
+        processed
+        nil))))
 
 ;; ============================================================================
 ;; TOGGLE FUNCTIONS
@@ -187,7 +157,7 @@
 ;; ============================================================================
 ;; TELNET INPUT HOOKS
 ;; ============================================================================
-;; Hook function for telnet-input-filter-hook integration
+;; Hook function for telnet-input-transform-hook integration
 ;; Signature: (lambda (text) -> string)
 ;; - text: Incoming telnet data (may contain ANSI codes)
 ;; Returns: Transformed text with highlights applied
@@ -196,7 +166,7 @@
 ;; in the terminal. We apply highlight patterns to colorize matching text.
 ;; After applying highlights, we post-process to handle nested ANSI states
 ;; so that server reset codes don't kill highlight colors.
-(defun tintin-telnet-input-filter (text)
+(defun tintin-telnet-input-transform (text)
   (if (and *tintin-enabled* (> (hash-count *tintin-highlights*) 0))
     (tintin-apply-highlights text)
     text))
@@ -218,8 +188,8 @@
 ;; AUTO-ACTIVATION
 ;; ============================================================================
 ;; Register TinTin++ hooks — pass function values (not quoted symbols)
-(add-hook 'user-input-hook tintin-user-input-hook)
-(add-hook 'telnet-input-filter-hook tintin-telnet-input-filter)
+(add-hook 'user-input-transform-hook tintin-user-input-hook)
+(add-hook 'telnet-input-transform-hook tintin-telnet-input-transform)
 (add-hook 'telnet-input-hook tintin-telnet-input-hook)
 
 ;; Announce activation (terminal is ready when this file loads via -l)

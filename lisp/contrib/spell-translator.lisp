@@ -209,7 +209,7 @@
 
 (define *spell-color-reset* "\033[0m")
 
-;; Filter function for telnet-input-filter-hook
+;; Filter function for telnet-input-transform-hook
 (defun spell-translator-filter (text)
   "Weave spell translation into utterance lines"
   ;; Strip ANSI codes for matching, but use original text for replacement
@@ -243,7 +243,7 @@
 ;;; Hook Registration
 ;;; ============================================================================
 ;; Register the filter hook
-(add-hook 'telnet-input-filter-hook spell-translator-filter)
+(add-hook 'telnet-input-transform-hook spell-translator-filter)
 
 ;; Startup message
 (script-echo "Spell translator active" :section

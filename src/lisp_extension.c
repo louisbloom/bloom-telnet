@@ -510,7 +510,9 @@ static int load_lisp_system_file(const char *filename, Environment *env) {
   char exe_relative_path[1024] = {0};
   char lisp_subdir_path[256];
   char parent_lisp_path[256];
-  const char *search_paths[10];
+  char contrib_subdir_path[256];
+  char parent_contrib_path[256];
+  const char *search_paths[16];
   int path_count = 0;
 
   /* Try executable-relative path first */
@@ -529,11 +531,27 @@ static int load_lisp_system_file(const char *filename, Environment *env) {
   snprintf(parent_lisp_path, sizeof(parent_lisp_path), "../lisp/%s", filename);
   search_paths[path_count++] = parent_lisp_path;
 
-  /* Installed path */
+  /* Contrib subdirectory */
+  snprintf(contrib_subdir_path, sizeof(contrib_subdir_path), "lisp/contrib/%s",
+           filename);
+  search_paths[path_count++] = contrib_subdir_path;
+
+  snprintf(parent_contrib_path, sizeof(parent_contrib_path),
+           "../lisp/contrib/%s", filename);
+  search_paths[path_count++] = parent_contrib_path;
+
+  /* Installed paths */
   static char installed_path[TELNET_MAX_PATH];
   if (path_construct_installed_resource("lisp", filename, installed_path,
                                         sizeof(installed_path))) {
     search_paths[path_count++] = installed_path;
+  }
+
+  static char installed_contrib_path[TELNET_MAX_PATH];
+  if (path_construct_installed_resource("lisp/contrib", filename,
+                                        installed_contrib_path,
+                                        sizeof(installed_contrib_path))) {
+    search_paths[path_count++] = installed_contrib_path;
   }
 
   search_paths[path_count] = NULL;
@@ -989,22 +1007,24 @@ static LispObject *builtin_run_hook(LispObject *args, Environment *env) {
   return NIL;
 }
 
-/* Builtin: (run-filter-hook 'hook-name initial-value) */
-static LispObject *builtin_run_filter_hook(LispObject *args, Environment *env) {
+/* Builtin: (run-transform-hook 'hook-name initial-value) */
+static LispObject *builtin_run_transform_hook(LispObject *args,
+                                              Environment *env) {
   if (args == NIL) {
-    return lisp_make_error("run-filter-hook requires 2 arguments");
+    return lisp_make_error("run-transform-hook requires 2 arguments");
   }
 
   LispObject *name_obj = lisp_car(args);
   args = lisp_cdr(args);
   if (args == NIL) {
-    return lisp_make_error("run-filter-hook requires 2 arguments");
+    return lisp_make_error("run-transform-hook requires 2 arguments");
   }
 
   LispObject *value = lisp_car(args);
 
   if (name_obj->type != LISP_SYMBOL) {
-    return lisp_make_error("run-filter-hook: first argument must be a symbol");
+    return lisp_make_error(
+        "run-transform-hook: first argument must be a symbol");
   }
 
   LispObject *hooks_table = get_session_hooks();
@@ -1030,7 +1050,8 @@ static LispObject *builtin_run_filter_hook(LispObject *args, Environment *env) {
     if (result && result->type == LISP_ERROR) {
       char *err_str = lisp_print(result);
       if (err_str) {
-        bloom_log(LOG_ERROR, "hooks", "run-filter-hook %s: %s", name, err_str);
+        bloom_log(LOG_ERROR, "hooks", "run-transform-hook %s: %s", name,
+                  err_str);
       }
       /* On error, keep previous value */
     } else {
@@ -1048,14 +1069,27 @@ static LispObject *builtin_run_filter_hook(LispObject *args, Environment *env) {
   env_define(env, lisp_intern(name)->value.symbol,                             \
              lisp_make_builtin(func, name), pkg_core)
 
-/* Callback for send-input: process text through user-input-hook and send */
+/* Callback for send-input: process text through user-input-transform-hook and
+ * send */
 static TuiMsg send_input_callback(void *data) {
   char *text = (char *)data;
   Session *s = session_get_current();
   if (s && s->telnet) {
     const char *processed = lisp_x_call_user_input_hook(text, strlen(text));
     if (processed) {
-      telnet_send_with_crlf(s->telnet, processed, strlen(processed));
+      /* Split by ';' and send each command separately */
+      const char *start = processed;
+      const char *p = processed;
+      while (*p) {
+        if (*p == ';') {
+          if (p > start)
+            telnet_send_with_crlf(s->telnet, start, p - start);
+          start = p + 1;
+        }
+        p++;
+      }
+      if (p > start)
+        telnet_send_with_crlf(s->telnet, start, p - start);
     }
   }
   return tui_msg_none();
@@ -1172,7 +1206,7 @@ static void register_builtins(Environment *env) {
   REG("add-hook", builtin_add_hook);
   REG("remove-hook", builtin_remove_hook);
   REG("run-hook", builtin_run_hook);
-  REG("run-filter-hook", builtin_run_filter_hook);
+  REG("run-transform-hook", builtin_run_transform_hook);
 }
 
 #undef REG
@@ -1383,9 +1417,10 @@ void lisp_x_run_timers(void) {
   }
 }
 
-/* Call telnet-input-filter-hook */
-const char *lisp_x_call_telnet_input_filter_hook(const char *text, size_t len,
-                                                 size_t *out_len) {
+/* Call telnet-input-transform-hook */
+const char *lisp_x_call_telnet_input_transform_hook(const char *text,
+                                                    size_t len,
+                                                    size_t *out_len) {
   Environment *env = get_current_env();
   if (!env || !text || len == 0 || !out_len) {
     if (out_len)
@@ -1394,7 +1429,7 @@ const char *lisp_x_call_telnet_input_filter_hook(const char *text, size_t len,
   }
 
   LispObject *hook =
-      env_lookup(env, lisp_intern("telnet-input-filter-hook")->value.symbol);
+      env_lookup(env, lisp_intern("telnet-input-transform-hook")->value.symbol);
   if (!lisp_is_callable(hook)) {
     *out_len = len;
     return text;
@@ -1422,7 +1457,7 @@ const char *lisp_x_call_telnet_input_filter_hook(const char *text, size_t len,
   if (!result || result->type == LISP_ERROR) {
     char *err_str = lisp_print(result);
     if (err_str) {
-      bloom_log(LOG_ERROR, "hooks", "telnet-input-filter-hook: %s", err_str);
+      bloom_log(LOG_ERROR, "hooks", "telnet-input-transform-hook: %s", err_str);
     }
     *out_len = len;
     return text;
@@ -1449,7 +1484,7 @@ const char *lisp_x_call_telnet_input_filter_hook(const char *text, size_t len,
   return telnet_filter_buffer;
 }
 
-/* Call user-input-hook */
+/* Call user-input-transform-hook */
 const char *lisp_x_call_user_input_hook(const char *text, int cursor_pos) {
   Environment *env = get_current_env();
   if (!env || !text) {
@@ -1457,7 +1492,7 @@ const char *lisp_x_call_user_input_hook(const char *text, int cursor_pos) {
   }
 
   LispObject *hook =
-      env_lookup(env, lisp_intern("user-input-hook")->value.symbol);
+      env_lookup(env, lisp_intern("user-input-transform-hook")->value.symbol);
   if (!lisp_is_callable(hook)) {
     return text;
   }
@@ -1480,7 +1515,7 @@ const char *lisp_x_call_user_input_hook(const char *text, int cursor_pos) {
   if (!result || result->type == LISP_ERROR) {
     char *err_str = lisp_print(result);
     if (err_str) {
-      bloom_log(LOG_ERROR, "hooks", "user-input-hook: %s", err_str);
+      bloom_log(LOG_ERROR, "hooks", "user-input-transform-hook: %s", err_str);
     }
     if (text && text[0] == '#') {
       return "";

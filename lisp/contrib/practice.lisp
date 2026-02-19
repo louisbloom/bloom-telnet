@@ -2,7 +2,7 @@
 ;;
 ;; This script was created for Carrion Fields MUD (https://carrionfields.net/)
 ;; It handles the /practice command (and its aliases like /p, /pr, etc.) for
-;; automated spell practice. The command is processed via the user-input-hook
+;; automated spell practice. The command is processed via the user-input-transform-hook
 ;; system before TinTin++ processing, allowing clean separation of concerns.
 ;;
 ;; Usage:
@@ -216,31 +216,33 @@
             nil))))))
 
 ;; User input hook handler for /practice commands
-;; Uses add-hook system - sets *user-input-handled* when handling input
-(defun practice-user-input-hook (text cursor-pos)
+;; Transform hook: returns nil to consume, text to pass through
+(defun practice-user-input-hook (text)
   "Handle /practice commands via the hook system.
    Accepts partial prefixes: /p, /pr, /pra, /prac, /pract, /practi, /practic, /practice"
-  (let ((args (practice-command? text)))
-    (when args
-      (cond
-        ;; /p stop or /practice stop
-        ((string=? args "stop") (practice-stop))
-        ;; /p <command> or /practice <command>
-        ((> (length args) 0) (practice-start args))
-        ;; Just /p with no args - show status
-        (#t
-         (if *practice-mode*
-           (practice-echo
-            (concat "Currently practicing: " *practice-command*
-             (if *practice-sleep-mode* " (sleeping)" "")))
-           (practice-echo "Not practicing. Use /p <command> to start."))))
-      ;; Mark as handled
-      (set! *user-input-handled* #t)
-      (set! *user-input-result* nil))))
+  (if (not (string? text))
+    text
+    (let ((args (practice-command? text)))
+      (if args
+        (progn
+          (cond
+            ;; /p stop or /practice stop
+            ((string=? args "stop") (practice-stop))
+            ;; /p <command> or /practice <command>
+            ((> (length args) 0) (practice-start args))
+            ;; Just /p with no args - show status
+            (#t
+             (if *practice-mode*
+               (practice-echo
+                (concat "Currently practicing: " *practice-command*
+                 (if *practice-sleep-mode* " (sleeping)" "")))
+               (practice-echo "Not practicing. Use /p <command> to start."))))
+          nil) ;; consumed — return nil
+        text)))) ;; not a /p command — pass through
 
 ;; Register the user input hook with high priority (runs before tintin)
 ;; Priority 10 = interceptor (handles /practice commands before tintin processes input)
-(add-hook 'user-input-hook practice-user-input-hook 10)
+(add-hook 'user-input-transform-hook practice-user-input-hook 10)
 
 ;; ============================================================================
 ;; INITIALIZATION MESSAGE

@@ -329,23 +329,16 @@
 ;; ============================================================================
 ;; Hook dispatch uses a per-session *hooks* hash table (key = hook name,
 ;; value = sorted list of (fn . priority) pairs). add-hook, remove-hook,
-;; run-hook, run-filter-hook are C builtins that operate on this table.
+;; run-hook, run-transform-hook are C builtins that operate on this table.
 ;; These wrappers are called from C via lisp_x_call_* functions.
 (defun telnet-input-hook (text)
   "Process telnet server output through registered hooks."
   (run-hook 'telnet-input-hook text)
   nil)
 
-(defvar *user-input-handled* nil)
-
-(defvar *user-input-result* nil)
-
-(defun user-input-hook (text cursor-pos)
+(defun user-input-transform-hook (text cursor-pos)
   "Transform user input before sending to telnet server."
-  (set! *user-input-handled* nil)
-  (set! *user-input-result* nil)
-  (run-hook 'user-input-hook text cursor-pos)
-  (if *user-input-handled* *user-input-result* text))
+  (run-transform-hook 'user-input-transform-hook text))
 
 ;; ============================================================================
 ;; COMPLETION HOOK
@@ -366,11 +359,11 @@
 (add-hook 'telnet-input-hook default-word-collector)
 
 ;; ============================================================================
-;; TELNET INPUT FILTER HOOK
+;; TELNET INPUT TRANSFORM HOOK
 ;; ============================================================================
-(defun telnet-input-filter-hook (text)
+(defun telnet-input-transform-hook (text)
   "Transform telnet server output before displaying."
-  (run-filter-hook 'telnet-input-filter-hook text))
+  (run-transform-hook 'telnet-input-transform-hook text))
 
 ;; ============================================================================
 ;; TIMER SYSTEM

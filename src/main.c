@@ -223,10 +223,22 @@ static void process_line(const char *line) {
     echo_to_viewport(reset, strlen(reset));
     echo_to_viewport("\n", 1);
 
-    /* Process through user input hook (sends empty lines too) */
+    /* Process through user input transform hook (sends empty lines too) */
     const char *processed = lisp_x_call_user_input_hook(line, strlen(line));
     if (processed) {
-      telnet_send_with_crlf(g_telnet, processed, strlen(processed));
+      /* Split by ';' and send each command separately */
+      const char *start = processed;
+      const char *p = processed;
+      while (*p) {
+        if (*p == ';') {
+          if (p > start)
+            telnet_send_with_crlf(g_telnet, start, p - start);
+          start = p + 1;
+        }
+        p++;
+      }
+      if (p > start)
+        telnet_send_with_crlf(g_telnet, start, p - start);
     }
   } else if (line[0] != '\0') {
     echo_to_viewport("\nNot connected. Use :connect <host> <port>\n", 44);
@@ -323,7 +335,7 @@ static int handle_telnet_data(char *recv_buffer, size_t buffer_size) {
     /* Call input hooks */
     lisp_x_call_telnet_input_hook(recv_buffer, received);
     size_t filtered_len;
-    const char *filtered = lisp_x_call_telnet_input_filter_hook(
+    const char *filtered = lisp_x_call_telnet_input_transform_hook(
         recv_buffer, received, &filtered_len);
 
     /* Append filtered data to viewport */

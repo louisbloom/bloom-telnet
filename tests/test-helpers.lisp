@@ -92,19 +92,19 @@
             ((null? remaining) nil)
           (apply (car (car remaining)) args))))))
 
-(defun run-filter-hook--loop (entries val)
+(defun run-transform-hook--loop (entries val)
   "Helper: thread value through remaining hook entries."
   (if (null? entries)
     val
     (let ((fn (car (car entries))))
-      (run-filter-hook--loop (cdr entries) (fn val)))))
+      (run-transform-hook--loop (cdr entries) (fn val)))))
 
-(defun run-filter-hook (hook initial-value)
+(defun run-transform-hook (hook initial-value)
   "Mock: thread a value through all functions registered on a hook."
   (let ((name (symbol->string hook)))
     (let ((hook-list (hash-ref *hooks* name)))
       (if hook-list
-        (run-filter-hook--loop hook-list initial-value)
+        (run-transform-hook--loop hook-list initial-value)
         initial-value))))
 
 ;; ============================================================================
