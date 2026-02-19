@@ -103,11 +103,15 @@
 (hash-set! *spell-dictionary* "izoahuzz" "negative") ; negatiee → negative
 (hash-set! *spell-dictionary* "saguhuzz" "positive") ; pasitiee → positive
 
+(defun spell-echo (msg)
+  "Echo a spell translator status message to the terminal."
+  (terminal-echo (concat "\r\n\033[36m[🔮 Spells]\033[0m " msg "\r\n")))
+
 ;; Add a known spell word (skips translation when seen)
 (defun spell-add-known (word)
   "Add a known spell word: (spell-add-known \"word\")"
   (set! *known-spell-words* (cons word *known-spell-words*))
-  (terminal-echo (concat "Added known word: " word))
+  (spell-echo (concat "Added known word: " word))
   word)
 
 ;; Remove a known spell word
@@ -117,15 +121,15 @@
     (set! *known-spell-words*
      (filter (lambda (w) (not (string=? w word))) *known-spell-words*))
     (if (< (length *known-spell-words*) before)
-      (terminal-echo (concat "Removed known word: " word))
-      (terminal-echo (concat "Not found: " word)))
+      (spell-echo (concat "Removed known word: " word))
+      (spell-echo (concat "Not found: " word)))
     word))
 
 ;; Add a custom word override
 (defun spell-add (garbled correct)
   "Add a dictionary override: (spell-add \"garbled\" \"correct\")"
   (hash-set! *spell-dictionary* garbled correct)
-  (terminal-echo (concat "Added: " garbled " -> " correct))
+  (spell-echo (concat "Added: " garbled " -> " correct))
   correct)
 
 ;; Remove a word override
