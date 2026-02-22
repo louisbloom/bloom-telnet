@@ -63,7 +63,7 @@
     "recharge" "refresh" "remove" "resist" "restoration" "resurrection" "rose"
     "sanctuary" "serious" "sex" "shield" "shock" "skin" "sleep" "slow" "spray"
     "spring" "stone" "strength" "summon" "tele" "touch" "truth" "ventriloquate"
-    "water" "weaken" "weapon" "weather" "word" "wrath"))
+    "water" "weaken" "weapon" "weather" "word" "wrath" "bloodlust"))
 
 ;; Check if utterance contains any known spell word
 (defun known-spell? (phrase)
