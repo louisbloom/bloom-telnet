@@ -16,6 +16,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 /* Check if a Lisp object is callable (lambda, macro, or builtin) */
 static inline int lisp_is_callable(LispObject *obj) {
@@ -1117,12 +1118,24 @@ static LispObject *builtin_send_input(LispObject *args, Environment *env) {
   return NIL;
 }
 
+/* Builtin: wake-event-loop - Wake the event loop so it recomputes timeout */
+static LispObject *builtin_wake_event_loop(LispObject *args, Environment *env) {
+  (void)args;
+  (void)env;
+
+  if (registered_runtime)
+    tui_runtime_wakeup(registered_runtime);
+
+  return NIL;
+}
+
 /* Register all builtins on the given environment */
 static void register_builtins(Environment *env) {
   REG("strip-ansi", builtin_strip_ansi);
   REG("terminal-echo", builtin_terminal_echo);
   REG("telnet-send", builtin_telnet_send);
   REG("send-input", builtin_send_input);
+  REG("wake-event-loop", builtin_wake_event_loop);
 
   /* Terminal capability builtin */
   lisp_set_docstring(
@@ -1415,6 +1428,54 @@ void lisp_x_run_timers(void) {
       bloom_log(LOG_ERROR, "hooks", "run-timers: %s", err_str);
     }
   }
+}
+
+/* Return ms until next timer fires, or -1 if no timers are active */
+int lisp_x_next_timer_ms(void) {
+  Environment *env = get_current_env();
+  if (!env)
+    return -1;
+
+  LispObject *timer_list =
+      env_lookup(env, lisp_intern("*timer-list*")->value.symbol);
+  if (!timer_list || timer_list == NIL)
+    return -1;
+
+  /* Get current time in ms (same source as current-time-ms) */
+  struct timespec ts;
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+  long long now_ms = (long long)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+
+  long long earliest = -1;
+  LispObject *p = timer_list;
+  while (p != NIL && p->type == LISP_CONS) {
+    LispObject *timer = lisp_car(p);
+    /* Timer format: (id fire-time repeat-ms function args) */
+    if (timer && timer->type == LISP_CONS) {
+      LispObject *rest = lisp_cdr(timer);
+      if (rest && rest->type == LISP_CONS) {
+        LispObject *fire_time_obj = lisp_car(rest);
+        if (fire_time_obj && fire_time_obj->type == LISP_INTEGER) {
+          long long fire_time = fire_time_obj->value.integer;
+          if (earliest < 0 || fire_time < earliest)
+            earliest = fire_time;
+        } else if (fire_time_obj && fire_time_obj->type == LISP_NUMBER) {
+          long long fire_time = (long long)fire_time_obj->value.number;
+          if (earliest < 0 || fire_time < earliest)
+            earliest = fire_time;
+        }
+      }
+    }
+    p = lisp_cdr(p);
+  }
+
+  if (earliest < 0)
+    return -1;
+
+  long long delta = earliest - now_ms;
+  if (delta <= 0)
+    return 0;
+  return (int)delta;
 }
 
 /* Call telnet-input-transform-hook */

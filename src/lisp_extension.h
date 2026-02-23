@@ -93,4 +93,8 @@ void lisp_x_register_runtime(struct TuiRuntime *runtime);
 /* Dispatch F-key press to Lisp fkey-hook */
 void lisp_x_call_fkey_hook(int fkey_num);
 
+/* Return ms until next timer fires, or -1 if no timers are active.
+ * Used by the event loop to compute select() timeout. */
+int lisp_x_next_timer_ms(void);
+
 #endif /* BLOOM_TELNET_LISP_H */

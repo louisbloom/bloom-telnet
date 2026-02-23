@@ -390,6 +390,7 @@
          (timer (list id fire-time repeat-ms function args)))
     (set! *timer-next-id* (+ *timer-next-id* 1))
     (set! *timer-list* (cons timer *timer-list*))
+    (when (bound? 'wake-event-loop) (wake-event-loop))
     timer))
 
 (defun cancel-timer (timer)

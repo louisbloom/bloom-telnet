@@ -169,6 +169,12 @@ static void on_tick(void *user_data) {
   lisp_x_run_timers();
 }
 
+/* Return ms until next timer, or -1 to block indefinitely */
+static int get_tick_timeout_ms(void *user_data) {
+  (void)user_data;
+  return lisp_x_next_timer_ms();
+}
+
 /* Called after terminal resize (runtime already sent WINDOW_SIZE to component)
  */
 static void on_resize(int width, int height, void *user_data) {
@@ -457,6 +463,7 @@ int main(int argc, char *argv[]) {
       .get_external_fd = get_telnet_fd,
       .on_external_ready = on_telnet_ready,
       .on_tick = on_tick,
+      .get_tick_timeout_ms = get_tick_timeout_ms,
       .on_resize = on_resize,
       .on_stdin_processed = on_stdin_processed,
       .event_data = NULL,
