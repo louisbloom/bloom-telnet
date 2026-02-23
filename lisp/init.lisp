@@ -59,6 +59,15 @@
   "Seconds between keepalive probes after the first probe.")
 
 ;; ============================================================================
+;; CONNECTION TIMEOUT CONFIGURATION
+;; ============================================================================
+(defvar *connect-timeout* 2
+  "Seconds to wait for each connection attempt before retrying.")
+
+(defvar *connect-max-retries* 5
+  "Maximum number of connection retries after the initial attempt.")
+
+;; ============================================================================
 ;; INPUT CONFIGURATION
 ;; ============================================================================
 (defvar *input-history-size* 1000

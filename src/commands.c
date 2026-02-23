@@ -249,7 +249,7 @@ int process_command(const char *text, Telnet *telnet, int *connected_mode,
     /* Attempt connection */
     output_messagef("\n*** Connecting to %s:%d... ***\n", hostname, port);
 
-    if (telnet_connect(telnet, hostname, port) < 0) {
+    if (telnet_connect(telnet, hostname, port, s_echo_fn) < 0) {
       output_messagef("\n*** Failed to connect to %s:%d ***\n", hostname, port);
     } else {
       *connected_mode = 1;

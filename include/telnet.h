@@ -26,8 +26,9 @@ typedef enum {
 /* Create a new Telnet client */
 Telnet *telnet_create(void);
 
-/* Connect to a server */
-int telnet_connect(Telnet *t, const char *hostname, int port);
+/* Connect to a server (retries on timeout, calls progress_fn with status) */
+int telnet_connect(Telnet *t, const char *hostname, int port,
+                   void (*progress_fn)(const char *msg, size_t len));
 
 /* Disconnect from server */
 void telnet_disconnect(Telnet *t);

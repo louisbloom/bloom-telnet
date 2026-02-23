@@ -516,7 +516,7 @@ int main(int argc, char *argv[]) {
     char msg[256];
     snprintf(msg, sizeof(msg), "Connecting to %s:%d...\n", hostname, port);
     telnet_app_echo(g_app, msg, strlen(msg));
-    if (telnet_connect(g_telnet, hostname, port) < 0) {
+    if (telnet_connect(g_telnet, hostname, port, echo_to_viewport) < 0) {
       snprintf(msg, sizeof(msg), "Failed to connect to %s:%d\n", hostname,
                port);
       telnet_app_echo(g_app, msg, strlen(msg));
