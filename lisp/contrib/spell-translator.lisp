@@ -35,7 +35,7 @@
 ;; Reverse single-character table
 ;; Ambiguous mappings (a→a/o, z→e/v, y→f/j) default to most common letter
 (define *spell-reverse-chars*
-  '((#\a . #\a) ; ambiguous: could be 'o', defaulting to 'a'
+  '((#\a . #\o) ; ambiguous: seems to be way more `o`s than `a`s
     (#\b . #\b) (#\q . #\c) (#\e . #\d) (#\z . #\e) ; ambiguous: could be 'v', defaulting to 'e'
     (#\y . #\f) ; ambiguous: could be 'j', defaulting to 'f'
     (#\o . #\g) (#\p . #\h) (#\u . #\i) (#\t . #\k) (#\r . #\l) (#\w . #\m)
@@ -50,18 +50,17 @@
 ;; When you're the same class as the caster, you see the real spell name.
 ;; If any word in the utterance matches a known spell word, skip translation.
 (define *known-spell-words*
-  '("acid" "align" "armor" "aura" "barrier" "benediction" "blast" "bless"
-    "blind" "bolt" "breath" "burn" "call" "calm" "cancel" "cause" "chain"
-    "change" "charm" "chill" "colour" "continual" "control" "create" "critical"
-    "cure" "curse" "demon" "detect" "disease" "dispel" "disrupt" "door" "drain"
-    "earth" "enchant" "energy" "evil" "exorcism" "explosive" "faerie"
-    "farsight" "fire" "flame" "fly" "fog" "food" "frenzy" "frost" "gas" "gate"
-    "giant" "good" "grasp" "hands" "harm" "haste" "heal" "heat" "hidden" "high"
-    "holy" "identify" "infravision" "invis" "know" "light" "locate" "magic"
-    "mass" "metal" "missile" "negative" "neuro" "nexus" "object" "pass"
-    "person" "plague" "poison" "positive" "portal" "protection" "ray" "recall"
-    "recharge" "refresh" "remove" "resist" "restoration" "resurrection" "rose"
-    "sanctuary" "serious" "sex" "shield" "shock" "skin" "sleep" "slow" "spray"
+  '("acid" "align" "armor" "aura" "barrier" "blast" "bless" "blind" "bolt"
+    "breath" "burn" "call" "calm" "cancel" "cause" "chain" "change" "charm"
+    "chill" "colour" "continual" "control" "create" "critical" "cure" "curse"
+    "demon" "detect" "disease" "dispel" "disrupt" "door" "drain" "earth"
+    "enchant" "energy" "evil" "exorcism" "explosive" "faerie" "farsight" "fire"
+    "flame" "fly" "fog" "food" "frenzy" "frost" "gas" "gate" "giant" "good"
+    "grasp" "hands" "harm" "haste" "heal" "heat" "hidden" "high" "holy"
+    "identify" "infravision" "invis" "know" "light" "locate" "magic" "mass"
+    "metal" "missile" "negative" "neuro" "nexus" "object" "pass" "person"
+    "plague" "poison" "positive" "portal" "protection" "recall" "recharge"
+    "refresh" "remove" "resist" "shield" "shock" "skin" "sleep" "slow" "spray"
     "spring" "stone" "strength" "summon" "tele" "touch" "truth" "ventriloquate"
     "water" "weaken" "weapon" "weather" "word" "wrath" "bloodlust"))
 
