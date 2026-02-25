@@ -150,18 +150,6 @@ int path_is_absolute(const char *path) {
 #endif
 }
 
-/* Check if a file exists at the given path.
- * Returns: 1 if exists, 0 if not
- */
-int file_exists(const char *path) {
-  FILE *f = file_open(path, "r");
-  if (f) {
-    fclose(f);
-    return 1;
-  }
-  return 0;
-}
-
 /* Get the executable's base path (directory containing the executable).
  * Returns: Newly allocated string that must be freed by caller, or NULL on
  * error. Note: Returns path with trailing separator.

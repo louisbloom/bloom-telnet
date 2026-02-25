@@ -44,11 +44,6 @@ int path_construct_exe_relative(const char *base_path, const char *filename,
  */
 int path_is_absolute(const char *path);
 
-/* Check if a file exists at the given path.
- * Returns: 1 if exists, 0 if not
- */
-int file_exists(const char *path);
-
 /* Get the executable's base path (directory containing the executable).
  * Returns: Newly allocated string that must be freed by caller, or NULL on
  * error. Note: Returns path with trailing separator.
