@@ -122,7 +122,8 @@
 ;; ============================================================================
 ;; WORD CHARACTER SET (whitelist)
 ;; ============================================================================
-(defvar *word-chars* "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_-"
+(defvar *word-chars*
+  "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-"
   "Characters that form words for completion and word movement.")
 
 (defun word-char? (c)
