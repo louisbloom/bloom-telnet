@@ -383,7 +383,12 @@
 (defvar *timer-next-id* 1 "Next timer ID to assign.")
 
 (defun run-at-time (time repeat function &rest args)
-  "Schedule FUNCTION to run after TIME seconds."
+  "Schedule FUNCTION to run after TIME seconds.
+If REPEAT is non-nil, re-run every REPEAT seconds.
+Returns a timer object that can be passed to cancel-timer.
+
+Example — send a command every 10 seconds:
+  (run-at-time 0 10 (lambda () (telnet-send \"look\")))"
   (let* ((delay-ms (* time 1000))
          (repeat-ms (if repeat (* repeat 1000) 0))
          (fire-time (+ (current-time-ms) delay-ms))
