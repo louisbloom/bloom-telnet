@@ -963,6 +963,28 @@ static LispObject *builtin_remove_hook(LispObject *args, Environment *env) {
   return NIL;
 }
 
+/* Builtin: (clear-hook 'hook-name) — remove all handlers from a hook */
+static LispObject *builtin_clear_hook(LispObject *args, Environment *env) {
+  (void)env;
+
+  if (args == NIL) {
+    return lisp_make_error("clear-hook requires 1 argument");
+  }
+
+  LispObject *name_obj = lisp_car(args);
+  if (name_obj->type != LISP_SYMBOL) {
+    return lisp_make_error("clear-hook: argument must be a symbol");
+  }
+
+  LispObject *hooks_table = get_session_hooks();
+  if (!hooks_table) {
+    return lisp_make_error("clear-hook: no current session");
+  }
+
+  hash_table_set_entry(hooks_table, name_obj, NIL);
+  return NIL;
+}
+
 /* Builtin: (run-hook 'hook-name &rest args) */
 static LispObject *builtin_run_hook(LispObject *args, Environment *env) {
   if (args == NIL) {
@@ -1218,6 +1240,7 @@ static void register_builtins(Environment *env) {
   /* Hook system builtins */
   REG("add-hook", builtin_add_hook);
   REG("remove-hook", builtin_remove_hook);
+  REG("clear-hook", builtin_clear_hook);
   REG("run-hook", builtin_run_hook);
   REG("run-transform-hook", builtin_run_transform_hook);
 }
