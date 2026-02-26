@@ -21,6 +21,9 @@
 
 #include "../src/telnet_app.h"
 
+/* Stub for lisp_x_call_fkey_hook (linked from telnet_app.o) */
+void lisp_x_call_fkey_hook(int fkey_num) { (void)fkey_num; }
+
 static int tests_run = 0;
 static int tests_passed = 0;
 
@@ -33,11 +36,14 @@ static int tests_passed = 0;
     } while (0)
 
 /* ========================================================================
- * Helper: create a TelnetApp with default config
+ * Helpers: create/update/free via component interface
  * ======================================================================== */
+
+static const TuiComponent *g_comp = NULL;
 
 static TelnetAppModel *create_test_app(void)
 {
+    if (!g_comp) g_comp = telnet_app_component();
     TelnetAppConfig cfg = {
         .terminal_width = 80,
         .terminal_height = 24,
@@ -45,7 +51,18 @@ static TelnetAppModel *create_test_app(void)
         .show_prompt = 1,
         .history_size = 10,
     };
-    return telnet_app_create(&cfg);
+    TuiInitResult r = g_comp->init(&cfg);
+    return (TelnetAppModel *)r.model;
+}
+
+static TuiUpdateResult test_app_update(TelnetAppModel *app, TuiMsg msg)
+{
+    return g_comp->update((TuiModel *)app, msg);
+}
+
+static void test_app_free(TelnetAppModel *app)
+{
+    g_comp->free((TuiModel *)app);
 }
 
 /* ========================================================================
@@ -130,14 +147,14 @@ static void test_window_size_updates_dimensions(void)
     assert(app->terminal_height == 24);
 
     TuiMsg msg = tui_msg_window_size(132, 50);
-    TuiUpdateResult result = telnet_app_update(app, msg);
+    TuiUpdateResult result = test_app_update(app, msg);
 
     assert(app->terminal_width == 132);
     assert(app->terminal_height == 50);
 
     if (result.cmd)
         tui_cmd_free(result.cmd);
-    telnet_app_free(app);
+    test_app_free(app);
 }
 
 /* Test that WINDOW_SIZE with small dimensions works */
@@ -146,14 +163,14 @@ static void test_window_size_small(void)
     TelnetAppModel *app = create_test_app();
 
     TuiMsg msg = tui_msg_window_size(20, 5);
-    TuiUpdateResult result = telnet_app_update(app, msg);
+    TuiUpdateResult result = test_app_update(app, msg);
 
     assert(app->terminal_width == 20);
     assert(app->terminal_height == 5);
 
     if (result.cmd)
         tui_cmd_free(result.cmd);
-    telnet_app_free(app);
+    test_app_free(app);
 }
 
 /* ========================================================================
@@ -177,14 +194,14 @@ static void test_mouse_wheel_up_scrolls(void)
     /* Send mouse wheel up */
     TuiMsg msg = tui_msg_mouse(TUI_MOUSE_WHEEL_UP, TUI_MOUSE_ACTION_PRESS,
                                1, 1);
-    TuiUpdateResult result = telnet_app_update(app, msg);
+    TuiUpdateResult result = test_app_update(app, msg);
 
     int new_offset = (int)vp->y_offset;
     assert(new_offset < initial_offset); /* Scrolled up (offset decreased) */
 
     if (result.cmd)
         tui_cmd_free(result.cmd);
-    telnet_app_free(app);
+    test_app_free(app);
 }
 
 /* Test that mouse wheel down scrolls the viewport down */
@@ -204,14 +221,14 @@ static void test_mouse_wheel_down_scrolls(void)
     /* Send mouse wheel down */
     TuiMsg msg = tui_msg_mouse(TUI_MOUSE_WHEEL_DOWN, TUI_MOUSE_ACTION_PRESS,
                                1, 1);
-    TuiUpdateResult result = telnet_app_update(app, msg);
+    TuiUpdateResult result = test_app_update(app, msg);
 
     int new_offset = (int)vp->y_offset;
     assert(new_offset > initial_offset); /* Scrolled down (offset increased) */
 
     if (result.cmd)
         tui_cmd_free(result.cmd);
-    telnet_app_free(app);
+    test_app_free(app);
 }
 
 /* Test that mouse scroll returns no command */
@@ -221,10 +238,10 @@ static void test_mouse_scroll_no_cmd(void)
 
     TuiMsg msg = tui_msg_mouse(TUI_MOUSE_WHEEL_UP, TUI_MOUSE_ACTION_PRESS,
                                1, 1);
-    TuiUpdateResult result = telnet_app_update(app, msg);
+    TuiUpdateResult result = test_app_update(app, msg);
     assert(result.cmd == NULL);
 
-    telnet_app_free(app);
+    test_app_free(app);
 }
 
 /* Test that non-scroll mouse events are handled without crashing */
@@ -233,10 +250,10 @@ static void test_mouse_click_no_crash(void)
     TelnetAppModel *app = create_test_app();
 
     TuiMsg msg = tui_msg_mouse(TUI_MOUSE_LEFT, TUI_MOUSE_ACTION_PRESS, 5, 10);
-    TuiUpdateResult result = telnet_app_update(app, msg);
+    TuiUpdateResult result = test_app_update(app, msg);
     assert(result.cmd == NULL);
 
-    telnet_app_free(app);
+    test_app_free(app);
 }
 
 /* ========================================================================
@@ -258,14 +275,14 @@ static void test_page_up_scrolls(void)
 
     /* Send PageUp key */
     TuiMsg msg = tui_msg_key(TUI_KEY_PAGE_UP, 0, 0);
-    TuiUpdateResult result = telnet_app_update(app, msg);
+    TuiUpdateResult result = test_app_update(app, msg);
 
     int new_offset = (int)vp->y_offset;
     assert(new_offset < initial_offset);
 
     if (result.cmd)
         tui_cmd_free(result.cmd);
-    telnet_app_free(app);
+    test_app_free(app);
 }
 
 /* Test that PageDown scrolls the viewport down */
@@ -284,14 +301,14 @@ static void test_page_down_scrolls(void)
 
     /* Send PageDown key */
     TuiMsg msg = tui_msg_key(TUI_KEY_PAGE_DOWN, 0, 0);
-    TuiUpdateResult result = telnet_app_update(app, msg);
+    TuiUpdateResult result = test_app_update(app, msg);
 
     int new_offset = (int)vp->y_offset;
     assert(new_offset > initial_offset);
 
     if (result.cmd)
         tui_cmd_free(result.cmd);
-    telnet_app_free(app);
+    test_app_free(app);
 }
 
 /* Test that PageUp/PageDown return no command */
@@ -300,14 +317,14 @@ static void test_page_keys_no_cmd(void)
     TelnetAppModel *app = create_test_app();
 
     TuiMsg msg_up = tui_msg_key(TUI_KEY_PAGE_UP, 0, 0);
-    TuiUpdateResult result_up = telnet_app_update(app, msg_up);
+    TuiUpdateResult result_up = test_app_update(app, msg_up);
     assert(result_up.cmd == NULL);
 
     TuiMsg msg_down = tui_msg_key(TUI_KEY_PAGE_DOWN, 0, 0);
-    TuiUpdateResult result_down = telnet_app_update(app, msg_down);
+    TuiUpdateResult result_down = test_app_update(app, msg_down);
     assert(result_down.cmd == NULL);
 
-    telnet_app_free(app);
+    test_app_free(app);
 }
 
 /* ========================================================================
