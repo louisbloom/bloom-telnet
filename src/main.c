@@ -25,6 +25,7 @@
 #include <bloom-boba/ansi_sequences.h>
 #include <bloom-boba/cmd.h>
 #include <bloom-boba/runtime.h>
+#include <bloom-lisp/lisp.h>
 
 /* Global state */
 static Telnet *g_telnet = NULL;
@@ -32,6 +33,7 @@ static TelnetAppModel *g_app = NULL;
 static TuiRuntime *g_runtime = NULL;
 static int g_connected = 0;
 static int g_quit_requested = 0;
+static int g_server_echo = 0;
 int g_term_rows = 24;
 int g_term_cols = 80;
 
@@ -213,21 +215,33 @@ static void process_line(const char *line) {
     }
     if (g_connected != was_connected) {
       update_divider_color();
+      if (!g_connected && g_server_echo) {
+        g_server_echo = 0;
+        tui_textinput_set_echo_mode(g_textinput, 0);
+        Environment *env = (Environment *)lisp_x_get_environment();
+        if (env)
+          lisp_eval_string("(statusbar-mode-remove 'echo-off)", env);
+      }
     }
   } else if (g_connected) {
-    /* Echo user input to viewport in configurable color */
-    int ur, ug, ub;
-    if (lisp_x_get_color("*color-user-input*", &ur, &ug, &ub) < 0) {
-      ur = COLOR_USER_INPUT_R;
-      ug = COLOR_USER_INPUT_G;
-      ub = COLOR_USER_INPUT_B;
+    if (g_server_echo) {
+      /* Password mode: don't echo the typed text, just the newline */
+      echo_to_viewport("\n", 1);
+    } else {
+      /* Echo user input to viewport in configurable color */
+      int ur, ug, ub;
+      if (lisp_x_get_color("*color-user-input*", &ur, &ug, &ub) < 0) {
+        ur = COLOR_USER_INPUT_R;
+        ug = COLOR_USER_INPUT_G;
+        ub = COLOR_USER_INPUT_B;
+      }
+      const char *gold = termcaps_format_fg_color(ur, ug, ub);
+      const char *reset = termcaps_format_reset();
+      echo_to_viewport(gold, strlen(gold));
+      echo_to_viewport(line, strlen(line));
+      echo_to_viewport(reset, strlen(reset));
+      echo_to_viewport("\n", 1);
     }
-    const char *gold = termcaps_format_fg_color(ur, ug, ub);
-    const char *reset = termcaps_format_reset();
-    echo_to_viewport(gold, strlen(gold));
-    echo_to_viewport(line, strlen(line));
-    echo_to_viewport(reset, strlen(reset));
-    echo_to_viewport("\n", 1);
 
     /* Process through user input transform hook (sends empty lines too) */
     const char *processed = lisp_x_call_user_input_hook(line, strlen(line));
@@ -330,6 +344,13 @@ static int handle_telnet_data(char *recv_buffer, size_t buffer_size) {
 
   if (received < 0) {
     g_connected = 0;
+    if (g_server_echo) {
+      g_server_echo = 0;
+      tui_textinput_set_echo_mode(g_textinput, 0);
+      Environment *env = (Environment *)lisp_x_get_environment();
+      if (env)
+        lisp_eval_string("(statusbar-mode-remove 'echo-off)", env);
+    }
     update_divider_color();
     echo_to_viewport("\n*** Connection lost ***\n", 25);
     return -1;
@@ -337,6 +358,21 @@ static int handle_telnet_data(char *recv_buffer, size_t buffer_size) {
 
   if (received > 0) {
     recv_buffer[received] = '\0';
+
+    /* Check for echo state change (password mode toggle) */
+    int echo_now = telnet_get_server_echo(g_telnet);
+    if (echo_now != g_server_echo) {
+      g_server_echo = echo_now;
+      tui_textinput_set_echo_mode(g_textinput, echo_now);
+      Environment *env = (Environment *)lisp_x_get_environment();
+      if (env) {
+        if (echo_now)
+          lisp_eval_string(
+              "(statusbar-mode-set 'echo-off \"\xF0\x9F\x94\x92\" 200)", env);
+        else
+          lisp_eval_string("(statusbar-mode-remove 'echo-off)", env);
+      }
+    }
 
     /* Call input hooks */
     lisp_x_call_telnet_input_hook(recv_buffer, received);

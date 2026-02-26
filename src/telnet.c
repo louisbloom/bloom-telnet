@@ -67,6 +67,9 @@ struct Telnet {
   int socket;
   TelnetState state;
   int rows, cols;
+  int server_echo; /* Server is echoing (password mode) */
+  TelnetDataState
+      data_state;          /* IAC state machine (persists across recv calls) */
   FILE *log_file;          /* Log file handle for I/O logging */
   char log_filename[1024]; /* Path to current log file */
   DynamicBuffer
@@ -197,6 +200,13 @@ static void telnet_log_data(Telnet *t, const char *direction,
   /* Write log line: [timestamp] DIRECTION: <data> */
   fprintf(t->log_file, "[%s] %s: ", timestamp, direction);
 
+  /* Mask sent data when server is echoing (password mode) */
+  if (strcmp(direction, "SEND") == 0 && t->server_echo) {
+    fprintf(t->log_file, "********\\r\\n\n");
+    fflush(t->log_file);
+    return;
+  }
+
   /* Write data, escaping non-printable characters */
   for (size_t i = 0; i < len; i++) {
     unsigned char c = data[i];
@@ -232,6 +242,8 @@ Telnet *telnet_create(void) {
   t->state = TELNET_STATE_DISCONNECTED;
   t->rows = 40;
   t->cols = 80;
+  t->server_echo = 0;
+  t->data_state = TELNET_DATA_NORMAL;
   t->log_file = NULL;
 
   /* Create reusable buffers for send operations */
@@ -501,6 +513,8 @@ void telnet_disconnect(Telnet *t) {
   close(t->socket);
   t->socket = -1;
   t->state = TELNET_STATE_DISCONNECTED;
+  t->server_echo = 0;
+  t->data_state = TELNET_DATA_NORMAL;
 }
 
 int telnet_send(Telnet *t, const char *data, size_t len) {
@@ -594,17 +608,16 @@ int telnet_receive(Telnet *t, char *buffer, size_t bufsize) {
     return -1;
   }
 
-  /* Parse Telnet commands */
+  /* Parse Telnet commands (state persists across recv calls) */
   size_t pos = 0;
-  TelnetDataState state = TELNET_DATA_NORMAL;
 
   for (int i = 0; i < received; i++) {
     unsigned char c = buffer[i];
 
-    switch (state) {
+    switch (t->data_state) {
     case TELNET_DATA_NORMAL:
       if (c == IAC) {
-        state = TELNET_DATA_IAC;
+        t->data_state = TELNET_DATA_IAC;
       } else {
         buffer[pos++] = c;
       }
@@ -614,34 +627,41 @@ int telnet_receive(Telnet *t, char *buffer, size_t bufsize) {
       switch (c) {
       case IAC:
         buffer[pos++] = IAC;
-        state = TELNET_DATA_NORMAL;
+        t->data_state = TELNET_DATA_NORMAL;
         break;
       case WILL:
-        state = TELNET_DATA_WILL;
+        t->data_state = TELNET_DATA_WILL;
         break;
       case WONT:
-        state = TELNET_DATA_WONT;
+        t->data_state = TELNET_DATA_WONT;
         break;
       case DO:
-        state = TELNET_DATA_DO;
+        t->data_state = TELNET_DATA_DO;
         break;
       case DONT:
-        state = TELNET_DATA_DONT;
+        t->data_state = TELNET_DATA_DONT;
         break;
       case SE:
       case NOP:
       default:
-        state = TELNET_DATA_NORMAL;
+        t->data_state = TELNET_DATA_NORMAL;
         break;
       }
       break;
 
     case TELNET_DATA_WILL:
+      if (c == OPT_ECHO)
+        t->server_echo = 1;
+      t->data_state = TELNET_DATA_NORMAL;
+      break;
     case TELNET_DATA_WONT:
+      if (c == OPT_ECHO)
+        t->server_echo = 0;
+      t->data_state = TELNET_DATA_NORMAL;
+      break;
     case TELNET_DATA_DO:
     case TELNET_DATA_DONT:
-      /* Ignore option for now */
-      state = TELNET_DATA_NORMAL;
+      t->data_state = TELNET_DATA_NORMAL;
       break;
     }
   }
@@ -649,6 +669,8 @@ int telnet_receive(Telnet *t, char *buffer, size_t bufsize) {
   buffer[pos] = '\0';
   return pos;
 }
+
+int telnet_get_server_echo(Telnet *t) { return t ? t->server_echo : 0; }
 
 int telnet_get_socket(Telnet *t) { return t ? t->socket : -1; }
 

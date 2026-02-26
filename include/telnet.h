@@ -45,6 +45,9 @@ DynamicBuffer *telnet_get_user_input_buffer(Telnet *t);
 /* Receive data from server */
 int telnet_receive(Telnet *t, char *buffer, size_t bufsize);
 
+/* Get server echo state (1 = server echoing, i.e. password mode) */
+int telnet_get_server_echo(Telnet *t);
+
 /* Get socket file descriptor for select/poll */
 int telnet_get_socket(Telnet *t);
 
