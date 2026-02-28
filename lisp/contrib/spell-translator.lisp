@@ -87,25 +87,20 @@
 (defvar *spell-dictionary* (make-hash-table))
 
 ;; Built-in overrides for common spells affected by ambiguity
-(hash-set! *spell-dictionary* "qaiyjcandus" "conjure") ; canfure → conjure
-(hash-set! *spell-dictionary* "eaaf" "door") ; daar → door
-(hash-set! *spell-dictionary* "barh" "bolt") ; balt → bolt
-(hash-set! *spell-dictionary* "bajroculof" "boulder") ; baulder → boulder
-(hash-set! *spell-dictionary* "aiqpaf" "anchor") ; anchar → anchor
-(hash-set! *spell-dictionary* "abraqpai" "archon") ; archan → archon
-(hash-set! *spell-dictionary* "uizug" "invis") ; ineis → invis
-(hash-set! *spell-dictionary* "aiozr" "angel") ; ansel → angel
-(hash-set! *spell-dictionary* "uiygruzuguai" "infravision") ; infraeisian → infravision
-(hash-set! *spell-dictionary* "zawsufuq" "vampiric") ; eampiric → vampiric
-(hash-set! *spell-dictionary* "izjfahiouqar" "neurological") ; neuralogical → neurological
-(hash-set! *spell-dictionary* "eugfjshuai" "disruption") ; disruptian → disruption
-(hash-set! *spell-dictionary* "izoahuzz" "negative") ; negatiee → negative
-(hash-set! *spell-dictionary* "saguhuzz" "positive") ; pasitiee → positive
-(hash-set! *spell-dictionary* "hiqahz" "locate") ; locote → locate (a→o ambiguity)
-(hash-set! *spell-dictionary* "abyzqh" "object") ; obfect → object (y→f/j ambiguity)
-(hash-set! *spell-dictionary* "waouq" "magic") ; mogic → magic (a→o ambiguity)
-(hash-set! *spell-dictionary* "sagg" "pass") ; poss → pass (a→o ambiguity)
-(hash-set! *spell-dictionary* "zrzwunsohar" "elemental") ; elementol → elemental (a→o ambiguity)
+(hash-set! *spell-dictionary* "qaiyjcandus" "conjure") ; confure → conjure (y→f/j)
+(hash-set! *spell-dictionary* "aiqpaf" "anchor") ; onchor → anchor (a→o)
+(hash-set! *spell-dictionary* "uizug" "invis") ; ineis → invis (z→e/v)
+(hash-set! *spell-dictionary* "aiozr" "angel") ; ongel → angel (a→o)
+(hash-set! *spell-dictionary* "uiygruzuguai" "infravision") ; infraeision → infravision (z→e/v)
+(hash-set! *spell-dictionary* "zawsufuq" "vampiric") ; eompiric → vampiric (z→e/v, a→o)
+(hash-set! *spell-dictionary* "izjfahiouqar" "neurological") ; neurologicol → neurological (a→o)
+(hash-set! *spell-dictionary* "izoahuzz" "negative") ; negotiee → negative (a→o, z→e/v)
+(hash-set! *spell-dictionary* "saguhuzz" "positive") ; positiee → positive (z→e/v)
+(hash-set! *spell-dictionary* "hiqahz" "locate") ; locote → locate (a→o)
+(hash-set! *spell-dictionary* "abyzqh" "object") ; obfect → object (y→f/j)
+(hash-set! *spell-dictionary* "waouq" "magic") ; mogic → magic (a→o)
+(hash-set! *spell-dictionary* "sagg" "pass") ; poss → pass (a→o)
+(hash-set! *spell-dictionary* "zrzwunsohar" "elemental") ; elementol → elemental (a→o)
 
 (defun spell-echo (msg)
   "Echo a spell translator status message to the terminal."

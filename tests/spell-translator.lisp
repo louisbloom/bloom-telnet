@@ -61,8 +61,17 @@
 (assert-equal (translate-garbled-word "qaiyjcandus") "conjure"
   "dictionary override: qaiyjcandus -> conjure")
 
+;; Words that translate correctly via algorithm (no dictionary needed)
 (assert-equal (translate-garbled-word "eaaf") "door"
-  "dictionary override: eaaf -> door")
+  "algorithmic: eaaf -> door")
+(assert-equal (translate-garbled-word "barh") "bolt"
+  "algorithmic: barh -> bolt")
+(assert-equal (translate-garbled-word "bajroculof") "boulder"
+  "algorithmic: bajroculof -> boulder")
+(assert-equal (translate-garbled-word "abraqpai") "archon"
+  "algorithmic: abraqpai -> archon")
+(assert-equal (translate-garbled-word "eugfjshuai") "disruption"
+  "algorithmic: eugfjshuai -> disruption")
 
 ;; ============================================================================
 ;; Phrase translation
