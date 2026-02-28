@@ -1,32 +1,17 @@
-;; practice.lisp - Practice mode automation for telnet-gui
+;; practice.lisp - Practice mode for Carrion Fields MUD
 ;;
 ;; This script was created for Carrion Fields MUD (https://carrionfields.net/)
-;; It handles the /practice command (and its aliases like /p, /pr, etc.) for
-;; automated spell practice. The command is processed via the user-input-transform-hook
-;; system before TinTin++ processing, allowing clean separation of concerns.
 ;;
 ;; Usage:
-;;   :load practice.lisp       ; Load the script
-;;   /p c lightb               ; Start practicing (or /practice, /pr, etc.)
-;;   /p stop                   ; Stop practice mode
-;;   /p                        ; Show current status
+;;   /p <command> | /p stop | /p
 ;;
-;; Practice Mode Features:
-;; - Retries command on failure patterns ("You failed.", etc.)
-;; - Enters sleep mode on "You don't have enough mana."
-;; - Wakes and resumes when prompt shows 100% mana
-;; - Use /p to check current status
-;; - Quits game on hunger/thirst damage (indicates no one is watching)
+;; Features:
+;;   Retries on failure
+;;   Sleeps when mana low, wakes at 100%
+;;   Quits on hunger/thirst damage
 ;;
-;; Configuration (via eval mode, Shift+Tab):
-;;   *practice-retry-patterns*   - List of patterns that retry the command
-;;   *practice-sleep-pattern*    - Pattern that enters sleep mode
-;;   *practice-mana-pattern*     - Regex to extract mana % from prompt
-;;   *practice-sleep-interval*   - Seconds between prompt refreshes while sleeping
-;;   *practice-hunger-thirst-pattern* - Regex pattern that triggers quit (hunger/thirst damage)
-;;
-;; Example: Add a retry pattern
-;;   (practice-add-retry-pattern "Your spell fizzles.")
+;; Config:
+;;   (practice-add-retry-pattern "pattern")
 ;; ============================================================================
 ;; CONFIGURATION
 ;; ============================================================================
