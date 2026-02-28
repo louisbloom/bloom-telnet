@@ -101,6 +101,11 @@
 (hash-set! *spell-dictionary* "eugfjshuai" "disruption") ; disruptian → disruption
 (hash-set! *spell-dictionary* "izoahuzz" "negative") ; negatiee → negative
 (hash-set! *spell-dictionary* "saguhuzz" "positive") ; pasitiee → positive
+(hash-set! *spell-dictionary* "hiqahz" "locate") ; locote → locate (a→o ambiguity)
+(hash-set! *spell-dictionary* "abyzqh" "object") ; obfect → object (y→f/j ambiguity)
+(hash-set! *spell-dictionary* "waouq" "magic") ; mogic → magic (a→o ambiguity)
+(hash-set! *spell-dictionary* "sagg" "pass") ; poss → pass (a→o ambiguity)
+(hash-set! *spell-dictionary* "zrzwunsohar" "elemental") ; elementol → elemental (a→o ambiguity)
 
 (defun spell-echo (msg)
   "Echo a spell translator status message to the terminal."
@@ -214,9 +219,9 @@
 
 (define *spell-color-reset* "\033[0m")
 
-;; Filter function for telnet-input-transform-hook
-(defun spell-translator-filter (text)
-  "Weave spell translation into utterance lines"
+;; Per-line filter function (translates a single line)
+(defun spell-translate-line (text)
+  "Weave spell translation into a single utterance line"
   ;; Strip ANSI codes for matching, but use original text for replacement
   (let* ((clean-text (strip-ansi text))
          (groups (regex-extract *spell-utter-pattern* clean-text)))
@@ -243,6 +248,13 @@
                   result))))))
       ;; No match - pass through unchanged
       text)))
+
+;; Filter function for telnet-input-transform-hook
+;; Splits multi-line chunks so regex-replace can't bleed across lines
+(defun spell-translator-filter (text)
+  "Weave spell translation into utterance lines (handles multi-line chunks)"
+  (let ((lines (split text "\n")))
+    (join (map spell-translate-line lines) "\n")))
 
 ;;; ============================================================================
 ;;; Hook Registration

@@ -8,7 +8,7 @@
 ;; Character translation
 ;; ============================================================================
 
-(assert-equal (translate-garbled-char #\a) #\a "a -> a")
+(assert-equal (translate-garbled-char #\a) #\o "a -> o (ambiguous, defaults to o)")
 (assert-equal (translate-garbled-char #\z) #\e "z -> e")
 (assert-equal (translate-garbled-char #\q) #\c "q -> c")
 (assert-equal (translate-garbled-char #\u) #\i "u -> i")
@@ -137,8 +137,8 @@
 ;; ============================================================================
 
 ;; Text that translates to itself should pass through
-(let ((input "Det utters the words, 'abba'."))
-  ;; abba translates to abba (a->a, b->b), so no annotation should be added
+(let ((input "Det utters the words, 'bbcc'."))
+  ;; bbcc translates to bbcc (b->b, c->c), so no annotation should be added
   (assert-equal (spell-translator-filter input) input
     "filter skips when translation matches original"))
 
@@ -151,6 +151,42 @@
   (assert-equal (spell-translator-filter input) input
     "filter skips after spell-add-known marks word"))
 (spell-remove-known "qaiyjcandus")
+
+;; ============================================================================
+;; Filter hook - multi-line chunk (garbled annotated, readable untouched)
+;; ============================================================================
+
+(let* ((input (string-append
+               ">> Det utters the words, 'candusgugh saguhuzz'.\n"
+               "Det utters the words, 'resist positive'."))
+       (result (spell-translator-filter input)))
+  ;; The garbled line should get a translation annotation
+  (assert-true (string-contains? result "resist positive")
+    "multi-line: garbled line gets translation")
+  ;; The readable line should pass through unchanged (no annotation)
+  (assert-true (string-contains? result "Det utters the words, 'resist positive'.")
+    "multi-line: readable line untouched"))
+
+;; ============================================================================
+;; Filter hook - single readable line passes through unchanged
+;; ============================================================================
+
+(let ((input "Det utters the words, 'resist positive'."))
+  (assert-equal (spell-translator-filter input) input
+    "single readable line passes through unchanged"))
+
+;; ============================================================================
+;; Dictionary correction translations
+;; ============================================================================
+
+(assert-equal (translate-garbled-word "hiqahz") "locate"
+  "dictionary correction: hiqahz -> locate")
+(assert-equal (translate-garbled-word "abyzqh") "object"
+  "dictionary correction: abyzqh -> object")
+(assert-equal (translate-garbled-word "waouq") "magic"
+  "dictionary correction: waouq -> magic")
+(assert-equal (translate-garbled-word "sagg") "pass"
+  "dictionary correction: sagg -> pass")
 
 ;; ============================================================================
 ;; Hook registration
