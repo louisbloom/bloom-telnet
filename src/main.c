@@ -200,7 +200,7 @@ static void on_stdin_processed(void *user_data) {
 /* Process a submitted line */
 static void process_line(const char *line) {
   TuiTextInput *textinput = g_textinput;
-  if (line[0] != '\0') {
+  if (line[0] != '\0' && !g_server_echo) {
     tui_textinput_history_add(textinput, line);
   }
 
