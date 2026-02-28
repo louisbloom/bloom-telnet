@@ -194,7 +194,7 @@
 
 (let ((hooks (hash-ref *hooks* "telnet-input-transform-hook")))
   (assert-true hooks "spell-translator-filter registered on telnet-input-transform-hook")
-  (assert-true (hooks--has-fn? hooks spell-translator-filter)
+  (assert-true (hooks--has-fn? hooks 'spell-translator-filter)
     "spell-translator-filter is in hook list"))
 
 (print "All tests passed!")

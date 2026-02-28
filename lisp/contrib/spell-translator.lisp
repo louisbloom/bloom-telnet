@@ -49,7 +49,7 @@
 ;;; ============================================================================
 ;; When you're the same class as the caster, you see the real spell name.
 ;; If any word in the utterance matches a known spell word, skip translation.
-(define *known-spell-words*
+(defvar *known-spell-words*
   '("acid" "align" "armor" "aura" "barrier" "blast" "bless" "blind" "bolt"
     "breath" "burn" "call" "calm" "cancel" "cause" "chain" "change" "charm"
     "chill" "colour" "continual" "control" "create" "critical" "cure" "curse"
@@ -84,7 +84,7 @@
 ;;; ============================================================================
 ;; Hash table for word overrides (garbled → correct)
 ;; Users can add entries with (spell-add "garbled" "correct")
-(define *spell-dictionary* (make-hash-table))
+(defvar *spell-dictionary* (make-hash-table))
 
 ;; Built-in overrides for common spells affected by ambiguity
 (hash-set! *spell-dictionary* "qaiyjcandus" "conjure") ; canfure → conjure
@@ -260,7 +260,7 @@
 ;;; Hook Registration
 ;;; ============================================================================
 ;; Register the filter hook
-(add-hook 'telnet-input-transform-hook spell-translator-filter)
+(add-hook 'telnet-input-transform-hook 'spell-translator-filter)
 
 ;; Startup message
 (script-echo "Spell translator active" :section

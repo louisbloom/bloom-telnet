@@ -187,10 +187,10 @@
 ;; ============================================================================
 ;; AUTO-ACTIVATION
 ;; ============================================================================
-;; Register TinTin++ hooks — pass function values (not quoted symbols)
-(add-hook 'user-input-transform-hook tintin-user-input-hook)
-(add-hook 'telnet-input-transform-hook tintin-telnet-input-transform)
-(add-hook 'telnet-input-hook tintin-telnet-input-hook)
+;; Register TinTin++ hooks
+(add-hook 'user-input-transform-hook 'tintin-user-input-hook)
+(add-hook 'telnet-input-transform-hook 'tintin-telnet-input-transform)
+(add-hook 'telnet-input-hook 'tintin-telnet-input-hook)
 
 ;; Announce activation (terminal is ready when this file loads via -l)
 (script-echo "TinTin++ emulation active")

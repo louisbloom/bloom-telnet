@@ -13,23 +13,23 @@
 (define test-called nil)
 (defun test-fn-1 (&rest args) (set! test-called #t))
 
-(add-hook 'my-hook test-fn-1)
+(add-hook 'my-hook 'test-fn-1)
 
 ;; Verify the hook was registered
 (let ((hook-list (hash-ref *hooks* "my-hook")))
   (assert-true (pair? hook-list) "Hook list is non-empty after add-hook")
   (assert-equal (length hook-list) 1 "Hook list has 1 entry")
   (let ((entry (car hook-list)))
-    (assert-true (eq? (car entry) test-fn-1) "Hook fn is test-fn-1")
+    (assert-true (eq? (car entry) 'test-fn-1) "Hook sym is 'test-fn-1")
     (assert-equal (cdr entry) 50 "Default priority is 50")))
 
 (print "Test 1 passed: add-hook with default priority")
 
 ;; ============================================================================
-;; Test 2: Duplicate detection (same fn not added twice)
+;; Test 2: Duplicate detection (same symbol not added twice)
 ;; ============================================================================
-(add-hook 'my-hook test-fn-1)
-(add-hook 'my-hook test-fn-1 10)
+(add-hook 'my-hook 'test-fn-1)
+(add-hook 'my-hook 'test-fn-1 10)
 
 (let ((hook-list (hash-ref *hooks* "my-hook")))
   (assert-equal (length hook-list) 1 "Still 1 entry after duplicate add-hook"))
@@ -45,35 +45,35 @@
 (defun fn-mid (&rest args) nil)
 (defun fn-high (&rest args) nil)
 
-(add-hook 'sorted-hook fn-mid 50)
-(add-hook 'sorted-hook fn-high 90)
-(add-hook 'sorted-hook fn-low 10)
+(add-hook 'sorted-hook 'fn-mid 50)
+(add-hook 'sorted-hook 'fn-high 90)
+(add-hook 'sorted-hook 'fn-low 10)
 
 (let ((hook-list (hash-ref *hooks* "sorted-hook")))
   (assert-equal (length hook-list) 3 "3 entries after adding 3 hooks")
   ;; Verify order: low (10) -> mid (50) -> high (90)
-  (assert-true (eq? (car (car hook-list)) fn-low) "First entry is fn-low (priority 10)")
+  (assert-true (eq? (car (car hook-list)) 'fn-low) "First entry is 'fn-low (priority 10)")
   (assert-equal (cdr (car hook-list)) 10 "First priority is 10")
-  (assert-true (eq? (car (car (cdr hook-list))) fn-mid) "Second entry is fn-mid (priority 50)")
+  (assert-true (eq? (car (car (cdr hook-list))) 'fn-mid) "Second entry is 'fn-mid (priority 50)")
   (assert-equal (cdr (car (cdr hook-list))) 50 "Second priority is 50")
-  (assert-true (eq? (car (car (cdr (cdr hook-list)))) fn-high) "Third entry is fn-high (priority 90)")
+  (assert-true (eq? (car (car (cdr (cdr hook-list)))) 'fn-high) "Third entry is 'fn-high (priority 90)")
   (assert-equal (cdr (car (cdr (cdr hook-list)))) 90 "Third priority is 90"))
 
 (print "Test 3 passed: Priority-sorted insertion")
 
 ;; ============================================================================
-;; Test 4: remove-hook removes by fn identity
+;; Test 4: remove-hook removes by symbol identity
 ;; ============================================================================
-(remove-hook 'sorted-hook fn-mid)
+(remove-hook 'sorted-hook 'fn-mid)
 
 (let ((hook-list (hash-ref *hooks* "sorted-hook")))
   (assert-equal (length hook-list) 2 "2 entries after remove-hook")
-  (assert-true (eq? (car (car hook-list)) fn-low) "First is still fn-low")
-  (assert-true (eq? (car (car (cdr hook-list))) fn-high) "Second is fn-high"))
+  (assert-true (eq? (car (car hook-list)) 'fn-low) "First is still 'fn-low")
+  (assert-true (eq? (car (car (cdr hook-list))) 'fn-high) "Second is 'fn-high"))
 
 ;; Remove remaining hooks
-(remove-hook 'sorted-hook fn-low)
-(remove-hook 'sorted-hook fn-high)
+(remove-hook 'sorted-hook 'fn-low)
+(remove-hook 'sorted-hook 'fn-high)
 
 (let ((hook-list (hash-ref *hooks* "sorted-hook")))
   (assert-true (null? hook-list) "Hook list is empty after removing all"))
@@ -91,9 +91,9 @@
 (defun recorder-b (&rest args) (set! call-order (append call-order (list "b"))))
 (defun recorder-c (&rest args) (set! call-order (append call-order (list "c"))))
 
-(add-hook 'order-hook recorder-b 50)
-(add-hook 'order-hook recorder-c 90)
-(add-hook 'order-hook recorder-a 10)
+(add-hook 'order-hook 'recorder-b 50)
+(add-hook 'order-hook 'recorder-c 90)
+(add-hook 'order-hook 'recorder-a 10)
 
 (set! call-order nil)
 (run-hook 'order-hook)
@@ -110,7 +110,7 @@
 (define received-args nil)
 (defun arg-recorder (x y) (set! received-args (list x y)))
 
-(add-hook 'arg-hook arg-recorder)
+(add-hook 'arg-hook 'arg-recorder)
 (run-hook 'arg-hook "hello" 42)
 
 (assert-equal received-args '("hello" 42) "run-hook passes args to hook functions")
@@ -125,8 +125,8 @@
 (defun add-ten (n) (+ n 10))
 (defun double-it (n) (* n 2))
 
-(add-hook 'filter-hook add-ten 10)
-(add-hook 'filter-hook double-it 50)
+(add-hook 'filter-hook 'add-ten 10)
+(add-hook 'filter-hook 'double-it 50)
 
 ;; Should: 5 -> add-ten -> 15 -> double-it -> 30
 (let ((result (run-transform-hook 'filter-hook 5)))

@@ -70,38 +70,38 @@
     ((eq? (car (car lst)) fn) (cdr lst))
     (#t (cons (car lst) (hooks--remove-fn (cdr lst) fn)))))
 
-(defun add-hook (hook fn &rest rest-args)
-  "Mock: add a hook function with optional priority."
+(defun add-hook (hook fn-sym &rest rest-args)
+  "Mock: add a hook handler (symbol) with optional priority."
   (let ((priority (if (null? rest-args) 50 (car rest-args)))
         (name (symbol->string hook)))
     (let ((hook-list (hash-ref *hooks* name)))
       (if (null? hook-list) (set! hook-list nil))
-      (if (hooks--has-fn? hook-list fn)
+      (if (hooks--has-fn? hook-list fn-sym)
         nil
         (hash-set! *hooks* name
-                   (hooks--insert-sorted fn priority hook-list))))))
+                   (hooks--insert-sorted fn-sym priority hook-list))))))
 
-(defun remove-hook (hook fn)
-  "Mock: remove a hook function."
+(defun remove-hook (hook fn-sym)
+  "Mock: remove a hook handler (symbol)."
   (let ((name (symbol->string hook)))
     (let ((hook-list (hash-ref *hooks* name)))
       (if hook-list
-        (hash-set! *hooks* name (hooks--remove-fn hook-list fn))))))
+        (hash-set! *hooks* name (hooks--remove-fn hook-list fn-sym))))))
 
 (defun run-hook (hook &rest args)
-  "Mock: run all functions registered on a hook."
+  "Mock: run all functions registered on a hook (resolve symbols)."
   (let ((name (symbol->string hook)))
     (let ((hook-list (hash-ref *hooks* name)))
       (if hook-list
         (do ((remaining hook-list (cdr remaining)))
             ((null? remaining) nil)
-          (apply (car (car remaining)) args))))))
+          (apply (eval (car (car remaining))) args))))))
 
 (defun run-transform-hook--loop (entries val)
-  "Helper: thread value through remaining hook entries."
+  "Helper: thread value through remaining hook entries (resolve symbols)."
   (if (null? entries)
     val
-    (let ((fn (car (car entries))))
+    (let ((fn (eval (car (car entries)))))
       (run-transform-hook--loop (cdr entries) (fn val)))))
 
 (defun run-transform-hook (hook initial-value)
@@ -124,7 +124,7 @@
 (defun fkey-handler (n)
   (let ((fn (hash-ref *fkey-bindings* n)))
     (if fn (fn))))
-(add-hook 'fkey-hook fkey-handler 50)
+(add-hook 'fkey-hook 'fkey-handler 50)
 (defun bind-fkey (n fn) (hash-set! *fkey-bindings* n fn))
 (defun unbind-fkey (n) (hash-remove! *fkey-bindings* n))
 

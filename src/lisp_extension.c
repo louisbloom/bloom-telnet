@@ -878,8 +878,8 @@ static LispObject *builtin_add_hook(LispObject *args, Environment *env) {
   if (name_obj->type != LISP_SYMBOL) {
     return lisp_make_error("add-hook: first argument must be a symbol");
   }
-  if (!lisp_is_callable(fn_obj)) {
-    return lisp_make_error("add-hook: second argument must be a function");
+  if (fn_obj->type != LISP_SYMBOL) {
+    return lisp_make_error("add-hook: second argument must be a symbol");
   }
 
   int priority = 50;
@@ -944,8 +944,8 @@ static LispObject *builtin_remove_hook(LispObject *args, Environment *env) {
   if (name_obj->type != LISP_SYMBOL) {
     return lisp_make_error("remove-hook: first argument must be a symbol");
   }
-  if (!lisp_is_callable(fn_obj)) {
-    return lisp_make_error("remove-hook: second argument must be a function");
+  if (fn_obj->type != LISP_SYMBOL) {
+    return lisp_make_error("remove-hook: second argument must be a symbol");
   }
 
   LispObject *hooks_table = get_session_hooks();
@@ -1012,7 +1012,21 @@ static LispObject *builtin_run_hook(LispObject *args, Environment *env) {
   LispObject *hook_list = he->value;
   while (hook_list != NIL && hook_list->type == LISP_CONS) {
     LispObject *entry = lisp_car(hook_list);
-    LispObject *fn = lisp_car(entry);
+    LispObject *fn_sym = lisp_car(entry);
+
+    /* Resolve symbol to its current function value */
+    LispObject *fn = NULL;
+    if (fn_sym && fn_sym->type == LISP_SYMBOL) {
+      fn = env_lookup(env, fn_sym->value.symbol);
+    }
+    if (!fn || !lisp_is_callable(fn)) {
+      bloom_log(
+          LOG_ERROR, "hooks", "run-hook %s: handler '%s' is not callable", name,
+          (fn_sym && fn_sym->type == LISP_SYMBOL) ? fn_sym->value.symbol->name
+                                                  : "?");
+      hook_list = lisp_cdr(hook_list);
+      continue;
+    }
 
     /* Build call: (fn arg1 arg2 ...) */
     LispObject *call = lisp_make_cons(fn, hook_args);
@@ -1064,7 +1078,22 @@ static LispObject *builtin_run_transform_hook(LispObject *args,
   LispObject *hook_list = he->value;
   while (hook_list != NIL && hook_list->type == LISP_CONS) {
     LispObject *entry = lisp_car(hook_list);
-    LispObject *fn = lisp_car(entry);
+    LispObject *fn_sym = lisp_car(entry);
+
+    /* Resolve symbol to its current function value */
+    LispObject *fn = NULL;
+    if (fn_sym && fn_sym->type == LISP_SYMBOL) {
+      fn = env_lookup(env, fn_sym->value.symbol);
+    }
+    if (!fn || !lisp_is_callable(fn)) {
+      bloom_log(LOG_ERROR, "hooks",
+                "run-transform-hook %s: handler '%s' is not callable", name,
+                (fn_sym && fn_sym->type == LISP_SYMBOL)
+                    ? fn_sym->value.symbol->name
+                    : "?");
+      hook_list = lisp_cdr(hook_list);
+      continue;
+    }
 
     /* Build call: (fn value) */
     LispObject *call_args = lisp_make_cons(value, NIL);

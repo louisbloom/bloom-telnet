@@ -192,7 +192,7 @@
          (if (and mana (>= mana 100)) (practice-exit-sleep)))))))
 
 ;; Register the telnet hook
-(add-hook 'telnet-input-hook practice-telnet-hook)
+(add-hook 'telnet-input-hook 'practice-telnet-hook)
 
 ;; ============================================================================
 ;; USER INPUT HOOK
@@ -242,7 +242,7 @@
 
 ;; Register the user input hook with high priority (runs before tintin)
 ;; Priority 10 = interceptor (handles /practice commands before tintin processes input)
-(add-hook 'user-input-transform-hook practice-user-input-hook 10)
+(add-hook 'user-input-transform-hook 'practice-user-input-hook 10)
 
 ;; ============================================================================
 ;; INITIALIZATION MESSAGE

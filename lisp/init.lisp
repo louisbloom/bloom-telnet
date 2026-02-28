@@ -366,7 +366,7 @@
   "Default telnet-input-hook handler that collects words for tab completion."
   (collect-words-from-text text))
 
-(add-hook 'telnet-input-hook default-word-collector)
+(add-hook 'telnet-input-hook 'default-word-collector)
 
 ;; ============================================================================
 ;; TELNET INPUT TRANSFORM HOOK
@@ -602,7 +602,7 @@ Colors: header=pale pink, desc=pale cyan, section=lavender, details=slate blue"
   "Dispatch F-key press to bound function, if any."
   (let ((fn (hash-ref *fkey-bindings* n))) (if fn (fn))))
 
-(add-hook 'fkey-hook fkey-handler 50)
+(add-hook 'fkey-hook 'fkey-handler 50)
 
 (defun bind-fkey (n fn)
   "Bind F-key N (1-12) to function FN."
