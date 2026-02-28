@@ -14,11 +14,15 @@
 ;;; The ROM 2.4 MUD garble algorithm uses syllable substitution followed by
 ;;; single-character substitution. This script reverses that process.
 ;;;
-;;; To add custom word overrides (for ambiguous translations):
-;;;   (spell-add "garbled-word" "correct-word")
+;;; Commands:
+;;;   (spell-add "garbled" "correct")    Add a dictionary override
+;;;   (spell-remove "garbled")           Remove a dictionary override
+;;;   (spell-add-known "word")           Add a known spell word (skips translation)
+;;;   (spell-remove-known "word")        Remove a known spell word
 ;;;
-;;; To remove an override:
-;;;   (spell-remove "garbled-word")
+;;; Data:
+;;;   *spell-dictionary*   — garbled word overrides
+;;;   *known-spell-words*  — words that skip translation
 ;;; ============================================================================
 ;;; Reverse Cipher Tables (ROM 2.4 magic.c)
 ;;; ============================================================================
