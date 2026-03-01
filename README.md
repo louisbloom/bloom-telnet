@@ -215,9 +215,10 @@ When tintin is loaded, `tintin-telnet-input-transform` (priority 50) applies `#h
 
 ##### `user-input-hook` (filter)
 
-Fired when the user submits input, before the transform hook. Handlers receive the raw text and return non-nil to pass through or `nil` to consume (prevent the input from reaching the transform hook or being sent to the server).
+Fired when the user submits input, before the transform hook. Dispatched via `run-filter-hook` — every handler receives the original text and returns non-nil to pass through or `nil` to consume. If any handler returns `nil`, the input is consumed and never reaches the transform hook or the server.
 
 ```lisp
+;; Intercept /greet to send a say command, consuming the input
 (defun my-command (text)
   (if (string-prefix? "/greet" text)
     (progn (telnet-send "say Hello!") nil)  ; consume
@@ -225,6 +226,8 @@ Fired when the user submits input, before the transform hook. Handlers receive t
 
 (add-hook 'user-input-hook 'my-command 5)
 ```
+
+The built-in `practice-user-input-hook` (priority 10) uses this hook to intercept `/p` commands.
 
 ##### `user-input-transform-hook` (transform)
 
