@@ -243,6 +243,9 @@ static void process_line(const char *line) {
       echo_to_viewport("\n", 1);
     }
 
+    /* Call user input side-effect hook */
+    lisp_x_call_user_input_hook(line, strlen(line));
+
     /* Process through user input transform hook (sends empty lines too) */
     LispObject *result =
         lisp_x_call_user_input_transform_hook(line, strlen(line));

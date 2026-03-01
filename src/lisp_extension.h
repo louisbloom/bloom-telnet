@@ -21,6 +21,9 @@ void lisp_x_cleanup(void);
 /* Call telnet-input-hook with telnet data (stripped of ANSI codes) */
 void lisp_x_call_telnet_input_hook(const char *text, size_t len);
 
+/* Call user-input-hook with raw user input (side-effect only) */
+void lisp_x_call_user_input_hook(const char *text, size_t len);
+
 /* Run all due timers - calls (run-timers) in Lisp each frame */
 void lisp_x_run_timers(void);
 

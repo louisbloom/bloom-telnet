@@ -346,6 +346,11 @@
   (run-hook 'telnet-input-hook text)
   nil)
 
+(defun user-input-hook (text)
+  "Process user input through registered side-effect hooks."
+  (run-hook 'user-input-hook text)
+  nil)
+
 (defun user-input-transform-hook (text cursor-pos)
   "Transform user input before sending to telnet server."
   (run-transform-hook 'user-input-transform-hook text))

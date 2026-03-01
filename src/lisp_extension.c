@@ -1190,6 +1190,7 @@ static TuiMsg send_input_callback(void *data) {
   char *text = (char *)data;
   Session *s = session_get_current();
   if (s && s->telnet) {
+    lisp_x_call_user_input_hook(text, strlen(text));
     LispObject *result =
         lisp_x_call_user_input_transform_hook(text, strlen(text));
     lisp_x_send_hook_result(result, s->telnet);
@@ -1507,6 +1508,42 @@ void lisp_x_call_telnet_input_hook(const char *text, size_t len) {
     char *err_str = lisp_print(result);
     if (err_str) {
       bloom_log(LOG_ERROR, "hooks", "telnet-input-hook: %s", err_str);
+    }
+  }
+}
+
+/* Call user-input-hook with raw user input (side-effect only) */
+void lisp_x_call_user_input_hook(const char *text, size_t len) {
+  Environment *env = get_current_env();
+  if (!env || !text || len == 0) {
+    return;
+  }
+
+  LispObject *hook =
+      env_lookup(env, lisp_intern("user-input-hook")->value.symbol);
+  if (!lisp_is_callable(hook)) {
+    bloom_log(LOG_DEBUG, "hooks",
+              "user-input-hook: hook not found or wrong type");
+    return;
+  }
+
+  bloom_log(LOG_DEBUG, "hooks", "user-input-hook: calling with %zu bytes", len);
+
+  volatile LispObject *text_arg = lisp_make_string(text);
+  if (!text_arg || ((LispObject *)text_arg)->type == LISP_ERROR) {
+    bloom_log(LOG_DEBUG, "hooks",
+              "user-input-hook: failed to create string arg");
+    return;
+  }
+
+  volatile LispObject *args = lisp_make_cons((LispObject *)text_arg, NIL);
+  volatile LispObject *call_expr = lisp_make_cons(hook, (LispObject *)args);
+  LispObject *result = lisp_eval((LispObject *)call_expr, env);
+
+  if (result && result->type == LISP_ERROR) {
+    char *err_str = lisp_print(result);
+    if (err_str) {
+      bloom_log(LOG_ERROR, "hooks", "user-input-hook: %s", err_str);
     }
   }
 }
