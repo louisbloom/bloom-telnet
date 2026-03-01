@@ -149,25 +149,154 @@ Under the hood, everything is Lisp. TinTin++ commands are sugar over Lisp data s
 
 ### Hooks
 
-The hook system (C builtins: `add-hook`, `remove-hook`, `run-hook`, `run-transform-hook`) drives the data flow between telnet, user input, and the display:
+Hooks are the primary way to customize bloom-telnet. They let you react to server output, transform user input, intercept keystrokes, and build automation scripts — all from Lisp.
 
-- `telnet-input-hook` — called with ANSI-stripped text from the server (e.g., for word collection). Event hook: side effects only.
-- `telnet-input-transform-hook` — transform server output before display. Each handler receives text and returns modified text.
-- `user-input-transform-hook` — transform user input before sending to the server. Pipeline: handlers run in priority order, each receiving the previous handler's output. Return nil to consume input.
-- `completion-hook` — provide tab completion candidates for the current input prefix
-- `fkey-hook` — called with the F-key number (1–12) when an F-key is pressed
+#### Two Hook Types
 
-### F-Key Bindings
+**Event hooks** (`run-hook`) call every registered handler with the same arguments. Return values are ignored — handlers exist for side effects (logging, triggering actions, collecting data).
 
-F1–F12 can be bound to Lisp functions:
+**Transform hooks** (`run-transform-hook`) thread a value through handlers in priority order. Each handler receives the previous handler's output and returns a transformed value. Return `nil` to consume/discard the value.
+
+#### Hook API
+
+```lisp
+;; Register a handler on a hook. Lower priority = runs first. Default: 50.
+(add-hook 'hook-name 'my-handler-fn)
+(add-hook 'hook-name 'my-handler-fn 10)   ; priority 10 (runs early)
+
+;; Remove a handler
+(remove-hook 'hook-name 'my-handler-fn)
+
+;; Remove all handlers from a hook
+(clear-hook 'hook-name)
+
+;; Dispatch (used internally — you rarely call these directly)
+(run-hook 'hook-name arg1 arg2 ...)       ; event: call all handlers
+(run-transform-hook 'hook-name value)     ; transform: thread value through handlers
+```
+
+Handlers are registered by symbol name, not by value. This means if you redefine a function (e.g., by reloading a script), the hook picks up the new definition automatically.
+
+Duplicate detection prevents the same symbol from being registered twice on the same hook.
+
+#### Available Hooks
+
+##### `telnet-input-hook` (event)
+
+Fired when data arrives from the server. Text has ANSI codes stripped.
+
+```lisp
+;; Auto-eat when hungry
+(defun auto-eat (text)
+  (if (string-contains? text "You are hungry")
+    (telnet-send "eat bread")))
+
+(add-hook 'telnet-input-hook 'auto-eat)
+```
+
+Built-in handler: `default-word-collector` (priority 50) scans server output for words and feeds them into tab completion.
+
+##### `telnet-input-transform-hook` (transform)
+
+Fired when data arrives from the server, before display. Text has ANSI codes preserved. Each handler receives the text and must return the (possibly modified) text.
+
+```lisp
+;; Hide lines containing "SPAM"
+(defun gag-spam (text)
+  (if (string-contains? text "SPAM") "" text))
+
+(add-hook 'telnet-input-transform-hook 'gag-spam)
+```
+
+When tintin is loaded, `tintin-telnet-input-transform` (priority 50) applies `#highlight` color rules here.
+
+##### `user-input-transform-hook` (transform)
+
+Fired when the user submits input. This is the main pipeline for input processing — alias expansion, speedwalk, command prefixing, and more.
+
+Handlers receive a string and return one of:
+
+- **string** — the transformed input (passed to next handler or sent to server)
+- **list of strings** — multiple commands (each sent separately to the server)
+- **nil** — consume the input (nothing is sent)
+
+```lisp
+;; Intercept a custom /command
+(defun my-command-handler (text)
+  (if (string-prefix? "/greet" text)
+    (progn (telnet-send "say Hello everyone!") nil)   ; consume input
+    text))                                             ; pass through
+
+(add-hook 'user-input-transform-hook 'my-command-handler 5)
+```
+
+Typical priority layout on this hook:
+
+| Priority | Handler                  | Purpose                                 |
+| -------- | ------------------------ | --------------------------------------- |
+| 5        | `familiar-user-input-command`   | Intercepts `/f` commands                |
+| 10       | `practice-user-input-hook`      | Intercepts `/p` commands                |
+| 50       | `tintin-user-input-hook` | Alias expansion, speedwalk, `#commands` |
+
+Lower priority numbers run first. Use priorities below 50 to intercept input before TinTin++ processes it, or above 50 to transform TinTin++'s output.
+
+##### `fkey-hook` (event)
+
+Fired when the user presses F1–F12. The handler receives the key number as an integer.
+
+Rather than registering on this hook directly, use the convenience functions:
 
 ```lisp
 ;; Bind F2 to send "look"
 (bind-fkey 2 (lambda () (send-input "look")))
 
-;; Unbind F2
+;; Bind F3 to toggle a mode
+(bind-fkey 3 my-toggle-function)
+
+;; Unbind
 (unbind-fkey 2)
 ```
+#### List-Aware Transform Hooks
+
+Transform hooks handle lists natively. When a handler returns a list, subsequent handlers receive each element individually:
+
+```
+"3n" → tintin-user-input-hook (priority 50)
+     → ("n" "n" "n")                         ;; speedwalk expanded to list
+     → ("character1 n" "character1 n" "character1 n")  ;; each element prefixed
+```
+
+The rules:
+
+- **String in, string out** — normal pass-through
+- **String in, list out** — subsequent handlers see individual elements
+- **List in** — handler is called once per element; results are collected:
+  - Returns a string → kept
+  - Returns nil → element is removed (filtering)
+  - Returns a list → elements are spliced in (expansion)
+
+This lets you write simple single-command handlers that automatically work on multi-command input:
+
+```lisp
+;; This handler works on individual commands, but if TinTin++ already
+;; split "3n" into ("n" "n" "n"), it processes each one separately.
+(defun my-prefix (text)
+  (concat "character1 " text))
+
+(add-hook 'user-input-transform-hook 'my-prefix 60)
+```
+
+#### Hook Scoping and Sessions
+
+Each session has its own hook registry. Hooks added via `add-hook` apply only to the current session. When you create a new session, it inherits hooks that were registered during `init.lisp` (before any session existed), but not hooks added later by loaded scripts.
+
+To add hooks to a new session, switch to it first:
+
+```lisp
+(telnet-session-switch 2)
+(add-hook 'telnet-input-hook 'my-handler)  ; applies to session 2 only
+```
+
 ### Lisp Files
 
 - `init.lisp` — loaded at startup; completion, timers, hooks, color config, telnet I/O logging, TCP keepalive
