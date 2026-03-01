@@ -97,12 +97,30 @@
             ((null? remaining) nil)
           (apply (eval (car (car remaining))) args))))))
 
+(defun run-transform-hook--map-list (fn lst)
+  "Helper: call fn on each list element, collect non-nil results.
+   If fn returns a list, splice its elements in."
+  (if (null? lst)
+    nil
+    (let ((result (fn (car lst))))
+      (cond
+        ((null? result)
+         (run-transform-hook--map-list fn (cdr lst)))
+        ((pair? result)
+         (append result (run-transform-hook--map-list fn (cdr lst))))
+        (#t
+         (cons result (run-transform-hook--map-list fn (cdr lst))))))))
+
 (defun run-transform-hook--loop (entries val)
-  "Helper: thread value through remaining hook entries (resolve symbols)."
+  "Helper: thread value through remaining hook entries (resolve symbols).
+   When value is a list, call handler on each element individually."
   (if (null? entries)
     val
     (let ((fn (eval (car (car entries)))))
-      (run-transform-hook--loop (cdr entries) (fn val)))))
+      (if (pair? val)
+        (run-transform-hook--loop (cdr entries)
+          (run-transform-hook--map-list fn val))
+        (run-transform-hook--loop (cdr entries) (fn val))))))
 
 (defun run-transform-hook (hook initial-value)
   "Mock: thread a value through all functions registered on a hook."

@@ -135,7 +135,75 @@
 (print "Test 7 passed: run-transform-hook threading")
 
 ;; ============================================================================
-;; Test 8: Empty/nonexistent hooks
+;; Test 8: List mapping — handler returns list, subsequent handler per element
+;; ============================================================================
+(set! *hooks* (make-hash-table))
+
+(defun split-on-comma (s)
+  "Split a string by comma into a list."
+  (let ((parts nil) (start 0) (len (length s)))
+    (do ((i 0 (+ i 1))) ((>= i len))
+      (if (char=? (string-ref s i) #\,)
+        (progn
+          (if (> i start)
+            (set! parts (append parts (list (substring s start i)))))
+          (set! start (+ i 1)))))
+    (if (< start len)
+      (set! parts (append parts (list (substring s start len)))))
+    parts))
+
+(defun upcase-string (s) (string-upcase s))
+
+(add-hook 'list-hook 'split-on-comma 10)
+(add-hook 'list-hook 'upcase-string 50)
+
+;; "a,b,c" -> split-on-comma -> ("a" "b" "c") -> upcase each -> ("A" "B" "C")
+(let ((result (run-transform-hook 'list-hook "a,b,c")))
+  (assert-equal result '("A" "B" "C")
+    "List mapping: split then upcase each element"))
+
+(print "Test 8 passed: list mapping")
+
+;; ============================================================================
+;; Test 9: Nil filtering — handler returns nil for list element
+;; ============================================================================
+(set! *hooks* (make-hash-table))
+
+(defun make-list-of-three (s) (list "keep" "drop" "also-keep"))
+
+(defun drop-filter (s)
+  "Return nil for 'drop', pass others through."
+  (if (string=? s "drop") nil s))
+
+(add-hook 'filter-list-hook 'make-list-of-three 10)
+(add-hook 'filter-list-hook 'drop-filter 50)
+
+(let ((result (run-transform-hook 'filter-list-hook "anything")))
+  (assert-equal result '("keep" "also-keep")
+    "Nil filtering: 'drop' element removed from list"))
+
+(print "Test 9 passed: nil filtering")
+
+;; ============================================================================
+;; Test 10: String-to-list transition
+;; ============================================================================
+(set! *hooks* (make-hash-table))
+
+(defun string-to-list (s) (list (concat s "-1") (concat s "-2")))
+(defun add-suffix (s) (concat s "!"))
+
+(add-hook 'transition-hook 'string-to-list 10)
+(add-hook 'transition-hook 'add-suffix 50)
+
+;; "x" -> string-to-list -> ("x-1" "x-2") -> add-suffix each -> ("x-1!" "x-2!")
+(let ((result (run-transform-hook 'transition-hook "x")))
+  (assert-equal result '("x-1!" "x-2!")
+    "String-to-list: handler returns list, next handler maps over elements"))
+
+(print "Test 10 passed: string-to-list transition")
+
+;; ============================================================================
+;; Test 11: Empty/nonexistent hooks
 ;; ============================================================================
 (set! *hooks* (make-hash-table))
 
@@ -143,7 +211,7 @@
 (assert-equal (run-transform-hook 'nonexistent-hook "initial")
   "initial" "run-transform-hook on nonexistent hook returns initial value")
 
-(print "Test 8 passed: Empty/nonexistent hooks")
+(print "Test 11 passed: Empty/nonexistent hooks")
 
 (print "")
 (print "All hook system tests passed!")

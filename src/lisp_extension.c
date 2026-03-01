@@ -1095,19 +1095,61 @@ static LispObject *builtin_run_transform_hook(LispObject *args,
       continue;
     }
 
-    /* Build call: (fn value) */
-    LispObject *call_args = lisp_make_cons(value, NIL);
-    LispObject *call = lisp_make_cons(fn, call_args);
-    LispObject *result = lisp_eval(call, env);
-    if (result && result->type == LISP_ERROR) {
-      char *err_str = lisp_print(result);
-      if (err_str) {
-        bloom_log(LOG_ERROR, "hooks", "run-transform-hook %s: %s", name,
-                  err_str);
+    if (value != NIL && value->type == LISP_CONS) {
+      /* List value: call handler once per element, collect results */
+      LispObject *result_head = NIL;
+      LispObject **result_tail = &result_head;
+      LispObject *elem = value;
+      while (elem != NIL && elem->type == LISP_CONS) {
+        LispObject *item = lisp_car(elem);
+        LispObject *call_args = lisp_make_cons(item, NIL);
+        LispObject *call = lisp_make_cons(fn, call_args);
+        LispObject *result = lisp_eval(call, env);
+        if (result && result->type == LISP_ERROR) {
+          char *err_str = lisp_print(result);
+          if (err_str) {
+            bloom_log(LOG_ERROR, "hooks", "run-transform-hook %s: %s", name,
+                      err_str);
+          }
+          /* On error, keep original element */
+          *result_tail = lisp_make_cons(item, NIL);
+          result_tail = &(*result_tail)->value.cons.cdr;
+        } else if (result != NIL) {
+          if (result->type == LISP_CONS) {
+            /* Handler returned a list — splice elements in */
+            LispObject *sub = result;
+            while (sub != NIL && sub->type == LISP_CONS) {
+              LispObject *sub_item = lisp_car(sub);
+              if (sub_item != NIL) {
+                *result_tail = lisp_make_cons(sub_item, NIL);
+                result_tail = &(*result_tail)->value.cons.cdr;
+              }
+              sub = lisp_cdr(sub);
+            }
+          } else {
+            *result_tail = lisp_make_cons(result, NIL);
+            result_tail = &(*result_tail)->value.cons.cdr;
+          }
+        }
+        /* nil results are filtered out */
+        elem = lisp_cdr(elem);
       }
-      /* On error, keep previous value */
+      value = result_head;
     } else {
-      value = result;
+      /* Scalar value: call handler normally */
+      LispObject *call_args = lisp_make_cons(value, NIL);
+      LispObject *call = lisp_make_cons(fn, call_args);
+      LispObject *result = lisp_eval(call, env);
+      if (result && result->type == LISP_ERROR) {
+        char *err_str = lisp_print(result);
+        if (err_str) {
+          bloom_log(LOG_ERROR, "hooks", "run-transform-hook %s: %s", name,
+                    err_str);
+        }
+        /* On error, keep previous value */
+      } else {
+        value = result;
+      }
     }
 
     hook_list = lisp_cdr(hook_list);
@@ -1121,28 +1163,36 @@ static LispObject *builtin_run_transform_hook(LispObject *args,
   env_define(env, lisp_intern(name)->value.symbol,                             \
              lisp_make_builtin(func, name), pkg_core)
 
+/* Send a hook result (string or list of strings) to telnet */
+void lisp_x_send_hook_result(LispObject *result, Telnet *telnet) {
+  if (!result || result == NIL || !telnet)
+    return;
+
+  if (result->type == LISP_STRING) {
+    const char *s = result->value.string;
+    telnet_send_with_crlf(telnet, s, strlen(s));
+  } else if (result->type == LISP_CONS) {
+    LispObject *elem = result;
+    while (elem != NIL && elem->type == LISP_CONS) {
+      LispObject *item = lisp_car(elem);
+      if (item && item->type == LISP_STRING) {
+        const char *s = item->value.string;
+        telnet_send_with_crlf(telnet, s, strlen(s));
+      }
+      elem = lisp_cdr(elem);
+    }
+  }
+}
+
 /* Callback for send-input: process text through user-input-transform-hook and
  * send */
 static TuiMsg send_input_callback(void *data) {
   char *text = (char *)data;
   Session *s = session_get_current();
   if (s && s->telnet) {
-    const char *processed = lisp_x_call_user_input_hook(text, strlen(text));
-    if (processed) {
-      /* Split by ';' and send each command separately */
-      const char *start = processed;
-      const char *p = processed;
-      while (*p) {
-        if (*p == ';') {
-          if (p > start)
-            telnet_send_with_crlf(s->telnet, start, p - start);
-          start = p + 1;
-        }
-        p++;
-      }
-      if (p >= start)
-        telnet_send_with_crlf(s->telnet, start, p - start);
-    }
+    LispObject *result =
+        lisp_x_call_user_input_transform_hook(text, strlen(text));
+    lisp_x_send_hook_result(result, s->telnet);
   }
   return tui_msg_none();
 }
@@ -1598,26 +1648,27 @@ const char *lisp_x_call_telnet_input_transform_hook(const char *text,
 }
 
 /* Call user-input-transform-hook */
-const char *lisp_x_call_user_input_hook(const char *text, int cursor_pos) {
+LispObject *lisp_x_call_user_input_transform_hook(const char *text,
+                                                  int cursor_pos) {
   Environment *env = get_current_env();
   if (!env || !text) {
-    return text;
+    return lisp_make_string(text ? text : "");
   }
 
   LispObject *hook =
       env_lookup(env, lisp_intern("user-input-transform-hook")->value.symbol);
   if (!lisp_is_callable(hook)) {
-    return text;
+    return lisp_make_string(text);
   }
 
   volatile LispObject *text_arg = lisp_make_string(text);
   if (!text_arg || ((LispObject *)text_arg)->type == LISP_ERROR) {
-    return text;
+    return lisp_make_string(text);
   }
 
   volatile LispObject *cursor_arg = lisp_make_integer(cursor_pos);
   if (!cursor_arg || ((LispObject *)cursor_arg)->type == LISP_ERROR) {
-    return text;
+    return lisp_make_string(text);
   }
 
   volatile LispObject *args = lisp_make_cons(
@@ -1631,27 +1682,12 @@ const char *lisp_x_call_user_input_hook(const char *text, int cursor_pos) {
       bloom_log(LOG_ERROR, "hooks", "user-input-transform-hook: %s", err_str);
     }
     if (text && text[0] == '#') {
-      return "";
+      return lisp_make_string("");
     }
-    return text;
+    return lisp_make_string(text);
   }
 
-  if (result->type != LISP_STRING) {
-    return NULL;
-  }
-
-  const char *transformed = result->value.string;
-  size_t transformed_len = strlen(transformed);
-
-  if (ensure_buffer_size(&user_input_hook_buffer, &user_input_hook_buffer_size,
-                         transformed_len + 1) < 0) {
-    return text;
-  }
-
-  memcpy(user_input_hook_buffer, transformed, transformed_len);
-  user_input_hook_buffer[transformed_len] = '\0';
-
-  return user_input_hook_buffer;
+  return result;
 }
 
 /* Get input history size from Lisp config */

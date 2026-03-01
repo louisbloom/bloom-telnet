@@ -129,7 +129,7 @@
                 (terminal-echo (concat cmd "\r\n")))))))
       ;; Return expanded text (or nil if only #commands were processed)
       (if (and (string? processed) (not (string=? processed "")))
-        processed
+        (tintin-split-commands processed)
         nil))))
 
 ;; ============================================================================

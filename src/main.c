@@ -244,22 +244,9 @@ static void process_line(const char *line) {
     }
 
     /* Process through user input transform hook (sends empty lines too) */
-    const char *processed = lisp_x_call_user_input_hook(line, strlen(line));
-    if (processed) {
-      /* Split by ';' and send each command separately */
-      const char *start = processed;
-      const char *p = processed;
-      while (*p) {
-        if (*p == ';') {
-          if (p > start)
-            telnet_send_with_crlf(g_telnet, start, p - start);
-          start = p + 1;
-        }
-        p++;
-      }
-      if (p >= start)
-        telnet_send_with_crlf(g_telnet, start, p - start);
-    }
+    LispObject *result =
+        lisp_x_call_user_input_transform_hook(line, strlen(line));
+    lisp_x_send_hook_result(result, g_telnet);
   } else if (line[0] != '\0') {
     echo_to_viewport("\nNot connected. Use :connect <host> <port>\n", 44);
   } else {

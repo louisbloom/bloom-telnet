@@ -30,15 +30,19 @@ const char *lisp_x_call_telnet_input_transform_hook(const char *text,
                                                     size_t len,
                                                     size_t *out_len);
 
+/* Forward declaration for Telnet type (defined in telnet.h) */
+struct Telnet;
+
 /* Call user-input-transform-hook with user input before sending to telnet
- * Returns transformed text or original */
-const char *lisp_x_call_user_input_hook(const char *text, int cursor_pos);
+ * Returns LispObject * (string or list of strings) */
+struct LispObject *lisp_x_call_user_input_transform_hook(const char *text,
+                                                         int cursor_pos);
+
+/* Send a hook result (string or list of strings) to telnet */
+void lisp_x_send_hook_result(struct LispObject *result, struct Telnet *telnet);
 
 /* Get input history size from Lisp config (default: 100) */
 int lisp_x_get_input_history_size(void);
-
-/* Forward declaration for Telnet type (defined in telnet.h) */
-struct Telnet;
 
 /* Register telnet pointer on the current session */
 void lisp_x_register_telnet(struct Telnet *t);
