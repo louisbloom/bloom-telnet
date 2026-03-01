@@ -43,6 +43,9 @@ venv/
 *~
 .DS_Store
 
+# Claude Code
+.claude/
+
 # Misc
 *.tmp
 *.bak
