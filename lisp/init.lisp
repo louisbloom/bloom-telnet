@@ -347,9 +347,9 @@
   nil)
 
 (defun user-input-hook (text)
-  "Process user input through registered side-effect hooks."
-  (run-hook 'user-input-hook text)
-  nil)
+  "Process user input through registered filter hooks.
+   Any handler returning nil consumes the input."
+  (run-filter-hook 'user-input-hook text))
 
 (defun user-input-transform-hook (text cursor-pos)
   "Transform user input before sending to telnet server."

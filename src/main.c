@@ -243,13 +243,13 @@ static void process_line(const char *line) {
       echo_to_viewport("\n", 1);
     }
 
-    /* Call user input side-effect hook */
-    lisp_x_call_user_input_hook(line, strlen(line));
-
-    /* Process through user input transform hook (sends empty lines too) */
-    LispObject *result =
-        lisp_x_call_user_input_transform_hook(line, strlen(line));
-    lisp_x_send_hook_result(result, g_telnet);
+    /* Call user input filter hook — if consumed, skip transform+send */
+    if (!lisp_x_call_user_input_hook(line, strlen(line))) {
+      /* Process through user input transform hook (sends empty lines too) */
+      LispObject *result =
+          lisp_x_call_user_input_transform_hook(line, strlen(line));
+      lisp_x_send_hook_result(result, g_telnet);
+    }
   } else if (line[0] != '\0') {
     echo_to_viewport("\nNot connected. Use :connect <host> <port>\n", 44);
   } else {

@@ -213,5 +213,72 @@
 
 (print "Test 11 passed: Empty/nonexistent hooks")
 
+;; ============================================================================
+;; Test 12: run-filter-hook passes through when no handler returns nil
+;; ============================================================================
+(set! *hooks* (make-hash-table))
+
+(defun filter-pass (x) x)
+
+(add-hook 'pass-filter 'filter-pass)
+
+(let ((result (run-filter-hook 'pass-filter "hello")))
+  (assert-equal result "hello"
+    "run-filter-hook returns original value when no handler returns nil"))
+
+(print "Test 12 passed: run-filter-hook pass-through")
+
+;; ============================================================================
+;; Test 13: run-filter-hook returns nil when any handler returns nil
+;; ============================================================================
+(set! *hooks* (make-hash-table))
+
+(defun filter-consume (x) nil)
+
+(add-hook 'consume-filter 'filter-consume)
+
+(let ((result (run-filter-hook 'consume-filter "hello")))
+  (assert-nil result
+    "run-filter-hook returns nil when handler returns nil"))
+
+(print "Test 13 passed: run-filter-hook consumption")
+
+;; ============================================================================
+;; Test 14: All handlers called even after one returns nil (no short-circuit)
+;; ============================================================================
+(set! *hooks* (make-hash-table))
+
+(define filter-call-log nil)
+
+(defun filter-log-and-consume (x)
+  (set! filter-call-log (append filter-call-log (list "consumer")))
+  nil)
+
+(defun filter-log-and-pass (x)
+  (set! filter-call-log (append filter-call-log (list "passer")))
+  x)
+
+(add-hook 'no-short-circuit 'filter-log-and-consume 10)
+(add-hook 'no-short-circuit 'filter-log-and-pass 50)
+
+(set! filter-call-log nil)
+(let ((result (run-filter-hook 'no-short-circuit "test")))
+  (assert-nil result "Result is nil when one handler consumed")
+  (assert-equal filter-call-log '("consumer" "passer")
+    "Both handlers called despite first returning nil"))
+
+(print "Test 14 passed: no short-circuit")
+
+;; ============================================================================
+;; Test 15: run-filter-hook on nonexistent hook returns original value
+;; ============================================================================
+(set! *hooks* (make-hash-table))
+
+(let ((result (run-filter-hook 'nonexistent-filter "original")))
+  (assert-equal result "original"
+    "run-filter-hook on nonexistent hook returns original value"))
+
+(print "Test 15 passed: nonexistent filter hook")
+
 (print "")
 (print "All hook system tests passed!")

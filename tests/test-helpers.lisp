@@ -130,6 +130,19 @@
         (run-transform-hook--loop hook-list initial-value)
         initial-value))))
 
+(defun run-filter-hook (hook value)
+  "Mock: call all handlers with value; return nil if any returned nil."
+  (let ((name (symbol->string hook)))
+    (let ((hook-list (hash-ref *hooks* name)))
+      (if hook-list
+        (let ((consumed nil))
+          (do ((remaining hook-list (cdr remaining)))
+              ((null? remaining)
+               (if consumed nil value))
+            (let ((result (apply (eval (car (car remaining))) (list value))))
+              (if (null? result) (set! consumed #t)))))
+        value))))
+
 ;; ============================================================================
 ;; Stdlib Mocks (from init.lisp)
 ;; ============================================================================

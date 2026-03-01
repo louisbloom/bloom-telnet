@@ -15,6 +15,7 @@ test_telnet_app_LDADD = \
 # Lisp tests
 TESTS = \
     test_telnet_app \
+    hooks.lisp \
     tintin-colors.lisp \
     tintin-patterns.lisp \
     tintin-parsing.lisp \
@@ -35,6 +36,7 @@ EXTRA_DIST = \
     test-loader.lisp \
     bench-completion.lisp \
     bench-trie-insert.lisp \
+    hooks.lisp \
     tintin-colors.lisp \
     tintin-patterns.lisp \
     tintin-parsing.lisp \

@@ -151,9 +151,11 @@ Under the hood, everything is Lisp. TinTin++ commands are sugar over Lisp data s
 
 Hooks are the primary way to customize bloom-telnet. They let you react to server output, transform user input, intercept keystrokes, and build automation scripts — all from Lisp.
 
-#### Two Hook Types
+#### Three Hook Types
 
 **Event hooks** (`run-hook`) call every registered handler with the same arguments. Return values are ignored — handlers exist for side effects (logging, triggering actions, collecting data).
+
+**Filter hooks** (`run-filter-hook`) call every handler with the original value. If any handler returns `nil`, the input is consumed and skips further processing. Use for command interception.
 
 **Transform hooks** (`run-transform-hook`) thread a value through handlers in priority order. Each handler receives the previous handler's output and returns a transformed value. Return `nil` to consume/discard the value.
 
@@ -172,6 +174,7 @@ Hooks are the primary way to customize bloom-telnet. They let you react to serve
 
 ;; Dispatch (used internally — you rarely call these directly)
 (run-hook 'hook-name arg1 arg2 ...)       ; event: call all handlers
+(run-filter-hook 'hook-name value)        ; filter: nil from any handler = consumed
 (run-transform-hook 'hook-name value)     ; transform: thread value through handlers
 ```
 
@@ -210,9 +213,22 @@ Fired when data arrives from the server, before display. Text has ANSI codes pre
 
 When tintin is loaded, `tintin-telnet-input-transform` (priority 50) applies `#highlight` color rules here.
 
+##### `user-input-hook` (filter)
+
+Fired when the user submits input, before the transform hook. Handlers receive the raw text and return non-nil to pass through or `nil` to consume (prevent the input from reaching the transform hook or being sent to the server).
+
+```lisp
+(defun my-command (text)
+  (if (string-prefix? "/greet" text)
+    (progn (telnet-send "say Hello!") nil)  ; consume
+    text))                                   ; pass through
+
+(add-hook 'user-input-hook 'my-command 5)
+```
+
 ##### `user-input-transform-hook` (transform)
 
-Fired when the user submits input. This is the main pipeline for input processing — alias expansion, speedwalk, command prefixing, and more.
+Fired when the user submits input, after the filter hook. This is the main pipeline for input processing — alias expansion, speedwalk, command prefixing, and more.
 
 Handlers receive a string and return one of:
 
@@ -220,22 +236,20 @@ Handlers receive a string and return one of:
 - **list of strings** — multiple commands (each sent separately to the server)
 - **nil** — consume the input (nothing is sent)
 
-```lisp
-;; Intercept a custom /command
-(defun my-command-handler (text)
-  (if (string-prefix? "/greet" text)
-    (progn (telnet-send "say Hello everyone!") nil)   ; consume input
-    text))                                             ; pass through
+For command interception (dispatching a `/command` and consuming input), use `user-input-hook` instead — it runs before this hook and is designed for that pattern.
 
-(add-hook 'user-input-transform-hook 'my-command-handler 5)
+```lisp
+;; Add a prefix to all outgoing commands
+(defun add-prefix (text)
+  (if (string=? text "") text (concat "say " text)))
+
+(add-hook 'user-input-transform-hook 'add-prefix 60)
 ```
 
 Typical priority layout on this hook:
 
 | Priority | Handler                  | Purpose                                 |
 | -------- | ------------------------ | --------------------------------------- |
-| 5        | `familiar-user-input-command`   | Intercepts `/f` commands                |
-| 10       | `practice-user-input-hook`      | Intercepts `/p` commands                |
 | 50       | `tintin-user-input-hook` | Alias expansion, speedwalk, `#commands` |
 
 Lower priority numbers run first. Use priorities below 50 to intercept input before TinTin++ processes it, or above 50 to transform TinTin++'s output.
