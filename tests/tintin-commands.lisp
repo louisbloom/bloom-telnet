@@ -227,8 +227,6 @@
 (tintin-process-command "loop1")
 ;; loop1 -> send-input("loop2") (depth=1) -> send-input("loop1") (depth=2) -> ...
 ;; Eventually hits *tintin-max-alias-depth* and stops
-(assert-true (>= *tintin-alias-depth* *tintin-max-alias-depth*)
-  "Circular alias stops at depth limit")
 (assert-true (some-echoed-contains "Circular alias")
   "Circular alias error message displayed")
 
@@ -300,7 +298,7 @@
 
 (set! *tintin-alias-depth* 0)
 (tintin-process-command "x")
-(assert-true (>= *tintin-alias-depth* *tintin-max-alias-depth*)
+(assert-true (some-echoed-contains "Circular alias")
   "Self-referencing alias stops at depth limit")
 
 (print "Test 17 passed: self-referencing alias")
@@ -313,7 +311,7 @@
 
 (set! *tintin-alias-depth* 0)
 (tintin-process-command "bomb")
-(assert-true (>= *tintin-alias-depth* *tintin-max-alias-depth*)
+(assert-true (some-echoed-contains "Circular alias")
   "Fork-bomb alias stops at depth limit")
 
 (print "Test 18 passed: fork-bomb alias")
@@ -331,18 +329,23 @@
 (print "Test 19 passed: depth resets on fresh input")
 
 ;; ============================================================================
-;; Test 20: Alias depth increments per send-input call
+;; Test 20: Alias with multiple parts sends all siblings
 ;; ============================================================================
 (reset-aliases)
 (hash-set! *tintin-aliases* "tri" (list "a;b;c"))
 
 (set! *tintin-alias-depth* 0)
+(set! *telnet-sent* '())
 (tintin-process-command "tri")
-;; 3 parts -> 3 send-input calls -> depth increments 3 times
-(assert-true (>= *tintin-alias-depth* 3)
-  "Alias with 3 parts increments depth at least 3 times")
+;; 3 sibling parts all process at depth 1 (same nesting level)
+(assert-true (member? "a" *telnet-sent*)
+  "First sibling sent")
+(assert-true (member? "b" *telnet-sent*)
+  "Second sibling sent")
+(assert-true (member? "c" *telnet-sent*)
+  "Third sibling sent")
 
-(print "Test 20 passed: depth increments per send-input")
+(print "Test 20 passed: alias siblings all sent")
 
 ;; ============================================================================
 ;; Test 21: Nested alias depth-first ordering (via telnet-send)

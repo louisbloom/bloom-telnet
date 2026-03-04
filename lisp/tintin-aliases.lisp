@@ -131,23 +131,24 @@
 (defun tintin-send-expanded (result)
   (let ((expanded (tintin-expand-speedwalk result)))
     (let ((parts (tintin-split-commands expanded)))
-      (do ((i 0 (+ i 1))) ((>= i (length parts)))
-        (let ((part (list-ref parts i)))
-          (if (and (string? part) (not (string=? part "")))
-            (let ((cmd (tintin-expand-variables-fast part)))
-              ;; Echo expanded command
-              (terminal-echo (concat cmd "\r\n"))
-              ;; Increment depth and process through full hook pipeline
-              (set! *tintin-alias-depth* (+ *tintin-alias-depth* 1))
-              (let ((filtered (run-filter-hook 'user-input-hook cmd)))
-                (if filtered
-                  (let ((transformed
-                         (run-transform-hook 'user-input-transform-hook
-                          filtered)))
-                    (cond
-                      ((string? transformed)
-                       (tintin-send-if-nonempty transformed))
-                      ((pair? transformed)
-                       (do ((j 0 (+ j 1))) ((>= j (length transformed)))
-                         (tintin-send-if-nonempty (list-ref transformed j)))))))))))))))
+      (let ((base-depth *tintin-alias-depth*))
+        (do ((i 0 (+ i 1))) ((>= i (length parts)))
+          (let ((part (list-ref parts i)))
+            (if (and (string? part) (not (string=? part "")))
+              (let ((cmd (tintin-expand-variables-fast part)))
+                ;; Echo expanded command
+                (terminal-echo (concat cmd "\r\n"))
+                ;; Reset depth for each sibling — they're at the same nesting level
+                (set! *tintin-alias-depth* (+ base-depth 1))
+                (let ((filtered (run-filter-hook 'user-input-hook cmd)))
+                  (if filtered
+                    (let ((transformed
+                           (run-transform-hook 'user-input-transform-hook
+                            filtered)))
+                      (cond
+                        ((string? transformed)
+                         (tintin-send-if-nonempty transformed))
+                        ((pair? transformed)
+                         (do ((j 0 (+ j 1))) ((>= j (length transformed)))
+                           (tintin-send-if-nonempty (list-ref transformed j))))))))))))))))
 
