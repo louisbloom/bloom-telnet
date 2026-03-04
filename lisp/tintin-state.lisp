@@ -65,6 +65,8 @@ to the telnet server without processing.
 - `(tintin-enable!)` - Enable TinTin++
 - `(tintin-disable!)` - Disable TinTin++")
 
+(define *tintin-alias-depth* 0)
+
 (defvar *tintin-max-alias-depth* 10
   "Maximum recursion depth for alias expansion.
 

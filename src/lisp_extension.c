@@ -1586,6 +1586,15 @@ void lisp_x_call_telnet_input_hook(const char *text, size_t len) {
   }
 }
 
+/* Reset alias expansion depth counter for fresh user input */
+void lisp_x_reset_alias_depth(void) {
+  Environment *env = get_current_env();
+  if (env) {
+    LispObject *sym = lisp_intern("*tintin-alias-depth*");
+    env_set(env, sym->value.symbol, lisp_make_integer(0));
+  }
+}
+
 /* Call user-input-hook with raw user input (filter hook).
  * Returns 1 if input was consumed (any handler returned nil), 0 otherwise. */
 int lisp_x_call_user_input_hook(const char *text, size_t len) {

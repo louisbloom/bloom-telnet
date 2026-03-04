@@ -43,28 +43,50 @@
 ;; ============================================================================
 ;; INPUT PROCESSING
 ;; ============================================================================
-;; Main command router with depth tracking (internal)
-(defun tintin-process-command-internal (cmd depth)
+;; Main command router with depth tracking via *tintin-alias-depth*.
+;;
+;; Each iteration:
+;; 1. Check depth limit — if exceeded, error and pass through
+;; 2. Run filter hook — if consumed, done
+;; 3. Check for # command — if so, dispatch, done
+;; 4. Try one level of alias expansion — if no match, return command (to server)
+;; 5. If alias matched — send expanded parts via send-input (re-enters event loop)
+(defun tintin-process-command-internal (cmd)
   (if (or (not (string? cmd)) (string=? cmd ""))
     ""
-    ;; Check if it's a # command
-    (if (tintin-is-command? cmd)
-      ;; TinTin++ command - dispatch (main.c handles echoing)
-      (let ((cmd-name (tintin-extract-command-name cmd)))
-        (if (not cmd-name)
-          (progn
-            (terminal-echo
-             (concat "Invalid TinTin++ command format: " cmd "\r\n"))
-            "")
-          (let ((matched (tintin-find-command cmd-name)))
-            (if (not matched)
+    ;; Depth check (for alias expansion chains via send-input)
+    (if (>= *tintin-alias-depth* *tintin-max-alias-depth*)
+      (progn
+        (terminal-echo
+         (concat "Error: Circular alias detected or depth limit ("
+          (number->string *tintin-max-alias-depth*) ") exceeded\r\n"))
+        cmd)
+      ;; Filter hook — may consume (e.g. /greet)
+      (if (not (run-filter-hook 'user-input-hook cmd))
+        ""
+        ;; Check if it's a # command
+        (if (tintin-is-command? cmd)
+          ;; TinTin++ command - dispatch (main.c handles echoing)
+          (let ((cmd-name (tintin-extract-command-name cmd)))
+            (if (not cmd-name)
               (progn
                 (terminal-echo
-                 (concat "Unknown TinTin++ command: #" cmd-name "\r\n"))
+                 (concat "Invalid TinTin++ command format: " cmd "\r\n"))
                 "")
-              (tintin-dispatch-command matched cmd)))))
-      ;; Regular command - expand aliases
-      (tintin-expand-alias cmd depth))))
+              (let ((matched (tintin-find-command cmd-name)))
+                (if (not matched)
+                  (progn
+                    (terminal-echo
+                     (concat "Unknown TinTin++ command: #" cmd-name "\r\n"))
+                    "")
+                  (tintin-dispatch-command matched cmd)))))
+          ;; Try one level of alias expansion
+          (let ((expanded (tintin-try-alias cmd)))
+            (if (not expanded)
+              ;; No alias — expand speedwalk + variables, return to server
+              (tintin-expand-speedwalk (tintin-expand-variables-fast cmd))
+              ;; Alias matched — send through event system, suppress original
+              (progn (tintin-send-expanded expanded) ""))))))))
 
 (defun tintin-process-command (cmd)
   "Process a single TinTin++ command or server command.
@@ -75,7 +97,7 @@
   ## Returns
   - For TinTin++ commands (#...): Empty string (handled internally)
   - For regular commands: Expanded command string (after alias substitution)"
-  (tintin-process-command-internal cmd 0))
+  (tintin-process-command-internal cmd))
 
 ;; Process a full input line (split by semicolons, process each command)
 (defun tintin-process-input (input)
@@ -116,18 +138,7 @@
   (if (or (not *tintin-enabled*) (not (string? text)) (string=? text ""))
     text ;; pass through
     (let ((processed (tintin-process-input text)))
-      ;; Echo expanded commands if different from original
-      (if
-        (and (string? processed) (not (string=? processed ""))
-             (not (string=? processed text)))
-        (let ((commands (tintin-split-commands processed)))
-          (do ((i 0 (+ i 1))) ((>= i (length commands)))
-            (let ((cmd (list-ref commands i)))
-              (if
-                (and (string? cmd) (not (string=? cmd ""))
-                     (not (string=? cmd text)))
-                (terminal-echo (concat cmd "\r\n")))))))
-      ;; Return expanded text (or nil if only #commands were processed)
+      ;; Return expanded text (or nil if only #commands/aliases were processed)
       (if (and (string? processed) (not (string=? processed "")))
         (tintin-split-commands processed)
         nil))))

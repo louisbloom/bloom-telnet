@@ -93,57 +93,11 @@
     result))
 
 ;; ============================================================================
-;; RECURSIVE EXPANSION
+;; ALIAS EXPANSION (PURE)
 ;; ============================================================================
-;; Expand speedwalk, split by semicolons, recursively process
-;; Returns: fully expanded and joined commands
-;; KEY: This eliminates ~70 lines of duplication
-(defun tintin-expand-and-recurse (result depth)
-  ;; Check depth limit (circular alias detection)
-  (if (>= depth *tintin-max-alias-depth*)
-    (progn
-      (terminal-echo
-       (concat "Error: Circular alias detected or depth limit ("
-        (number->string *tintin-max-alias-depth*) ") exceeded\r\n"))
-      result) ; Return unexpanded to stop recursion
-    ;; Expand speedwalk only (variables expand per-command for just-in-time evaluation)
-    (let ((expanded (tintin-expand-speedwalk result)))
-      ;; Split by semicolon
-      (let ((split-commands (tintin-split-commands expanded)))
-        (if (> (length split-commands) 1)
-          ;; Multiple commands - recursively process each
-          (let ((sub-results '()))
-            (do ((j 0 (+ j 1))) ((>= j (length split-commands)))
-              (let ((subcmd (list-ref split-commands j)))
-                (if (and (string? subcmd) (not (string=? subcmd "")))
-                  ;; Expand variables for THIS command only (just-in-time)
-                  (let* ((cmd-with-vars (tintin-expand-variables-fast subcmd))
-                         (result
-                          (tintin-process-command-internal cmd-with-vars
-                           (+ depth 1))))
-                    (if (and (string? result) (not (string=? result "")))
-                      (set! sub-results (cons result sub-results)))))))
-            ;; Join with semicolons
-            (if (eq? sub-results '())
-              ""
-              (let ((reversed (reverse sub-results))
-                    (output ""))
-                (do ((k 0 (+ k 1))) ((>= k (length reversed)) output)
-                  (set! output
-                   (concat output (if (> k 0) ";" "") (list-ref reversed k)))))))
-          ;; Single command - recursively process
-          (if (> (length split-commands) 0)
-            (let ((cmd-with-vars
-                   (tintin-expand-variables-fast (list-ref split-commands 0))))
-              (tintin-process-command-internal cmd-with-vars (+ depth 1)))
-            ""))))))
-
-;; ============================================================================
-;; MAIN ALIAS EXPANSION
-;; ============================================================================
-;; Orchestrate alias matching and expansion
-;; Returns: expanded command (may contain semicolons)
-(defun tintin-expand-alias (cmd depth)
+;; Try one level of alias expansion: variable expansion + match + substitute.
+;; Returns expanded template string, or nil if no alias matched.
+(defun tintin-try-alias (cmd)
   (let ((expanded-cmd (tintin-expand-variables-fast cmd)))
     ;; Try simple alias match
     (let ((simple-match (tintin-match-simple-alias expanded-cmd)))
@@ -151,9 +105,8 @@
         ;; Simple alias found
         (let* ((alias-entry (car simple-match))
                (args (cdr simple-match))
-               (template (car alias-entry))
-               (result (tintin-substitute-template template args nil)))
-          (tintin-expand-and-recurse result depth))
+               (template (car alias-entry)))
+          (tintin-substitute-template template args nil))
         ;; Try pattern alias match
         (let ((pattern-match (tintin-match-pattern-alias expanded-cmd)))
           (if pattern-match
@@ -161,9 +114,25 @@
             (let* ((pattern (car pattern-match))
                    (match-values (cdr pattern-match))
                    (alias-data (hash-ref *tintin-aliases* pattern))
-                   (template (car alias-data))
-                   (result
-                    (tintin-substitute-template template nil match-values)))
-              (tintin-expand-and-recurse result depth))
-            ;; No alias match - just expand speedwalk
-            (tintin-expand-speedwalk expanded-cmd)))))))
+                   (template (car alias-data)))
+              (tintin-substitute-template template nil match-values))
+            ;; No alias match
+            nil))))))
+
+;; ============================================================================
+;; SEND EXPANDED ALIAS (via event loop)
+;; ============================================================================
+;; Expand speedwalk, split by semicolon, send each part via send-input.
+;; Each send-input re-enters the full hook pipeline asynchronously.
+(defun tintin-send-expanded (result)
+  (let ((expanded (tintin-expand-speedwalk result)))
+    (let ((parts (tintin-split-commands expanded)))
+      (do ((i 0 (+ i 1))) ((>= i (length parts)))
+        (let ((part (list-ref parts i)))
+          (if (and (string? part) (not (string=? part "")))
+            (let ((cmd (tintin-expand-variables-fast part)))
+              ;; Echo expanded command
+              (terminal-echo (concat cmd "\r\n"))
+              ;; Increment depth and send through event system
+              (set! *tintin-alias-depth* (+ *tintin-alias-depth* 1))
+              (send-input cmd))))))))

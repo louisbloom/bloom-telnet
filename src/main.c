@@ -243,6 +243,9 @@ static void process_line(const char *line) {
       echo_to_viewport("\n", 1);
     }
 
+    /* Reset alias expansion depth for fresh user input */
+    lisp_x_reset_alias_depth();
+
     /* Call user input filter hook — if consumed, skip transform+send */
     if (!lisp_x_call_user_input_hook(line, strlen(line))) {
       /* Process through user input transform hook (sends empty lines too) */

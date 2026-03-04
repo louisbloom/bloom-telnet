@@ -28,8 +28,18 @@
 (defun terminal-echo (msg) nil)
 (defun telnet-send (msg) nil)
 (defvar *sent-inputs* '())
+(defvar *sent-results* '())
 (defun send-input (text)
-  (set! *sent-inputs* (append *sent-inputs* (list text))))
+  (set! *sent-inputs* (append *sent-inputs* (list text)))
+  ;; Simulate event loop: process through hook pipeline synchronously
+  (if (not (run-filter-hook 'user-input-hook text))
+    nil
+    (let ((result (run-transform-hook 'user-input-transform-hook text)))
+      (cond
+        ((and (string? result) (not (string=? result "")))
+         (set! *sent-results* (append *sent-results* (list result))))
+        ((pair? result)
+         (set! *sent-results* (append *sent-results* result)))))))
 (defun script-echo (title &rest args) nil)
 (defun run-at-time (delay repeat func) nil)
 (defun cancel-timer (timer) nil)
