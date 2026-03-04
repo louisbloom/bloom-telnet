@@ -2,12 +2,6 @@
 ;; Loaded into base_env on startup after the TUI is initialized.
 ;; All variables defined here can be overridden in your custom Lisp configuration file.
 ;; ============================================================================
-;; COMPLETION PATTERN CONFIGURATION
-;; ============================================================================
-(defvar *completion-pattern* "\\S+$"
-  "PCRE2 regex pattern that matches the text to complete.")
-
-;; ============================================================================
 ;; WORD STORE CONFIGURATION
 ;; ============================================================================
 (defvar *completion-word-store-size* 50000
@@ -451,14 +445,6 @@ Example — send a command every 10 seconds:
     ((eq? obj #f) "#f")
     (#t (format nil "~A" obj))))
 
-(defconst *ansi-reset* "\033[0m"
-  "ANSI escape sequence to reset all text attributes.")
-
-(defun ansi-fg-rgb (r g b)
-  "Generate ANSI true color foreground escape sequence."
-  (concat "\033[38;2;" (number->string r) ";" (number->string g) ";"
-   (number->string b) "m"))
-
 ;; ============================================================================
 ;; COMPLETION DIAGNOSTICS
 ;; ============================================================================
@@ -472,17 +458,6 @@ Example — send a command every 10 seconds:
       " words (hash+trie)\r\n" "Circular buffer size: "
       (number->string vec-size) "\r\n" "Buffer index: " (number->string idx)
       "\r\n"))))
-
-;; ============================================================================
-;; LOGGING CONVENIENCE WRAPPERS
-;; ============================================================================
-(defun report-error (message)
-  "Log an error message via the bloom logging system."
-  (bloom-log 'error "lisp" message))
-
-(defun report-warn (message)
-  "Log a warning message via the bloom logging system."
-  (bloom-log 'warn "lisp" message))
 
 ;; ============================================================================
 ;; SCRIPT STARTUP BANNERS
