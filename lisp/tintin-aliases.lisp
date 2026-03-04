@@ -120,10 +120,14 @@
             nil))))))
 
 ;; ============================================================================
-;; SEND EXPANDED ALIAS (via event loop)
+;; SEND EXPANDED ALIAS (synchronous, depth-first)
 ;; ============================================================================
-;; Expand speedwalk, split by semicolon, send each part via send-input.
-;; Each send-input re-enters the full hook pipeline asynchronously.
+;; Expand speedwalk, split by semicolon, process each part synchronously
+;; through the full hook pipeline (filter + transform) for depth-first ordering.
+;; Helper: send a single string via telnet-send if non-empty
+(defun tintin-send-if-nonempty (s)
+  (if (and (string? s) (not (string=? s ""))) (telnet-send s)))
+
 (defun tintin-send-expanded (result)
   (let ((expanded (tintin-expand-speedwalk result)))
     (let ((parts (tintin-split-commands expanded)))
@@ -133,6 +137,17 @@
             (let ((cmd (tintin-expand-variables-fast part)))
               ;; Echo expanded command
               (terminal-echo (concat cmd "\r\n"))
-              ;; Increment depth and send through event system
+              ;; Increment depth and process through full hook pipeline
               (set! *tintin-alias-depth* (+ *tintin-alias-depth* 1))
-              (send-input cmd))))))))
+              (let ((filtered (run-filter-hook 'user-input-hook cmd)))
+                (if filtered
+                  (let ((transformed
+                         (run-transform-hook 'user-input-transform-hook
+                          filtered)))
+                    (cond
+                      ((string? transformed)
+                       (tintin-send-if-nonempty transformed))
+                      ((pair? transformed)
+                       (do ((j 0 (+ j 1))) ((>= j (length transformed)))
+                         (tintin-send-if-nonempty (list-ref transformed j)))))))))))))))
+

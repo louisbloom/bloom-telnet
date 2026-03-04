@@ -16,6 +16,11 @@
 
 (defun clear-echoed () (set! *echoed* '()))
 
+;; Helper: collect telnet-send output (alias expansion sends via telnet-send)
+(define *telnet-sent* '())
+(defun telnet-send (msg)
+  (set! *telnet-sent* (append *telnet-sent* (list msg))))
+
 ;; Helper: check if any echoed message contains a substring
 (defun some-echoed-contains (substr)
   (let ((found #f))
@@ -31,6 +36,7 @@
   (set! *tintin-alias-depth* 0)
   (set! *sent-inputs* '())
   (set! *sent-results* '())
+  (set! *telnet-sent* '())
   (clear-echoed))
 
 ;; ============================================================================
@@ -40,11 +46,11 @@
 (hash-set! *tintin-aliases* "gh" (list "go home"))
 
 (let ((result (tintin-process-command "gh")))
-  (assert-equal result "" "Simple alias returns empty (sent via send-input)")
-  (assert-true (member? "go home" *sent-inputs*)
-    "Alias expanded command sent via send-input"))
+  (assert-equal result "" "Simple alias returns empty (sent via telnet-send)")
+  (assert-true (member? "go home" *telnet-sent*)
+    "Alias expanded command sent via telnet-send"))
 
-(print "Test 1 passed: simple alias expansion via send-input")
+(print "Test 1 passed: simple alias expansion via telnet-send")
 
 ;; ============================================================================
 ;; Test 2: Alias with arguments (%0)
@@ -54,8 +60,8 @@
 
 (let ((result (tintin-process-command "say hello world")))
   (assert-equal result "" "Alias with args returns empty")
-  (assert-true (member? "say hello world" *sent-inputs*)
-    "Alias with %0 sends expanded command"))
+  (assert-true (member? "say hello world" *telnet-sent*)
+    "Alias with %0 sends expanded command via telnet-send"))
 
 (print "Test 2 passed: alias with %0")
 
@@ -67,8 +73,8 @@
 
 (let ((result (tintin-process-command "k orc")))
   (assert-equal result "" "Alias with %1 returns empty")
-  (assert-true (member? "kill orc" *sent-inputs*)
-    "Alias with %1 sends expanded command"))
+  (assert-true (member? "kill orc" *telnet-sent*)
+    "Alias with %1 sends expanded command via telnet-send"))
 
 (print "Test 3 passed: alias with numbered args")
 
@@ -90,10 +96,10 @@
 
 (let ((result (tintin-process-command "buff")))
   (assert-equal result "" "Alias with semicolons returns empty")
-  (assert-true (member? "cast shield" *sent-inputs*)
-    "First part sent via send-input")
-  (assert-true (member? "cast armor" *sent-inputs*)
-    "Second part sent via send-input"))
+  (assert-true (member? "cast shield" *telnet-sent*)
+    "First part sent via telnet-send")
+  (assert-true (member? "cast armor" *telnet-sent*)
+    "Second part sent via telnet-send"))
 
 (print "Test 5 passed: alias with semicolons")
 
@@ -105,16 +111,14 @@
 (hash-set! *tintin-aliases* "fullbuff" (list "cast shield;cast armor"))
 
 (tintin-process-command "fb")
-;; fb -> send-input("fullbuff") -> hook pipeline -> fullbuff alias ->
-;;   send-input("cast shield"), send-input("cast armor")
-(assert-true (member? "fullbuff" *sent-inputs*)
-  "First level alias sends fullbuff")
-(assert-true (member? "cast shield" *sent-inputs*)
-  "Nested alias sends cast shield")
-(assert-true (member? "cast armor" *sent-inputs*)
-  "Nested alias sends cast armor")
+;; fb -> fullbuff -> tintin-process-command-internal("fullbuff") -> alias ->
+;;   tintin-send-expanded("cast shield;cast armor") -> telnet-send each
+(assert-true (member? "cast shield" *telnet-sent*)
+  "Nested alias sends cast shield via telnet-send")
+(assert-true (member? "cast armor" *telnet-sent*)
+  "Nested alias sends cast armor via telnet-send")
 
-(print "Test 6 passed: nested alias expansion via send-input")
+(print "Test 6 passed: nested alias expansion via telnet-send")
 
 ;; ============================================================================
 ;; Test 7: # command dispatch from alias expansion
@@ -193,11 +197,11 @@
 (hash-set! *tintin-aliases* "setup" (list "look;#echo {Ready}"))
 
 (tintin-process-command "setup")
-;; send-input("look") and send-input("#echo {Ready}") both go through pipeline
-(assert-true (member? "look" *sent-inputs*)
-  "look sent via send-input")
-(assert-true (member? "#echo {Ready}" *sent-inputs*)
-  "#echo sent via send-input")
+;; "look" goes to telnet-send, "#echo {Ready}" dispatched internally
+(assert-true (member? "look" *telnet-sent*)
+  "look sent via telnet-send")
+(assert-true (some-echoed-contains "Ready")
+  "#echo dispatched and echoed")
 
 (print "Test 10 passed: # command in semicolon-split alias")
 
@@ -283,8 +287,8 @@
 (hash-set! *tintin-aliases* "cast %1 at %2" (list "cast '%1' target '%2'"))
 
 (tintin-process-command "cast fireball at dragon")
-(assert-true (member? "cast 'fireball' target 'dragon'" *sent-inputs*)
-  "Pattern alias with wildcards sends expanded command via send-input")
+(assert-true (member? "cast 'fireball' target 'dragon'" *telnet-sent*)
+  "Pattern alias with wildcards sends expanded command via telnet-send")
 
 (print "Test 16 passed: pattern alias with wildcards")
 
@@ -339,6 +343,26 @@
   "Alias with 3 parts increments depth at least 3 times")
 
 (print "Test 20 passed: depth increments per send-input")
+
+;; ============================================================================
+;; Test 21: Nested alias depth-first ordering (via telnet-send)
+;; ============================================================================
+;; When ef -> "gb lamb;eat lamb" and gb -> "get %1 bag", depth-first means
+;; "get lamb bag" must reach the server before "eat lamb".
+(reset-aliases)
+
+(hash-set! *tintin-aliases* "gb" (list "get %1 bag"))
+(hash-set! *tintin-aliases* "ef" (list "gb lamb;eat lamb"))
+
+(tintin-process-command "ef")
+(assert-equal (length *telnet-sent*) 2
+  "Two commands sent to server")
+(assert-equal (list-ref *telnet-sent* 0) "get lamb bag"
+  "Depth-first: nested alias 'gb lamb' fully expanded first")
+(assert-equal (list-ref *telnet-sent* 1) "eat lamb"
+  "Depth-first: 'eat lamb' sent second")
+
+(print "Test 21 passed: nested alias depth-first ordering")
 
 (print "")
 (print "All command processing tests passed!")
