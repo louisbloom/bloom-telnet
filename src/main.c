@@ -249,8 +249,7 @@ static void process_line(const char *line) {
     /* Call user input filter hook — if consumed, skip transform+send */
     if (!lisp_x_call_user_input_hook(line, strlen(line))) {
       /* Process through user input transform hook (sends empty lines too) */
-      LispObject *result =
-          lisp_x_call_user_input_transform_hook(line, strlen(line));
+      LispObject *result = lisp_x_call_user_input_transform_hook(line);
       lisp_x_send_hook_result(result, g_telnet);
     }
   } else if (line[0] != '\0') {

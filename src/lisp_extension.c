@@ -1263,8 +1263,7 @@ static TuiMsg send_input_callback(void *data) {
   Session *s = session_get_current();
   if (s && s->telnet) {
     if (!lisp_x_call_user_input_hook(text, strlen(text))) {
-      LispObject *result =
-          lisp_x_call_user_input_transform_hook(text, strlen(text));
+      LispObject *result = lisp_x_call_user_input_transform_hook(text);
       lisp_x_send_hook_result(result, s->telnet);
     }
   }
@@ -1756,8 +1755,7 @@ const char *lisp_x_call_telnet_input_transform_hook(const char *text,
 }
 
 /* Call user-input-transform-hook */
-LispObject *lisp_x_call_user_input_transform_hook(const char *text,
-                                                  int cursor_pos) {
+LispObject *lisp_x_call_user_input_transform_hook(const char *text) {
   Environment *env = get_current_env();
   if (!env || !text) {
     return lisp_make_string(text ? text : "");
@@ -1774,13 +1772,7 @@ LispObject *lisp_x_call_user_input_transform_hook(const char *text,
     return lisp_make_string(text);
   }
 
-  volatile LispObject *cursor_arg = lisp_make_integer(cursor_pos);
-  if (!cursor_arg || ((LispObject *)cursor_arg)->type == LISP_ERROR) {
-    return lisp_make_string(text);
-  }
-
-  volatile LispObject *args = lisp_make_cons(
-      (LispObject *)text_arg, lisp_make_cons((LispObject *)cursor_arg, NIL));
+  volatile LispObject *args = lisp_make_cons((LispObject *)text_arg, NIL);
   volatile LispObject *call_expr = lisp_make_cons(hook, (LispObject *)args);
   LispObject *result = lisp_eval((LispObject *)call_expr, env);
 

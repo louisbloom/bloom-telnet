@@ -39,8 +39,7 @@ struct Telnet;
 
 /* Call user-input-transform-hook with user input before sending to telnet
  * Returns LispObject * (string or list of strings) */
-struct LispObject *lisp_x_call_user_input_transform_hook(const char *text,
-                                                         int cursor_pos);
+struct LispObject *lisp_x_call_user_input_transform_hook(const char *text);
 
 /* Send a hook result (string or list of strings) to telnet */
 void lisp_x_send_hook_result(struct LispObject *result, struct Telnet *telnet);

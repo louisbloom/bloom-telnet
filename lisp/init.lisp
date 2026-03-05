@@ -350,7 +350,7 @@
    Any handler returning nil consumes the input."
   (run-filter-hook 'user-input-hook text))
 
-(defun user-input-transform-hook (text cursor-pos)
+(defun user-input-transform-hook (text)
   "Transform user input before sending to telnet server."
   (run-transform-hook 'user-input-transform-hook text))
 
