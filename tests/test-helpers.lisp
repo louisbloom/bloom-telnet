@@ -41,7 +41,7 @@
         ((pair? result)
          (set! *sent-results* (append *sent-results* result)))))))
 (defun script-echo (title &rest args) nil)
-(defun run-at-time (delay repeat func) nil)
+(defun run-at-time (delay repeat func &rest args) nil)
 (defun cancel-timer (timer) nil)
 (defun bloom-log (level category message) nil)
 (defun statusbar-set-mode (&optional text) nil)

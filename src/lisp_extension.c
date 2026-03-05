@@ -1657,49 +1657,32 @@ void lisp_x_run_timers(void) {
   }
 }
 
-/* Return ms until next timer fires, or -1 if no timers are active */
+/* Return ms until next timer fires, or -1 if no timers are active.
+   Reads the cached *timer-next-fire-ms* variable maintained by Lisp. */
 int lisp_x_next_timer_ms(void) {
   Environment *env = get_current_env();
   if (!env)
     return -1;
 
-  LispObject *timer_list =
-      env_lookup(env, lisp_intern("*timer-list*")->value.symbol);
-  if (!timer_list || timer_list == NIL)
+  LispObject *cached =
+      env_lookup(env, lisp_intern("*timer-next-fire-ms*")->value.symbol);
+  if (!cached || cached == NIL)
     return -1;
 
-  /* Get current time in ms (same source as current-time-ms) */
+  long long fire_time = -1;
+  if (cached->type == LISP_INTEGER)
+    fire_time = cached->value.integer;
+  else if (cached->type == LISP_NUMBER)
+    fire_time = (long long)cached->value.number;
+
+  if (fire_time < 0)
+    return -1;
+
   struct timespec ts;
   clock_gettime(CLOCK_MONOTONIC, &ts);
   long long now_ms = (long long)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
 
-  long long earliest = -1;
-  LispObject *p = timer_list;
-  while (p != NIL && p->type == LISP_CONS) {
-    LispObject *timer = lisp_car(p);
-    /* Timer format: (id fire-time repeat-ms function args) */
-    if (timer && timer->type == LISP_CONS) {
-      LispObject *rest = lisp_cdr(timer);
-      if (rest && rest->type == LISP_CONS) {
-        LispObject *fire_time_obj = lisp_car(rest);
-        if (fire_time_obj && fire_time_obj->type == LISP_INTEGER) {
-          long long fire_time = fire_time_obj->value.integer;
-          if (earliest < 0 || fire_time < earliest)
-            earliest = fire_time;
-        } else if (fire_time_obj && fire_time_obj->type == LISP_NUMBER) {
-          long long fire_time = (long long)fire_time_obj->value.number;
-          if (earliest < 0 || fire_time < earliest)
-            earliest = fire_time;
-        }
-      }
-    }
-    p = lisp_cdr(p);
-  }
-
-  if (earliest < 0)
-    return -1;
-
-  long long delta = earliest - now_ms;
+  long long delta = fire_time - now_ms;
   if (delta <= 0)
     return 0;
   return (int)delta;

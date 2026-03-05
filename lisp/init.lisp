@@ -377,9 +377,26 @@
 ;; ============================================================================
 ;; TIMER SYSTEM
 ;; ============================================================================
-(defvar *timer-list* '() "List of active timers.")
+(defvar *timer-list* '()
+  "List of active timers (sorted by fire-time ascending).")
 
 (defvar *timer-next-id* 1 "Next timer ID to assign.")
+
+(defvar *timer-next-fire-ms* -1
+  "Cached fire-time of the earliest timer, or -1 if none. Read by C for select() timeout.")
+
+(defun timer--update-cache ()
+  "Set *timer-next-fire-ms* from the head of the sorted timer list."
+  (set! *timer-next-fire-ms*
+   (if (null? *timer-list*) -1 (list-ref (car *timer-list*) 1))))
+
+(defun timer--insert-sorted (timer lst)
+  "Insert TIMER into LST maintaining ascending fire-time order."
+  (if (null? lst)
+    (list timer)
+    (if (<= (list-ref timer 1) (list-ref (car lst) 1))
+      (cons timer lst)
+      (cons (car lst) (timer--insert-sorted timer (cdr lst))))))
 
 (defun run-at-time (time repeat function &rest args)
   "Schedule FUNCTION to run after TIME seconds.
@@ -394,7 +411,8 @@ Example — send a command every 10 seconds:
          (id *timer-next-id*)
          (timer (list id fire-time repeat-ms function args)))
     (set! *timer-next-id* (+ *timer-next-id* 1))
-    (set! *timer-list* (cons timer *timer-list*))
+    (set! *timer-list* (timer--insert-sorted timer *timer-list*))
+    (timer--update-cache)
     (when (bound? 'wake-event-loop) (wake-event-loop))
     timer))
 
@@ -404,6 +422,8 @@ Example — send a command every 10 seconds:
     (set! *timer-list*
      (filter (lambda (t) (if (eq? t timer) (progn (set! found #t) #f) #t))
       *timer-list*))
+    (when found (timer--update-cache)
+      (when (bound? 'wake-event-loop) (wake-event-loop)))
     found))
 
 (defun list-timers () "Return list of active timers." *timer-list*)
@@ -413,20 +433,29 @@ Example — send a command every 10 seconds:
   (when (not (null? *timer-list*))
     (let ((now (current-time-ms))
           (to-process *timer-list*)
-          (new-list '()))
+          (repeaters '()))
+      ;; Detach list so callbacks that schedule timers don't interfere
       (set! *timer-list* '())
-      (do ((remaining to-process (cdr remaining))) ((null? remaining))
+      ;; Walk sorted list, fire due timers, collect repeaters
+      (do ((remaining to-process (cdr remaining)))
+        ((or (null? remaining) (> (list-ref (car remaining) 1) now))
+         ;; Non-due tail is already sorted — set as base
+         (when (and remaining (not (null? remaining)))
+           (set! *timer-list* remaining)))
         (let* ((timer (car remaining))
                (fire-time (list-ref timer 1))
                (repeat-ms (list-ref timer 2))
                (callback (list-ref timer 3))
                (args (list-ref timer 4)))
-          (if (>= now fire-time)
-            (progn (apply callback args)
-              (when (> repeat-ms 0) (set-car! (cdr timer) (+ now repeat-ms))
-                (set! new-list (cons timer new-list))))
-            (set! new-list (cons timer new-list)))))
-      (set! *timer-list* (append new-list *timer-list*)))))
+          (apply callback args)
+          (when (> repeat-ms 0)
+            ;; Drift fix: advance from scheduled time, not current time
+            (set-car! (cdr timer) (+ fire-time repeat-ms))
+            (set! repeaters (cons timer repeaters)))))
+      ;; Merge any callbacks-added timers with survivors, then insert repeaters
+      (do ((r repeaters (cdr r))) ((null? r))
+        (set! *timer-list* (timer--insert-sorted (car r) *timer-list*)))
+      (timer--update-cache))))
 
 ;; ============================================================================
 ;; UTILITY FUNCTIONS
