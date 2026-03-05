@@ -329,16 +329,21 @@
             (add-word-to-store (substring src word-start end))))))))
 
 ;; ============================================================================
-;; HOOK WRAPPER FUNCTIONS
+;; HOOKS
 ;; ============================================================================
 ;; Hook dispatch uses a per-session *hooks* hash table (key = hook name,
 ;; value = sorted list of (fn . priority) pairs). add-hook, remove-hook,
 ;; run-hook, run-transform-hook are C builtins that operate on this table.
 ;; These wrappers are called from C via lisp_x_call_* functions.
+;; -- Wrappers called from C --
 (defun telnet-input-hook (text)
   "Process telnet server output through registered hooks."
   (run-hook 'telnet-input-hook text)
   nil)
+
+(defun telnet-input-transform-hook (text)
+  "Transform telnet server output before displaying."
+  (run-transform-hook 'telnet-input-transform-hook text))
 
 (defun user-input-hook (text)
   "Process user input through registered filter hooks.
@@ -349,30 +354,18 @@
   "Transform user input before sending to telnet server."
   (run-transform-hook 'user-input-transform-hook text))
 
-;; ============================================================================
-;; COMPLETION HOOK
-;; ============================================================================
 (defun completion-hook (text)
   "Provide tab completion candidates from word store."
   (if (and (string? text) (> (length text) 0))
     (get-completions-from-store text)
     '()))
 
-;; ============================================================================
-;; DEFAULT HOOKS
-;; ============================================================================
+;; -- Default handlers --
 (defun default-word-collector (text)
   "Default telnet-input-hook handler that collects words for tab completion."
   (collect-words-from-text text))
 
 (add-hook 'telnet-input-hook 'default-word-collector)
-
-;; ============================================================================
-;; TELNET INPUT TRANSFORM HOOK
-;; ============================================================================
-(defun telnet-input-transform-hook (text)
-  "Transform telnet server output before displaying."
-  (run-transform-hook 'telnet-input-transform-hook text))
 
 ;; ============================================================================
 ;; TIMER SYSTEM
