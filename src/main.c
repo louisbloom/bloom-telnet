@@ -223,7 +223,7 @@ static void process_line(const char *line) {
           lisp_eval_string("(statusbar-mode-remove 'echo-off)", env);
       }
     }
-  } else if (g_connected) {
+  } else {
     if (g_server_echo) {
       /* Password mode: don't echo the typed text, just the newline */
       echo_to_viewport("\n", 1);
@@ -248,15 +248,14 @@ static void process_line(const char *line) {
 
     /* Call user input filter hook — if consumed, skip transform+send */
     if (!lisp_x_call_user_input_hook(line, strlen(line))) {
-      /* Process through user input transform hook (sends empty lines too) */
+      /* Process through user input transform hook */
       LispObject *result = lisp_x_call_user_input_transform_hook(line);
-      lisp_x_send_hook_result(result, g_telnet);
+      if (g_connected) {
+        lisp_x_send_hook_result(result, g_telnet);
+      } else if (result && result != NIL) {
+        echo_to_viewport("Not connected. Use :connect <host> <port>\n", 43);
+      }
     }
-  } else if (line[0] != '\0') {
-    echo_to_viewport("\nNot connected. Use :connect <host> <port>\n", 44);
-  } else {
-    /* Empty line when not connected */
-    echo_to_viewport("\n", 1);
   }
 
   /* Update prompt */
