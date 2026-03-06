@@ -21,7 +21,8 @@ TESTS = \
     tintin-patterns.lisp \
     tintin-parsing.lisp \
     tintin-highlights.lisp \
-    tintin-speedwalk.lisp
+    tintin-speedwalk.lisp \
+    tintin-alias-ordering.lisp
 
 TEST_EXTENSIONS = .lisp
 LISP_LOG_COMPILER = $(srcdir)/run-test.sh
@@ -43,4 +44,5 @@ EXTRA_DIST = \
     tintin-patterns.lisp \
     tintin-parsing.lisp \
     tintin-highlights.lisp \
-    tintin-speedwalk.lisp
+    tintin-speedwalk.lisp \
+    tintin-alias-ordering.lisp

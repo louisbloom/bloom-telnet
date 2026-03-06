@@ -120,35 +120,32 @@
             nil))))))
 
 ;; ============================================================================
-;; SEND EXPANDED ALIAS (synchronous, depth-first)
+;; EXPAND ALIAS (synchronous, depth-first, collect results)
 ;; ============================================================================
 ;; Expand speedwalk, split by semicolon, process each part synchronously
 ;; through the full hook pipeline (filter + transform) for depth-first ordering.
-;; Helper: send a single string via telnet-send if non-empty
-(defun tintin-send-if-nonempty (s)
-  (if (and (string? s) (not (string=? s ""))) (telnet-send s)))
-
-(defun tintin-send-expanded (result)
+;; Returns semicolon-joined string of all expanded commands (preserving order).
+(defun tintin-expand-alias (result)
   (let ((expanded (tintin-expand-speedwalk result)))
-    (let ((parts (tintin-split-commands expanded)))
+    (let ((parts (tintin-split-commands expanded))
+          (collected '()))
       (let ((base-depth *tintin-alias-depth*))
         (do ((i 0 (+ i 1))) ((>= i (length parts)))
           (let ((part (list-ref parts i)))
             (if (and (string? part) (not (string=? part "")))
               (let ((cmd (tintin-expand-variables-fast part)))
-                ;; Echo expanded command
-                (terminal-echo (concat cmd "\r\n"))
                 ;; Reset depth for each sibling — they're at the same nesting level
                 (set! *tintin-alias-depth* (+ base-depth 1))
-                (let ((filtered (run-filter-hook 'user-input-hook cmd)))
-                  (if filtered
-                    (let ((transformed
-                           (run-transform-hook 'user-input-transform-hook
-                            filtered)))
-                      (cond
-                        ((string? transformed)
-                         (tintin-send-if-nonempty transformed))
-                        ((pair? transformed)
-                         (do ((j 0 (+ j 1))) ((>= j (length transformed)))
-                           (tintin-send-if-nonempty (list-ref transformed j))))))))))))))))
+                ;; Recurse via process-command-internal for nested alias expansion.
+                ;; Do NOT run the full hook pipeline here — the caller's pipeline
+                ;; will apply other transforms (command prefixing, etc.) to our result.
+                (let ((processed (tintin-process-command-internal cmd)))
+                  (if (and (string? processed) (not (string=? processed "")))
+                    (set! collected (cons processed collected)))))))))
+      ;; Join collected results with semicolons
+      (let ((reversed (reverse collected))
+            (output ""))
+        (do ((i 0 (+ i 1))) ((>= i (length reversed)) output)
+          (set! output
+           (concat output (if (> i 0) ";" "") (list-ref reversed i))))))))
 

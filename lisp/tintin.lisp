@@ -84,9 +84,17 @@
           (let ((expanded (tintin-try-alias cmd)))
             (if (not expanded)
               ;; No alias — expand speedwalk + variables, return to server
-              (tintin-expand-speedwalk (tintin-expand-variables-fast cmd))
-              ;; Alias matched — send through event system, suppress original
-              (progn (tintin-send-expanded expanded) ""))))))))
+              ;; Echo leaf commands from alias expansion (depth > 0)
+              (let ((server-cmd
+                     (tintin-expand-speedwalk
+                      (tintin-expand-variables-fast cmd))))
+                (if
+                  (and (> *tintin-alias-depth* 0)
+                       (not (string=? server-cmd "")))
+                  (terminal-echo (concat server-cmd "\r\n")))
+                server-cmd)
+              ;; Alias matched — return expanded commands (preserves ordering)
+              (tintin-expand-alias expanded))))))))
 
 (defun tintin-process-command (cmd)
   "Process a single TinTin++ command or server command.
