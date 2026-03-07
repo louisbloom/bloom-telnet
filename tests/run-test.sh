@@ -5,7 +5,7 @@
 # Get the directory containing this script
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # Project root is one level up
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+PROJECT_ROOT="${PROJECT_ROOT:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 
 # Find the bloom-repl binary
 if [ -n "$BLOOM_REPL" ] && command -v "$BLOOM_REPL" >/dev/null 2>&1; then
