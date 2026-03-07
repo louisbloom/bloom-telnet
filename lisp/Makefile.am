@@ -3,25 +3,25 @@
 lispdir = $(pkgdatadir)/lisp
 
 dist_lisp_DATA = \
-    init.lisp \
-    tintin.lisp \
-    tintin-state.lisp \
-    tintin-utils.lisp \
-    tintin-colors.lisp \
-    tintin-patterns.lisp \
-    tintin-parsing.lisp \
-    tintin-speedwalk.lisp \
-    tintin-highlights.lisp \
-    tintin-actions.lisp \
-    tintin-aliases.lisp \
-    tintin-tables.lisp \
-    tintin-commands.lisp \
-    tintin-conditional.lisp \
-    tintin-read.lisp \
-    tintin-save.lisp
+    init.lisp
 
 contribdir = $(pkgdatadir)/lisp/contrib
 
 dist_contrib_DATA = \
+    contrib/tintin.lisp \
+    contrib/tintin-state.lisp \
+    contrib/tintin-utils.lisp \
+    contrib/tintin-colors.lisp \
+    contrib/tintin-patterns.lisp \
+    contrib/tintin-parsing.lisp \
+    contrib/tintin-speedwalk.lisp \
+    contrib/tintin-highlights.lisp \
+    contrib/tintin-actions.lisp \
+    contrib/tintin-aliases.lisp \
+    contrib/tintin-tables.lisp \
+    contrib/tintin-commands.lisp \
+    contrib/tintin-conditional.lisp \
+    contrib/tintin-read.lisp \
+    contrib/tintin-save.lisp \
     contrib/practice.lisp \
     contrib/spell-translator.lisp

@@ -5,8 +5,8 @@
 ;; and the alias expansion architecture (aliases return expanded text).
 
 (load "tests/test-helpers.lisp")
-(defmacro load-system-file (name) `(load (string-append "lisp/" ,name)))
-(load "lisp/tintin.lisp")
+(defmacro load-system-file (name) `(load (string-append "lisp/contrib/" ,name)))
+(load "lisp/contrib/tintin.lisp")
 (set! *tintin-speedwalk-enabled* #f) ;; Disable speedwalk to avoid interference
 
 ;; Helper: collect terminal-echo output

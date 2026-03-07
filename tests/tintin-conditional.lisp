@@ -4,10 +4,10 @@
 ;; Shim load-system-file as a macro so (load ...) runs at top level,
 ;; allowing (define ...) in loaded files to create global bindings.
 (defmacro load-system-file (filename)
-  `(load (concat "lisp/" ,filename)))
+  `(load (concat "lisp/contrib/" ,filename)))
 
 ;; Load the full tintin stack (brings in all modules including conditionals)
-(load "lisp/tintin.lisp")
+(load "lisp/contrib/tintin.lisp")
 
 ;; ============================================================================
 ;; HELPERS

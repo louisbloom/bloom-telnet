@@ -8,8 +8,8 @@
 ;; commands were returned and sent later by the C caller.
 
 (load "tests/test-helpers.lisp")
-(defmacro load-system-file (name) `(load (string-append "lisp/" ,name)))
-(load "lisp/tintin.lisp")
+(defmacro load-system-file (name) `(load (string-append "lisp/contrib/" ,name)))
+(load "lisp/contrib/tintin.lisp")
 (set! *tintin-speedwalk-enabled* #f)
 
 ;; Mock terminal-echo (alias expansion echoes expanded commands)

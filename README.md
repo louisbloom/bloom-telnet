@@ -273,6 +273,7 @@ Rather than registering on this hook directly, use the convenience functions:
 ;; Unbind
 (unbind-fkey 2)
 ```
+
 #### List-Aware Transform Hooks
 
 Transform hooks handle lists natively. When a handler returns a list, subsequent handlers receive each element individually:
@@ -317,7 +318,7 @@ To add hooks to a new session, switch to it first:
 ### Lisp Files
 
 - `init.lisp` — loaded at startup; completion, timers, hooks, color config, telnet I/O logging, TCP keepalive
-- `tintin.lisp` — TinTin++ command layer (loads sub-modules in dependency order)
+- `contrib/tintin.lisp` — TinTin++ command layer (loads sub-modules in dependency order)
 - `contrib/practice.lisp` — practice mode automation for Carrion Fields
 - `contrib/spell-translator.lisp` — translate ROM 2.4 garbled spell utterances
 
