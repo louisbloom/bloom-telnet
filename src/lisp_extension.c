@@ -1476,17 +1476,26 @@ int lisp_x_load_file(const char *filepath) {
     return -1;
   }
 
+  /* Auto-append .lisp extension if not present */
+  char normalized[512];
+  const char *effective_path = filepath;
+  size_t flen = strlen(filepath);
+  if (flen < 5 || strcmp(filepath + flen - 5, ".lisp") != 0) {
+    snprintf(normalized, sizeof(normalized), "%s.lisp", filepath);
+    effective_path = normalized;
+  }
+
   /* Derive package name from filename and set *package* */
   char pkg_name[256];
-  derive_package_name(filepath, pkg_name, sizeof(pkg_name));
+  derive_package_name(effective_path, pkg_name, sizeof(pkg_name));
   LispObject *saved_pkg = env_lookup(env, sym_star_package_star->value.symbol);
   env_set(env, sym_star_package_star->value.symbol, lisp_intern(pkg_name));
 
   int ret;
 
   /* If path is absolute, load directly */
-  if (path_is_absolute(filepath)) {
-    LispObject *result = lisp_load_file(filepath, env);
+  if (path_is_absolute(effective_path)) {
+    LispObject *result = lisp_load_file(effective_path, env);
     if (result && result->type == LISP_ERROR) {
       char *err_str = lisp_print(result);
       bloom_log(LOG_ERROR, "lisp", "Error loading %s: %s", filepath, err_str);
@@ -1496,7 +1505,7 @@ int lisp_x_load_file(const char *filepath) {
     }
   } else {
     /* Try standard search paths */
-    ret = load_lisp_system_file(filepath, env) ? 0 : -1;
+    ret = load_lisp_system_file(effective_path, env) ? 0 : -1;
   }
 
   /* Restore *package* */
