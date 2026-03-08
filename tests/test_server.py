@@ -105,7 +105,7 @@ class TelnetConnection:
         Returns response bytes to send.
         """
         # We'll accept ECHO, SGA, and NAWS; refuse others
-        supported = {OPT_ECHO, OPT_SGA, OPT_NAWS}
+        supported = {OPT_SGA, OPT_NAWS}
 
         if cmd == DO:
             # Client asks if we will do something
@@ -322,8 +322,7 @@ class TestServer:
             print(f"Connection from {addr[0]}:{addr[1]}")
 
             # Send initial telnet negotiations
-            # Offer to echo and suppress go-ahead
-            connection.send_iac(WILL, OPT_ECHO)
+            # Suppress go-ahead for character-at-a-time mode
             connection.send_iac(WILL, OPT_SGA)
             # Request window size from client
             connection.send_iac(DO, OPT_NAWS)
