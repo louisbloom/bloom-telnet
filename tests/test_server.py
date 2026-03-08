@@ -323,8 +323,6 @@ class TestServer:
             print(f"Connection from {addr[0]}:{addr[1]}")
 
             # Send initial telnet negotiations
-            # Suppress go-ahead
-            connection.send_iac(WILL, OPT_SGA)
             # Request window size from client
             connection.send_iac(DO, OPT_NAWS)
             # Banner is deferred until first client data (after NAWS arrives)

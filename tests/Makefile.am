@@ -22,10 +22,12 @@ TESTS = \
     tintin-parsing.lisp \
     tintin-highlights.lisp \
     tintin-speedwalk.lisp \
-    tintin-alias-ordering.lisp
+    tintin-alias-ordering.lisp \
+    test_test_server.py
 
-TEST_EXTENSIONS = .lisp
+TEST_EXTENSIONS = .lisp .py
 LISP_LOG_COMPILER = $(srcdir)/run-test.sh
+PY_LOG_COMPILER = python3
 
 AM_TESTS_ENVIRONMENT = \
     BLOOM_REPL="$${BLOOM_REPL:-bloom-repl}"; \
@@ -45,4 +47,5 @@ EXTRA_DIST = \
     tintin-parsing.lisp \
     tintin-highlights.lisp \
     tintin-speedwalk.lisp \
-    tintin-alias-ordering.lisp
+    tintin-alias-ordering.lisp \
+    test_test_server.py
