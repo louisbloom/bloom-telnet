@@ -200,6 +200,7 @@ class TelnetConnection:
         response = self.server.handle_input(line, self)
         if response:
             self.send(response)
+            self.send(b"\r\n")
             self.send(PROMPT)
         elif response is not None:
             # Empty response (e.g. empty echo), still show prompt
