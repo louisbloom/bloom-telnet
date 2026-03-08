@@ -158,45 +158,46 @@ class TelnetConnection:
     def handle_data(self, raw_data):
         """Handle incoming data from the client.
 
-        In character-at-a-time mode (WILL ECHO + WILL SGA), the client
-        sends each keystroke individually. We echo characters back as they
-        arrive and buffer until a complete line (CR/LF) is received.
+        The client handles line editing locally and sends complete lines.
+        We buffer incoming data and dispatch each complete line.
         """
-        # Process telnet protocol (strips IAC sequences)
         data = self.process_data(raw_data)
-
-        # Send banner after first data (NAWS negotiation will have set width)
         self.send_banner_if_needed()
 
         if not data:
             return
 
-        for byte in data:
-            if byte in (0x7F, 0x08):  # DEL or BS
-                if self.line_buffer:
-                    self.line_buffer.pop()
-                    self.send(b"\b \b")  # Erase character on client
-            elif byte == ord("\r"):
-                # CR: could be CR+LF or CR+NUL — extract line now,
-                # the LF or NUL that follows will be consumed harmlessly
-                self.send(b"\r\n")  # Echo the newline
-                self._dispatch_line()
-            elif byte == ord("\n"):
-                # Bare LF (or LF after CR — buffer already dispatched so this is a no-op)
-                if self.line_buffer:
-                    self.send(b"\r\n")
-                    self._dispatch_line()
-            elif byte == 0x00:
-                # NUL after CR per RFC 854 — ignore
-                pass
-            elif byte >= 0x20:  # Printable characters
-                self.line_buffer.append(byte)
-                self.send(bytes([byte]))  # Echo character back
+        self.line_buffer.extend(data)
 
-    def _dispatch_line(self):
+        # Process complete lines
+        while True:
+            # Find line ending (CR, LF, or CRLF)
+            cr = self.line_buffer.find(ord("\r"))
+            lf = self.line_buffer.find(ord("\n"))
+
+            if cr == -1 and lf == -1:
+                break  # No complete line yet
+
+            if cr >= 0 and (lf == -1 or cr < lf):
+                # CR found first — take line up to CR
+                line = bytes(self.line_buffer[:cr])
+                # Skip CR and optional following LF or NUL
+                end = cr + 1
+                if end < len(self.line_buffer) and self.line_buffer[end] in (
+                    ord("\n"),
+                    0x00,
+                ):
+                    end += 1
+            else:
+                # Bare LF
+                line = bytes(self.line_buffer[:lf])
+                end = lf + 1
+
+            del self.line_buffer[:end]
+            self._dispatch_line(line)
+
+    def _dispatch_line(self, line):
         """Pass the completed line to the server's input handler."""
-        line = bytes(self.line_buffer)
-        self.line_buffer.clear()
         response = self.server.handle_input(line, self)
         if response:
             self.send(response)
@@ -322,7 +323,7 @@ class TestServer:
             print(f"Connection from {addr[0]}:{addr[1]}")
 
             # Send initial telnet negotiations
-            # Suppress go-ahead for character-at-a-time mode
+            # Suppress go-ahead
             connection.send_iac(WILL, OPT_SGA)
             # Request window size from client
             connection.send_iac(DO, OPT_NAWS)
