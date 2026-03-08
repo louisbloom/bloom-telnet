@@ -44,6 +44,7 @@ class TelnetConnection:
         self.addr = addr
         self.server = server
         self.buffer = b""
+        self.line_buffer = bytearray()
         self.terminal_width = 80
         self.banner_sent = False
 
@@ -155,8 +156,13 @@ class TelnetConnection:
             self.send(PROMPT)
 
     def handle_data(self, raw_data):
-        """Handle incoming data from the client."""
-        # Process telnet protocol
+        """Handle incoming data from the client.
+
+        In character-at-a-time mode (WILL ECHO + WILL SGA), the client
+        sends each keystroke individually. We echo characters back as they
+        arrive and buffer until a complete line (CR/LF) is received.
+        """
+        # Process telnet protocol (strips IAC sequences)
         data = self.process_data(raw_data)
 
         # Send banner after first data (NAWS negotiation will have set width)
@@ -165,8 +171,33 @@ class TelnetConnection:
         if not data:
             return
 
-        # Pass to server's input handler
-        response = self.server.handle_input(data, self)
+        for byte in data:
+            if byte in (0x7F, 0x08):  # DEL or BS
+                if self.line_buffer:
+                    self.line_buffer.pop()
+                    self.send(b"\b \b")  # Erase character on client
+            elif byte == ord("\r"):
+                # CR: could be CR+LF or CR+NUL — extract line now,
+                # the LF or NUL that follows will be consumed harmlessly
+                self.send(b"\r\n")  # Echo the newline
+                self._dispatch_line()
+            elif byte == ord("\n"):
+                # Bare LF (or LF after CR — buffer already dispatched so this is a no-op)
+                if self.line_buffer:
+                    self.send(b"\r\n")
+                    self._dispatch_line()
+            elif byte == 0x00:
+                # NUL after CR per RFC 854 — ignore
+                pass
+            elif byte >= 0x20:  # Printable characters
+                self.line_buffer.append(byte)
+                self.send(bytes([byte]))  # Echo character back
+
+    def _dispatch_line(self):
+        """Pass the completed line to the server's input handler."""
+        line = bytes(self.line_buffer)
+        self.line_buffer.clear()
+        response = self.server.handle_input(line, self)
         if response:
             self.send(response)
             self.send(PROMPT)
