@@ -45,6 +45,7 @@ venv/
 
 # Claude Code
 .claude/
+CLAUDE.md
 
 # Misc
 *.tmp
