@@ -64,15 +64,15 @@ setup_local_deps() {
 	return 0
 }
 
-# Check if running on Fedora 43
+# Check if running on Fedora 41+
 check_os() {
 	log_info "Checking operating system..."
 	if [ -f /etc/fedora-release ]; then
 		FEDORA_VERSION=$(grep -oP 'Fedora release \K\d+' /etc/fedora-release)
-		if [ "$FEDORA_VERSION" -eq 43 ]; then
-			log_info "Running on Fedora 43"
+		if [ "$FEDORA_VERSION" -ge 41 ]; then
+			log_info "Running on Fedora $FEDORA_VERSION"
 		else
-			log_warn "Running on Fedora $FEDORA_VERSION (expected Fedora 43)"
+			log_warn "Running on Fedora $FEDORA_VERSION (expected Fedora 41+)"
 		fi
 	else
 		log_warn "Not running on Fedora. Some dependencies may differ."
