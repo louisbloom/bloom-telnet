@@ -78,8 +78,8 @@
 (defun test-handler-almanac (args) nil)
 (register-slash-command "/almanac" test-handler-almanac "Almanac")
 
-(assert-equal (slash-command-lookup "/al") 'ambiguous
- "Ambiguous prefix detected for /al (matches /alpha and /almanac)")
+(assert-true (pair? (slash-command-lookup "/al"))
+ "Ambiguous prefix returns list for /al (matches /alpha and /almanac)")
 ;; But /alp still uniquely matches /alpha
 (assert-equal (slash-command-lookup "/alp") "/alpha"
  "/alp still uniquely matches /alpha")

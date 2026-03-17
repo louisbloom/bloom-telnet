@@ -599,24 +599,27 @@ Colors: header=pale pink, desc=pale cyan, section=lavender, details=slate blue"
           (set! banner-args (append banner-args (list :section (car sl)))))
         (apply script-echo banner-args)))))
 
+(defun slash-command-prefix-matches (cmd)
+  "Return list of registered command names that cmd is a prefix of."
+  (let ((matches nil))
+    (do ((keys (hash-keys *slash-commands*) (cdr keys))) ((null? keys))
+      (when (string-prefix? cmd (car keys))
+        (set! matches (cons (car keys) matches))))
+    matches))
+
 (defun slash-command-lookup (cmd)
   "Resolve a command string to its canonical name.
-   Checks aliases (exact), then registered names (exact), then prefix.
-   Returns canonical name string, 'ambiguous, or nil."
+   Returns canonical name (string), list of matches (ambiguous), or nil."
   (let ((alias-target (hash-ref *slash-command-aliases* cmd)))
     (if alias-target
       alias-target
       (if (hash-ref *slash-commands* cmd)
         cmd
-        ;; Prefix match against registered names
-        (let ((matches nil))
-          (do ((keys (hash-keys *slash-commands*) (cdr keys))) ((null? keys))
-            (when (string-prefix? cmd (car keys))
-              (set! matches (cons (car keys) matches))))
+        (let ((matches (slash-command-prefix-matches cmd)))
           (cond
             ((null? matches) nil)
             ((null? (cdr matches)) (car matches))
-            (#t 'ambiguous)))))))
+            (#t matches)))))))
 
 (defun slash-command-show-help (name)
   "Display detailed help for a slash command via script-echo."
@@ -667,6 +670,12 @@ Colors: header=pale pink, desc=pale cyan, section=lavender, details=slate blue"
             reset "\r\n"))))
       (terminal-echo "\r\n"))))
 
+(defun slash-command-show-ambiguous (cmd matches)
+  "Display ambiguous command error with list of matches."
+  (terminal-echo
+   (concat "\r\nAmbiguous command: " cmd " matches " (string-join matches ", ")
+    "\r\n")))
+
 (defun slash-help-handler (args)
   "Handler for /help and /doc commands."
   (if (string=? args "")
@@ -676,15 +685,7 @@ Colors: header=pale pink, desc=pale cyan, section=lavender, details=slate blue"
         (cond
           ((null? result)
            (terminal-echo (concat "\r\nUnknown command: " cmd "\r\n")))
-          ((eq? result 'ambiguous)
-           (let ((matches nil))
-             (do ((keys (hash-keys *slash-commands*) (cdr keys)))
-               ((null? keys))
-               (when (string-prefix? cmd (car keys))
-                 (set! matches (cons (car keys) matches))))
-             (terminal-echo
-              (concat "\r\nAmbiguous: " cmd " matches "
-               (string-join matches ", ") "\r\n"))))
+          ((pair? result) (slash-command-show-ambiguous cmd result))
           (#t (slash-command-show-help result)))))))
 
 (defun slash-command-hook (text)
@@ -699,15 +700,7 @@ Colors: header=pale pink, desc=pale cyan, section=lavender, details=slate blue"
         (let ((result (slash-command-lookup cmd)))
           (cond
             ((null? result) text)
-            ((eq? result 'ambiguous)
-             (let ((matches nil))
-               (do ((keys (hash-keys *slash-commands*) (cdr keys)))
-                 ((null? keys))
-                 (when (string-prefix? cmd (car keys))
-                   (set! matches (cons (car keys) matches))))
-               (terminal-echo
-                (concat "\r\nAmbiguous command: " cmd " matches "
-                 (string-join matches ", ") "\r\n"))) nil)
+            ((pair? result) (slash-command-show-ambiguous cmd result) nil)
             (#t
              (let ((entry (hash-ref *slash-commands* result)))
                (if (string=? args "help")
