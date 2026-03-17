@@ -29,6 +29,7 @@ A terminal-based telnet client with Lisp scripting support, designed for MUD gam
 ./build.sh --bear       # Generate compile_commands.json for clangd
 ./build.sh --install    # Install to ~/.local
 ./build.sh --no-debug   # Release build
+./build.sh --test       # Build and run test suite
 ```
 
 Build output goes to `build/`.
@@ -53,7 +54,7 @@ Build output goes to `build/`.
 ./build/src/bloom-telnet --version
 ```
 
-Note: The `-l`/`--load` option expects just the filename (e.g., `tintin.lisp`), not a path. The system searches `lisp/` and `lisp/contrib/` automatically.
+Note: The `-l`/`--load` option expects just the filename (e.g., `tintin` or `tintin.lisp`), not a path. The `.lisp` extension is added automatically if omitted. The system searches `lisp/` and `lisp/contrib/` automatically.
 
 ## Commands
 
@@ -66,6 +67,41 @@ Once running, use these commands (prefixed with `:`):
 - `:eval <code>` - Evaluate Lisp code and show result
 - `:quit` or `:q` - Exit the client
 - `:help` - Show command help
+
+## Slash Commands
+
+Slash commands are user-extensible commands typed at the prompt. They start with `/` and are dispatched before any other input processing.
+
+Built-in commands:
+
+- `/help` — list all registered slash commands
+- `/help <cmd>` — show detailed help for a specific command
+- `/doc` — alias for `/help`
+
+Prefix matching is automatic: `/he` resolves to `/help` if unambiguous, or shows candidates if multiple commands match.
+
+### Creating a Custom Slash Command
+
+```lisp
+;; Define a handler — receives everything after the command name
+(defun greeter-handler (args)
+  (if (string=? args "")
+    (telnet-send "say Hello, everyone!")
+    (telnet-send (concat "say Hello, " args "!"))))
+
+;; Register it
+(register-slash-command "/greet" greeter-handler "Greeter"
+  :desc "Send a greeting to the room"
+  :aliases '("/hi")
+  :usage "/greet — greet everyone\n/greet <name> — greet someone specific")
+```
+
+What happens:
+
+- `/greet` → sends `say Hello, everyone!`
+- `/greet Bob` → sends `say Hello, Bob!`
+- `/hi` → resolves the alias, same as `/greet`
+- `/greet help` → shows the command's usage and description
 
 ## TinTin++ Scripting
 
