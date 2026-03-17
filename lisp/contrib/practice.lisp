@@ -180,60 +180,21 @@
 (add-hook 'telnet-input-hook 'practice-telnet-hook)
 
 ;; ============================================================================
-;; USER INPUT HOOK
+;; COMMAND HANDLER
 ;; ============================================================================
-;; Check if text starts with a partial match of "/practice"
-(defun practice-command? (text)
-  "Check if text is a /practice command (accepts /p, /pr, /pra, etc.)
-   Returns the argument portion after the command, or nil if not a match."
-  (if (not (string-prefix? "/" text))
-    nil
-    (let ((space-pos (string-index text " ")))
-      (if (not space-pos)
-        ;; No space - check if it's just "/p" or similar (bare command)
-        (if (string-prefix? text "/practice")
-          "" ; Return empty string for bare command
-          nil)
-        ;; Has space - check if prefix matches
-        (let ((cmd (substring text 0 space-pos)))
-          (if (string-prefix? cmd "/practice")
-            (substring text (+ space-pos 1) (length text))
-            nil))))))
+(defun practice-handler (args)
+  (cond
+    ((string=? args "stop") (practice-stop))
+    ((> (length args) 0) (practice-start args))
+    (#t
+     (if *practice-mode*
+       (practice-echo
+        (concat "Currently practicing: " *practice-command*
+         (if *practice-sleep-mode* " (sleeping)" "")))
+       (practice-echo "Not practicing. Use /p <command> to start.")))))
 
-;; User input hook handler for /practice commands
-;; Transform hook: returns nil to consume, text to pass through
-(defun practice-user-input-hook (text)
-  "Handle /practice commands via the hook system.
-   Accepts partial prefixes: /p, /pr, /pra, /prac, /pract, /practi, /practic, /practice"
-  (if (not (string? text))
-    text
-    (let ((args (practice-command? text)))
-      (if args
-        (progn
-          (cond
-            ;; /p stop or /practice stop
-            ((string=? args "stop") (practice-stop))
-            ;; /p <command> or /practice <command>
-            ((> (length args) 0) (practice-start args))
-            ;; Just /p with no args - show status
-            (#t
-             (if *practice-mode*
-               (practice-echo
-                (concat "Currently practicing: " *practice-command*
-                 (if *practice-sleep-mode* " (sleeping)" "")))
-               (practice-echo "Not practicing. Use /p <command> to start."))))
-          nil) ;; consumed — return nil
-        text)))) ;; not a /p command — pass through
-
-;; Register the user input hook with high priority (runs before tintin)
-;; Priority 10 = interceptor (handles /practice commands before tintin processes input)
-(add-hook 'user-input-hook 'practice-user-input-hook 10)
-
-;; ============================================================================
-;; INITIALIZATION MESSAGE
-;; ============================================================================
-(script-echo "Practice mode" :section "Usage\n/p <command> | /p stop | /p"
- :section
+(register-slash-command "/practice" practice-handler "Practice mode" :usage
+ "/p <command> | /p stop | /p" :section
  "Features\nRetries on failure\nSleeps when mana low, wakes at 100%\nQuits on hunger/thirst damage"
- :section "Config\n(practice-add-retry-pattern \"pattern\")")
+ :config "(practice-add-retry-pattern \"pattern\")")
 

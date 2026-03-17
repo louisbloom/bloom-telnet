@@ -16,6 +16,7 @@ test_telnet_app_LDADD = \
 TESTS = \
     test_telnet_app \
     hooks.lisp \
+    slash-commands.lisp \
     tintin-colors.lisp \
     tintin-commands.lisp \
     tintin-patterns.lisp \
@@ -41,6 +42,7 @@ EXTRA_DIST = \
     bench-completion.lisp \
     bench-trie-insert.lisp \
     hooks.lisp \
+    slash-commands.lisp \
     tintin-colors.lisp \
     tintin-commands.lisp \
     tintin-patterns.lisp \

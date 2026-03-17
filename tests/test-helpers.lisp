@@ -41,6 +41,46 @@
         ((pair? result)
          (set! *sent-results* (append *sent-results* result)))))))
 (defun script-echo (title &rest args) nil)
+
+;; Slash command mock system — provides a minimal dispatcher so tests
+;; that call (run-user-input "/cmd args") work without loading init.lisp.
+(define *mock-slash-commands* (make-hash-table))
+(define *mock-slash-aliases* (make-hash-table))
+
+(defun register-slash-command (name handler title &rest args)
+  "Mock: register a slash command handler and optional aliases."
+  (hash-set! *mock-slash-commands* name handler)
+  (do ((rest args (cdr rest))) ((null? rest))
+    (let ((item (car rest)))
+      (when (eq? item :aliases) (set! rest (cdr rest))
+        (when rest
+          (do ((al (car rest) (cdr al))) ((null? al))
+            (hash-set! *mock-slash-aliases* (car al) name)))))))
+
+(defun mock-slash-dispatch (text)
+  "Mock dispatcher: route /commands to registered handlers."
+  (if (not (and (string? text) (> (length text) 0) (string-prefix? "/" text)))
+    text
+    (let ((space-pos (string-index text " ")))
+      (let ((cmd (if space-pos (substring text 0 space-pos) text))
+            (args (if space-pos
+                    (substring text (+ space-pos 1) (length text)) "")))
+        ;; Exact alias match
+        (let ((target (hash-ref *mock-slash-aliases* cmd)))
+          (if (not target)
+            ;; Exact name or prefix match
+            (if (hash-ref *mock-slash-commands* cmd)
+              (set! target cmd)
+              (do ((keys (hash-keys *mock-slash-commands*) (cdr keys)))
+                ((or target (null? keys)))
+                (when (string-prefix? cmd (car keys))
+                  (set! target (car keys))))))
+          (if target
+            (let ((handler (hash-ref *mock-slash-commands* target)))
+              (when handler (handler args))
+              nil)
+            text))))))
+
 (defun run-at-time (delay repeat func &rest args) nil)
 (defun cancel-timer (timer) nil)
 (defun bloom-log (level category message) nil)
@@ -166,6 +206,7 @@
   (let ((fn (hash-ref *fkey-bindings* n)))
     (if fn (fn))))
 (add-hook 'fkey-hook 'fkey-handler 50)
+(add-hook 'user-input-hook 'mock-slash-dispatch 1)
 (defun bind-fkey (n fn) (hash-set! *fkey-bindings* n fn))
 (defun unbind-fkey (n) (hash-remove! *fkey-bindings* n))
 

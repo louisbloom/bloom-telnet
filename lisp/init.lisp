@@ -534,6 +534,190 @@ Colors: header=pale pink, desc=pale cyan, section=lavender, details=slate blue"
               (terminal-echo (concat "    " c-detail (car dlist) reset "\r\n")))))))))
 
 ;; ============================================================================
+;; SLASH COMMAND SYSTEM
+;; ============================================================================
+;; Central registry and dispatcher for /commands. Scripts register via
+;; register-slash-command; a single user-input-hook handler dispatches
+;; by prefix match, with /help and /doc built in.
+(define *slash-commands* (make-hash-table))
+
+(define *slash-command-aliases* (make-hash-table))
+
+(defun slash-command--insert-sorted (entry sorted)
+  "Insert entry into sorted list by name (car), ascending."
+  (cond
+    ((null? sorted) (list entry))
+    ((string<? (car entry) (car (car sorted))) (cons entry sorted))
+    (#t (cons (car sorted) (slash-command--insert-sorted entry (cdr sorted))))))
+
+(defun register-slash-command (name handler title &rest args)
+  "Register a slash command with handler and optional documentation.
+   Keywords: :desc, :aliases, :usage, :commands, :config, :section"
+  (let ((desc nil)
+        (aliases nil)
+        (usage nil)
+        (commands nil)
+        (config nil)
+        (custom-sections nil))
+    ;; Parse keyword args
+    (do ((rest args (cdr rest))) ((null? rest))
+      (let ((item (car rest)))
+        (cond
+          ((eq? item :desc) (set! rest (cdr rest))
+           (when rest (set! desc (car rest))))
+          ((eq? item :aliases) (set! rest (cdr rest))
+           (when rest (set! aliases (car rest))))
+          ((eq? item :usage) (set! rest (cdr rest))
+           (when rest (set! usage (car rest))))
+          ((eq? item :commands) (set! rest (cdr rest))
+           (when rest (set! commands (car rest))))
+          ((eq? item :config) (set! rest (cdr rest))
+           (when rest (set! config (car rest))))
+          ((eq? item :section) (set! rest (cdr rest))
+           (when rest (set! custom-sections (cons (car rest) custom-sections)))))))
+    (set! custom-sections (reverse custom-sections))
+    ;; Build ordered sections: Usage, Commands, Config, custom
+    (let ((sections '()))
+      (when usage (set! sections (cons (concat "Usage\n" usage) sections)))
+      (when commands
+        (set! sections (cons (concat "Commands\n" commands) sections)))
+      (when config (set! sections (cons (concat "Config\n" config) sections)))
+      (do ((cs custom-sections (cdr cs))) ((null? cs))
+        (set! sections (cons (car cs) sections)))
+      (set! sections (reverse sections))
+      ;; Store entry: (handler title desc sections aliases)
+      (hash-set! *slash-commands* name
+       (list handler title desc sections aliases))
+      ;; Register aliases
+      (when aliases
+        (do ((al aliases (cdr al))) ((null? al))
+          (hash-set! *slash-command-aliases* (car al) name)))
+      ;; Display startup banner via script-echo
+      (let ((banner-args (list title)))
+        (when desc (set! banner-args (append banner-args (list :desc desc))))
+        (do ((sl sections (cdr sl))) ((null? sl))
+          (set! banner-args (append banner-args (list :section (car sl)))))
+        (apply script-echo banner-args)))))
+
+(defun slash-command-lookup (cmd)
+  "Resolve a command string to its canonical name.
+   Checks aliases (exact), then registered names (exact), then prefix.
+   Returns canonical name string, 'ambiguous, or nil."
+  (let ((alias-target (hash-ref *slash-command-aliases* cmd)))
+    (if alias-target
+      alias-target
+      (if (hash-ref *slash-commands* cmd)
+        cmd
+        ;; Prefix match against registered names
+        (let ((matches nil))
+          (do ((keys (hash-keys *slash-commands*) (cdr keys))) ((null? keys))
+            (when (string-prefix? cmd (car keys))
+              (set! matches (cons (car keys) matches))))
+          (cond
+            ((null? matches) nil)
+            ((null? (cdr matches)) (car matches))
+            (#t 'ambiguous)))))))
+
+(defun slash-command-show-help (name)
+  "Display detailed help for a slash command via script-echo."
+  (let ((entry (hash-ref *slash-commands* name)))
+    (when entry
+      (let ((title (list-ref entry 1))
+            (desc (list-ref entry 2))
+            (sections (list-ref entry 3)))
+        (let ((banner-args (list title)))
+          (when desc (set! banner-args (append banner-args (list :desc desc))))
+          (do ((sl sections (cdr sl))) ((null? sl))
+            (set! banner-args (append banner-args (list :section (car sl)))))
+          (apply script-echo banner-args))))))
+
+(defun slash-command-list-all ()
+  "Display a summary of all registered slash commands."
+  (let ((c-header (color->fg *color-script-header*))
+        (c-desc (color->fg *color-script-desc*))
+        (c-detail (color->fg *color-script-detail*))
+        (reset (termcap 'reset))
+        (entries nil))
+    ;; Collect (name display-text aliases) triples
+    (do ((keys (hash-keys *slash-commands*) (cdr keys))) ((null? keys))
+      (let* ((name (car keys))
+             (entry (hash-ref *slash-commands* name))
+             (title (list-ref entry 1))
+             (desc (list-ref entry 2))
+             (aliases (list-ref entry 4)))
+        (set! entries (cons (list name (if desc desc title) aliases) entries))))
+    ;; Sort alphabetically by name
+    (let ((sorted nil))
+      (do ((remaining entries (cdr remaining))) ((null? remaining))
+        (set! sorted (slash-command--insert-sorted (car remaining) sorted)))
+      ;; Output
+      (terminal-echo (concat "\r\n" c-header "Slash Commands" reset "\r\n"))
+      (do ((remaining sorted (cdr remaining))) ((null? remaining))
+        (let* ((e (car remaining))
+               (name (car e))
+               (display-desc (cadr e))
+               (aliases (caddr e))
+               (alias-str
+                (if aliases (concat " (" (string-join aliases ", ") ")") ""))
+               (label (concat name alias-str))
+               (pad (- 24 (length label))))
+          (terminal-echo
+           (concat "  " c-desc label reset
+            (repeat-string " " (if (< pad 1) 1 pad)) c-detail display-desc
+            reset "\r\n"))))
+      (terminal-echo "\r\n"))))
+
+(defun slash-help-handler (args)
+  "Handler for /help and /doc commands."
+  (if (string=? args "")
+    (slash-command-list-all)
+    (let ((cmd (if (string-prefix? "/" args) args (concat "/" args))))
+      (let ((result (slash-command-lookup cmd)))
+        (cond
+          ((null? result)
+           (terminal-echo (concat "\r\nUnknown command: " cmd "\r\n")))
+          ((eq? result 'ambiguous)
+           (let ((matches nil))
+             (do ((keys (hash-keys *slash-commands*) (cdr keys)))
+               ((null? keys))
+               (when (string-prefix? cmd (car keys))
+                 (set! matches (cons (car keys) matches))))
+             (terminal-echo
+              (concat "\r\nAmbiguous: " cmd " matches "
+               (string-join matches ", ") "\r\n"))))
+          (#t (slash-command-show-help result)))))))
+
+(defun slash-command-hook (text)
+  "Central dispatcher for slash commands.
+   Returns nil to consume input, text to pass through."
+  (if (not (and (string? text) (> (length text) 0) (string-prefix? "/" text)))
+    text
+    (let ((space-pos (string-index text " ")))
+      (let ((cmd (if space-pos (substring text 0 space-pos) text))
+            (args
+             (if space-pos (substring text (+ space-pos 1) (length text)) "")))
+        (let ((result (slash-command-lookup cmd)))
+          (cond
+            ((null? result) text)
+            ((eq? result 'ambiguous)
+             (let ((matches nil))
+               (do ((keys (hash-keys *slash-commands*) (cdr keys)))
+                 ((null? keys))
+                 (when (string-prefix? cmd (car keys))
+                   (set! matches (cons (car keys) matches))))
+               (terminal-echo
+                (concat "\r\nAmbiguous command: " cmd " matches "
+                 (string-join matches ", ") "\r\n"))) nil)
+            (#t
+             (let ((entry (hash-ref *slash-commands* result)))
+               (if (string=? args "help")
+                 (progn (slash-command-show-help result) nil)
+                 (progn ((car entry) args) nil))))))))))
+
+;; Register central dispatcher at highest priority
+(add-hook 'user-input-hook 'slash-command-hook 1)
+
+;; ============================================================================
 ;; STATUSBAR MODE REGISTRY
 ;; ============================================================================
 ;; Mode registry: list of (symbol text priority) entries
@@ -678,6 +862,12 @@ Colors: header=pale pink, desc=pale cyan, section=lavender, details=slate blue"
          (if (and (string? encoding) (not (string=? encoding "ASCII")))
            (concat sep encoding)
            ""))))
-  (script-echo (concat "bloom-telnet " *version*) :desc ":help for commands"
-   :section (concat "Terminal\n" term-info)))
+  (script-echo (concat "bloom-telnet " *version*) :desc
+   ":help for built-in commands, /help for scripts" :section
+   (concat "Terminal\n" term-info)))
+
+;; Register /help after startup banner so its banner appears second
+(register-slash-command "/help" slash-help-handler "Help" :desc
+ "Show help for slash commands" :aliases '("/doc") :usage
+ "/help — list all commands\n/help <cmd> — show details")
 
