@@ -72,7 +72,8 @@
 (defun known-spell? (phrase)
   "Return true if phrase contains any known spell word (no translation needed)"
   (let ((lower-phrase (string-downcase phrase)))
-    (known-spell-check-list lower-phrase *known-spell-words*)))
+    (or (known-spell-check-list lower-phrase *known-spell-words*)
+        (dictionary-spell? lower-phrase))))
 
 ;; Recursively check if phrase contains any word from the list
 (defun known-spell-check-list (phrase words)
@@ -82,6 +83,19 @@
     (if (string-contains? phrase (car words))
       #t
       (known-spell-check-list phrase (cdr words)))))
+
+;; Check if phrase contains any dictionary correction word
+(defun dictionary-spell? (phrase)
+  "Return true if phrase contains any dictionary correction word"
+  (dictionary-spell-check-keys phrase (hash-keys *spell-dictionary*)))
+
+(defun dictionary-spell-check-keys (phrase keys)
+  "Recursively check if phrase contains any dictionary value"
+  (if (null? keys)
+    nil
+    (if (string-contains? phrase (hash-ref *spell-dictionary* (car keys)))
+      #t
+      (dictionary-spell-check-keys phrase (cdr keys)))))
 
 ;;; ============================================================================
 ;;; Dictionary Overrides

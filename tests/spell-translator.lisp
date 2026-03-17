@@ -88,6 +88,16 @@
 (assert-true (known-spell? "CURE LIGHT") "case-insensitive known spell check")
 (assert-false (known-spell? "qaiyjcandus") "garbled text is not known")
 
+;; Dictionary correction words are automatically known
+(assert-true (known-spell? "conjure elemental") "dictionary correction 'conjure' is known")
+(assert-true (known-spell? "vampiric touch") "dictionary correction 'vampiric' is known")
+
+;; Dynamically added corrections become known
+(spell-add "hzgh" "xyzzyspell")
+(assert-true (known-spell? "xyzzyspell") "spell-add correction becomes known")
+(spell-remove "hzgh")
+(assert-false (known-spell? "xyzzyspell") "spell-remove correction no longer known")
+
 ;; ============================================================================
 ;; spell-add / spell-remove
 ;; ============================================================================
