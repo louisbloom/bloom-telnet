@@ -143,6 +143,7 @@
 ;; Pure transformer: receives text, returns transformed text.
 ;; C caller splits result by ';' and sends each part separately.
 (defun tintin-user-input-hook (text)
+  (set! *tintin-alias-depth* 0)
   (if (or (not *tintin-enabled*) (not (string? text)) (string=? text ""))
     text ;; pass through
     (let ((processed (tintin-process-input text)))
