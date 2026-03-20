@@ -119,6 +119,8 @@
 (hash-set! *spell-dictionary* "waouq" "magic") ; mogic → magic (a→o)
 (hash-set! *spell-dictionary* "sagg" "pass") ; poss → pass (a→o)
 (hash-set! *spell-dictionary* "zrzwunsohar" "elemental") ; elementol → elemental (a→o)
+(hash-set! *spell-dictionary* "yawuruabra" "familiar")
+(hash-set! *spell-dictionary* "eugwuggar" "dismissal")
 
 (defun spell-echo (msg)
   "Echo a spell translator status message to the terminal."
