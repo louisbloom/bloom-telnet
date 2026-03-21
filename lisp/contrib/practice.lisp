@@ -246,6 +246,7 @@
        (practice-echo "Not practicing. Use /p <command> to start.")))))
 
 (register-slash-command "/practice" practice-handler "Practice mode" :usage
- "/p <cmd> | /p <a> | <b> | /p stop | /p add|remove|patterns" :section
- "Features\nRetries on failure, alternates with |\nSleeps when mana low, wakes at 100%\nQuits on hunger/thirst damage")
+ "/p <command>             Start practicing a command\n/p <cmd1> | <cmd2>      Alternate between commands\n/p stop                  Stop practicing\n/p add <pattern>         Add a retry pattern\n/p remove <pattern>      Remove a retry pattern\n/p patterns              List retry patterns\n/p                       Show status"
+ :section
+ "Features\nRetries on failure\nAlternates commands with | delimiter\nSleeps when mana low, wakes at 100%\nQuits on hunger/thirst damage")
 
