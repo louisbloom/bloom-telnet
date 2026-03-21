@@ -16,9 +16,6 @@
 
 (define *tintin-action-executing* #f)
 
-;; Track last #if/#elseif result for #else/#elseif chaining
-(define *tintin-last-if-result* #f)
-
 ;; Performance caches for highlight processing
 (define *tintin-pattern-cache* (make-hash-table))
 

@@ -20,7 +20,6 @@ dist_contrib_DATA = \
     contrib/tintin-aliases.lisp \
     contrib/tintin-tables.lisp \
     contrib/tintin-commands.lisp \
-    contrib/tintin-conditional.lisp \
     contrib/tintin-read.lisp \
     contrib/tintin-save.lisp \
     contrib/practice.lisp \

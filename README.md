@@ -7,7 +7,7 @@ A terminal-based telnet client with Lisp scripting support, designed for MUD gam
 - RFC 854 compliant telnet client with NAWS and I/O logging
 - TUI interface with readline-style input, history, and tab completion cycling
 - Lisp scripting via bloom-lisp integration
-- TinTin++ compatible MUD scripting (`#alias`, `#action`, `#highlight`, `#var`, `#if`/`#else`/`#elseif`)
+- TinTin++ compatible MUD scripting (`#alias`, `#action`, `#highlight`, `#var`, `#color`)
 - Multi-session support with per-session hook registries and telnet connections
 - ANSI color support with truecolor detection
 - Statusbar with mode display and notifications
@@ -120,10 +120,6 @@ When loaded with `--load tintin.lisp`, you get TinTin++ style commands at the pr
 #save {mysession}                 Save session state to a file
 #load {mysession}                 Restore a saved session
 #read {config.tin}                Import a TinTin++ config file
-#if {$hp < 100} {flee}            Conditional execution
-#if {$hp < 100} {flee} {fight}    Conditional with else branch
-#elseif {$hp < 200} {heal}       Chained conditional
-#else {wait}                      Default branch
 ```
 
 ## Sessions
