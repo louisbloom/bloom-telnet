@@ -83,6 +83,15 @@
                   ""
                   (concat " {" (number->string priority) "}")))))))
         (write-line file "")))
+    ;; Settings
+    (write-line file "// Settings")
+    (write-line file
+     (concat "#config {speedwalk} {" (if *tintin-speedwalk-enabled* "on" "off")
+      "}"))
+    (write-line file
+     (concat "#config {speedwalk diagonals} {"
+      (if *tintin-speedwalk-diagonals* "on" "off") "}"))
+    (write-line file "")
     ;; Close file
     (close file)
     filename))

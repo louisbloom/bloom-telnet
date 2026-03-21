@@ -289,6 +289,57 @@
         "")
       (progn (terminal-echo (concat "Color '" name "' not found\r\n")) ""))))
 
+;; Handle #config command (matches upstream TinTin++ #config)
+;; args: (), (setting), or (setting value)
+;; Supported settings: "speedwalk", "speedwalk diagonals" (bloom extension)
+(defun tintin-handle-config (args)
+  "Handle #config command (list, show, or set configuration)."
+  (cond
+    ;; No arguments - list all settings
+    ((or (null? args) (= 0 (length args))) (terminal-echo "Configuration:\r\n")
+     (terminal-echo
+      (concat "  speedwalk           "
+       (if *tintin-speedwalk-enabled* "on" "off") "\r\n"))
+     (terminal-echo
+      (concat "  speedwalk diagonals "
+       (if *tintin-speedwalk-diagonals* "on" "off") "\r\n")) "")
+    ;; One argument - show specific setting
+    ((= 1 (length args))
+     (let ((key (string-downcase (tintin-strip-braces (list-ref args 0)))))
+       (cond
+         ((string=? key "speedwalk")
+          (terminal-echo
+           (concat "speedwalk = " (if *tintin-speedwalk-enabled* "on" "off")
+            "\r\n")) "")
+         ((string=? key "speedwalk diagonals")
+          (terminal-echo
+           (concat "speedwalk diagonals = "
+            (if *tintin-speedwalk-diagonals* "on" "off") "\r\n")) "")
+         (#t (terminal-echo (concat "Unknown config: " key "\r\n")) ""))))
+    ;; Two arguments - set a setting
+    (#t
+     (let ((key (string-downcase (tintin-strip-braces (list-ref args 0))))
+           (val (string-downcase (tintin-strip-braces (list-ref args 1)))))
+       (let ((bool-val
+              (cond
+                ((string=? val "on") #t)
+                ((string=? val "off") #f)
+                (#t nil))))
+         (if (not (or (string=? val "on") (string=? val "off")))
+           (progn
+             (terminal-echo (concat "Invalid value: " val " (use on/off)\r\n"))
+             "")
+           (cond
+             ((string=? key "speedwalk")
+              (set! *tintin-speedwalk-enabled* bool-val)
+              (terminal-echo
+               (concat "speedwalk = " (if bool-val "on" "off") "\r\n")) "")
+             ((string=? key "speedwalk diagonals")
+              (set! *tintin-speedwalk-diagonals* bool-val)
+              (terminal-echo
+               (concat "speedwalk diagonals = " (if bool-val "on" "off") "\r\n")) "")
+             (#t (terminal-echo (concat "Unknown config: " key "\r\n")) ""))))))))
+
 ;; ============================================================================
 ;; COMMAND REGISTRY
 ;; ============================================================================
@@ -312,6 +363,9 @@
  (list tintin-handle-uncolor 1 "#uncolor {name}"))
 (hash-set! *tintin-commands* "write"
  (list tintin-handle-write 1 "#write {filename}"))
+(hash-set! *tintin-commands* "config"
+ (list tintin-handle-config 2
+  "#config or #config {setting} or #config {setting} {on|off}"))
 (hash-set! *tintin-commands* "action"
  (list tintin-handle-action 3
   "#action or #action {pattern} or #action {pattern} {commands} [priority]"))

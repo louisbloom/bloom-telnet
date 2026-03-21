@@ -117,6 +117,7 @@ When loaded with `--load tintin.lisp`, you get TinTin++ style commands at the pr
 #var {target} {goblin}            Set a variable ($target expands in commands)
 #color {danger} {bold <Ffe3e78>}  Define a named color (use in #highlight specs)
 #uncolor {danger}                 Remove a named color
+#config {speedwalk} {on|off}      Toggle speedwalk expansion
 #write {mysession.tin}            Write state to a TinTin++ config file
 #read {mysession.tin}             Read a TinTin++ config file
 ```

@@ -421,6 +421,8 @@
 (set! *tintin-actions* (make-hash-table))
 (hash-set! *tintin-actions* "%0 arrives." (list "look" 5))
 (hash-set! *tintin-actions* "%0 drops %1" (list "get %1" 3))
+(set! *tintin-speedwalk-enabled* #t)
+(set! *tintin-speedwalk-diagonals* #f)
 
 ;; Write state to file in TinTin++ syntax
 (tintin-save-state "/tmp/bloom-test-write.tin")
@@ -470,7 +472,63 @@
   (assert-equal (cadr act-data) 3
     "#write round-trip preserves non-default priority"))
 
+;; Verify settings
+(assert-true *tintin-speedwalk-enabled*
+  "#write round-trip preserves speedwalk on")
+(assert-false *tintin-speedwalk-diagonals*
+  "#write round-trip preserves speedwalk diagonals off")
+
 (print "Test 27 passed: #write/#read round-trip")
+
+;; ============================================================================
+;; Test 28: #config command - list settings
+;; ============================================================================
+(clear-echoed)
+(set! *tintin-speedwalk-enabled* #t)
+(set! *tintin-speedwalk-diagonals* #f)
+(tintin-process-command "#config")
+(assert-true (some-echoed-contains "speedwalk")
+  "#config lists speedwalk setting")
+
+(print "Test 28 passed: #config list settings")
+
+;; ============================================================================
+;; Test 29: #config command - show specific setting
+;; ============================================================================
+(clear-echoed)
+(tintin-process-command "#config {speedwalk}")
+(assert-true (some-echoed-contains "on")
+  "#config {speedwalk} shows current value")
+
+(print "Test 29 passed: #config show setting")
+
+;; ============================================================================
+;; Test 30: #config command - set on/off
+;; ============================================================================
+(clear-echoed)
+(tintin-process-command "#config {speedwalk} {off}")
+(assert-false *tintin-speedwalk-enabled*
+  "#config {speedwalk} {off} disables speedwalk")
+
+(tintin-process-command "#config {speedwalk} {on}")
+(assert-true *tintin-speedwalk-enabled*
+  "#config {speedwalk} {on} enables speedwalk")
+
+(print "Test 30 passed: #config set on/off")
+
+;; ============================================================================
+;; Test 31: #config command - speedwalk diagonals
+;; ============================================================================
+(clear-echoed)
+(tintin-process-command "#config {speedwalk diagonals} {on}")
+(assert-true *tintin-speedwalk-diagonals*
+  "#config {speedwalk diagonals} {on} enables diagonals")
+
+(tintin-process-command "#config {speedwalk diagonals} {off}")
+(assert-false *tintin-speedwalk-diagonals*
+  "#config {speedwalk diagonals} {off} disables diagonals")
+
+(print "Test 31 passed: #config speedwalk diagonals")
 
 ;; Cleanup
 (set! *tintin-custom-colors* (make-hash-table))
@@ -478,6 +536,8 @@
 (set! *tintin-variables* (make-hash-table))
 (set! *tintin-highlights* (make-hash-table))
 (set! *tintin-actions* (make-hash-table))
+(set! *tintin-speedwalk-enabled* #t)
+(set! *tintin-speedwalk-diagonals* #f)
 
 (print "")
 (print "All command processing tests passed!")
