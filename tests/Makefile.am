@@ -1,7 +1,7 @@
 # tests/Makefile.am - Test files
 
 # C tests
-check_PROGRAMS = test_telnet_app
+check_PROGRAMS = test_telnet_app test_event_loop
 
 test_telnet_app_SOURCES = test_telnet_app.c
 test_telnet_app_CPPFLAGS = \
@@ -12,9 +12,22 @@ test_telnet_app_LDADD = \
     $(top_builddir)/src/bloom_telnet-telnet_app.o \
     $(BLOOMBOBA_LIBS)
 
+test_event_loop_SOURCES = test_event_loop.c
+test_event_loop_CPPFLAGS = \
+    -I$(top_srcdir)/src \
+    -I$(top_srcdir)/include \
+    $(BLOOMBOBA_CFLAGS)
+test_event_loop_LDADD = \
+    $(top_builddir)/src/bloom_telnet-telnet.o \
+    $(top_builddir)/src/bloom_telnet-logging.o \
+    $(top_builddir)/src/bloom_telnet-path_utils.o \
+    $(BLOOMLISP_LIBS) \
+    $(BLOOMBOBA_LIBS)
+
 # Lisp tests
 TESTS = \
     test_telnet_app \
+    test_event_loop \
     hooks.lisp \
     slash-commands.lisp \
     tintin-colors.lisp \

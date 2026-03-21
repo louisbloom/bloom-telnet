@@ -27,6 +27,11 @@ static TuiRuntime *registered_runtime = NULL;
 /* Terminal echo callback */
 static TerminalEchoCallback echo_callback = NULL;
 
+/* Pending telnet-send buffer: \0-separated strings flushed by event loop */
+static DynamicBuffer *pending_send_buf = NULL;
+static int pending_send_scheduled = 0;
+static TuiMsg flush_pending_sends(void *data);
+
 /* CLI argument handler registry: hash table mapping flag name → handler symbol.
  * Lisp scripts call (register-cli-handler short long handler) to register.
  * After all -l files load, main.c calls lisp_x_dispatch_cli_args(). */
@@ -361,33 +366,29 @@ static LispObject *builtin_terminal_echo(LispObject *args, Environment *env) {
   return NIL;
 }
 
-/* Builtin: telnet-send - Send text to telnet server */
+/* Builtin: telnet-send - Queue text for raw send via event loop */
 static LispObject *builtin_telnet_send(LispObject *args, Environment *env) {
   (void)env;
 
-  Session *s = session_get_current();
-  if (!s || !s->telnet) {
-    return lisp_make_error("telnet-send: no telnet connection registered");
-  }
-
-  if (args == NIL) {
+  if (args == NIL)
     return lisp_make_error("telnet-send requires 1 argument");
-  }
 
   LispObject *text_obj = lisp_car(args);
-  if (text_obj->type != LISP_STRING) {
+  if (text_obj->type != LISP_STRING)
     return lisp_make_error("telnet-send: argument must be a string");
-  }
+
+  if (!registered_runtime)
+    return lisp_make_error("telnet-send: no runtime registered");
 
   const char *text = text_obj->value.string;
-  size_t len = strlen(text);
+  dynamic_buffer_append(pending_send_buf, text, strlen(text));
+  dynamic_buffer_append(pending_send_buf, "\0", 1);
 
-  /* Send with CRLF appended */
-  int result = telnet_send_with_crlf(s->telnet, text, len);
-  if (result < 0) {
-    return lisp_make_error("telnet-send: failed to send data");
+  if (!pending_send_scheduled) {
+    tui_runtime_schedule(registered_runtime,
+                         tui_cmd_custom(flush_pending_sends, NULL, NULL));
+    pending_send_scheduled = 1;
   }
-
   return NIL;
 }
 
@@ -1264,6 +1265,24 @@ void lisp_x_send_hook_result(LispObject *result, Telnet *telnet) {
   }
 }
 
+/* Callback for telnet-send: flush all pending raw sends */
+static TuiMsg flush_pending_sends(void *data) {
+  (void)data;
+  Session *s = session_get_current();
+  if (s && s->telnet) {
+    const char *p = dynamic_buffer_data(pending_send_buf);
+    const char *end = p + dynamic_buffer_len(pending_send_buf);
+    while (p < end) {
+      size_t len = strlen(p);
+      telnet_send_with_crlf(s->telnet, p, len);
+      p += len + 1;
+    }
+  }
+  dynamic_buffer_clear(pending_send_buf);
+  pending_send_scheduled = 0;
+  return tui_msg_none();
+}
+
 /* Callback for send-input: process text through user-input-transform-hook and
  * send */
 static TuiMsg send_input_callback(void *data) {
@@ -1542,8 +1561,11 @@ int lisp_x_init(void) {
   user_input_hook_buffer_size = 4096;
   user_input_hook_buffer = malloc(user_input_hook_buffer_size);
 
+  pending_send_buf = dynamic_buffer_create(256);
+
   if (!ansi_strip_buffer || !telnet_filter_buffer ||
-      !telnet_filter_temp_buffer || !user_input_hook_buffer) {
+      !telnet_filter_temp_buffer || !user_input_hook_buffer ||
+      !pending_send_buf) {
     bloom_log(LOG_ERROR, "lisp", "Failed to allocate buffers");
     lisp_x_cleanup();
     return -1;
@@ -1654,6 +1676,12 @@ void lisp_x_cleanup(void) {
     free(user_input_hook_buffer);
     user_input_hook_buffer = NULL;
     user_input_hook_buffer_size = 0;
+  }
+
+  if (pending_send_buf) {
+    dynamic_buffer_destroy(pending_send_buf);
+    pending_send_buf = NULL;
+    pending_send_scheduled = 0;
   }
 
   registered_statusbar = NULL;

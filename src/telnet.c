@@ -54,31 +54,7 @@
 #define OPT_TERMINAL_TYPE 24
 #define OPT_NAWS 31
 
-typedef enum {
-  TELNET_DATA_NORMAL,
-  TELNET_DATA_IAC,
-  TELNET_DATA_WILL,
-  TELNET_DATA_WONT,
-  TELNET_DATA_DO,
-  TELNET_DATA_DONT,
-} TelnetDataState;
-
-struct Telnet {
-  int socket;
-  TelnetState state;
-  int rows, cols;
-  int server_echo; /* Server is echoing (password mode) */
-  TelnetDataState
-      data_state;          /* IAC state machine (persists across recv calls) */
-  FILE *log_file;          /* Log file handle for I/O logging */
-  char log_filename[1024]; /* Path to current log file */
-  DynamicBuffer
-      *send_buffer; /* Buffer for IAC escaping (reused across calls) */
-  DynamicBuffer *crlf_buffer; /* Buffer for adding CRLF to Lisp sends (reused
-                                 across calls) */
-  DynamicBuffer
-      *user_input_buffer; /* Buffer for user input LF->CRLF conversion */
-};
+#include "telnet_internal.h"
 
 /* Send Telnet command */
 static int telnet_send_command(int socket, int cmd, int opt) {
