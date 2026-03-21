@@ -3,15 +3,18 @@
 ;; This script was created for Carrion Fields MUD (https://carrionfields.net/)
 ;;
 ;; Usage:
-;;   /p <command> | /p stop | /p
+;;   /p <command>             Start practicing a single command
+;;   /p <cmd1> | <cmd2>      Alternate between two commands
+;;   /p stop                  Stop practicing
+;;   /p add <pattern>         Add a retry pattern
+;;   /p remove <pattern>      Remove a retry pattern
+;;   /p patterns              List retry patterns
+;;   /p                       Show status
 ;;
 ;; Features:
-;;   Retries on failure
+;;   Retries on failure, alternates commands each send
 ;;   Sleeps when mana low, wakes at 100%
 ;;   Quits on hunger/thirst damage
-;;
-;; Config:
-;;   (practice-add-retry-pattern "pattern")
 ;; ============================================================================
 ;; CONFIGURATION
 ;; ============================================================================
@@ -39,7 +42,9 @@
 ;; ============================================================================
 (defvar *practice-mode* nil "Whether practice mode is active.")
 
-(defvar *practice-command* nil "The command being practiced.")
+(defvar *practice-command* nil "List of commands being practiced.")
+
+(defvar *practice-command-index* 0 "Index of the next command to send.")
 
 (defvar *practice-sleep-mode* nil
   "Whether we're in sleep sub-mode (waiting for mana).")
@@ -79,18 +84,58 @@
       (set! *practice-retry-patterns* (cons pattern *practice-retry-patterns*))
       (practice-echo (concat "Added retry pattern: " pattern)))))
 
+(defun practice-remove-retry-pattern (pattern)
+  "Remove a pattern from *practice-retry-patterns*."
+  (if (member pattern *practice-retry-patterns*)
+    (progn
+      (set! *practice-retry-patterns*
+       (filter (lambda (p) (not (string=? p pattern)))
+        *practice-retry-patterns*))
+      (practice-echo (concat "Removed retry pattern: " pattern)))
+    (practice-echo (concat "Pattern not found: " pattern))))
+
+(defun practice-list-retry-patterns ()
+  "List all current retry patterns."
+  (if (null? *practice-retry-patterns*)
+    (practice-echo "No retry patterns configured")
+    (practice-echo
+     (concat "Retry patterns:\n"
+      (join (map (lambda (p) (concat "  - " p)) *practice-retry-patterns*) "\n")))))
+
+(defun practice-current-command ()
+  "Return the current command to send."
+  (list-ref *practice-command* *practice-command-index*))
+
+(defun practice-advance-command ()
+  "Advance to the next command in the rotation."
+  (set! *practice-command-index*
+   (remainder (+ *practice-command-index* 1) (length *practice-command*))))
+
+(defun practice-parse-commands (input)
+  "Parse input into a list of commands, splitting on | delimiter.
+   Trims whitespace from each command."
+  (let ((parts (split input "|")))
+    (filter (lambda (s) (> (length s) 0)) (map string-trim parts))))
+
 ;; ============================================================================
 ;; CORE FUNCTIONS
 ;; ============================================================================
 (defun practice-start (command)
-  "Start practice mode with the given command."
+  "Start practice mode with the given command string.
+   Supports alternating commands with | delimiter."
   (if *practice-mode*
-    (practice-echo (concat "Already practicing: " *practice-command*))
-    (progn (set! *practice-mode* #t) (set! *practice-command* command)
-      (set! *practice-sleep-mode* nil)
-      (set! *practice-sleep-timer* nil)
-      (statusbar-mode-set 'practice "🤹" 20)
-      (practice-send command))))
+    (practice-echo
+     (concat "Already practicing: " (join *practice-command* " | ")))
+    (let ((commands (practice-parse-commands command)))
+      (if (null? commands)
+        (practice-echo "No commands specified")
+        (progn (set! *practice-mode* #t) (set! *practice-command* commands)
+          (set! *practice-command-index* 0)
+          (set! *practice-sleep-mode* nil)
+          (set! *practice-sleep-timer* nil)
+          (statusbar-mode-set 'practice "🤹" 20)
+          (practice-send (practice-current-command))
+          (practice-advance-command))))))
 
 (defun practice-stop ()
   "Stop practice mode."
@@ -104,6 +149,7 @@
       ;; Clear state
       (set! *practice-mode* nil)
       (set! *practice-command* nil)
+      (set! *practice-command-index* 0)
       (set! *practice-sleep-mode* nil)
       (statusbar-mode-remove 'practice)
       (statusbar-mode-remove 'practice-sleep)
@@ -139,7 +185,8 @@
       (practice-echo "Waking up (mana restored)...")
       ;; Stand up and resume practicing
       (practice-send "stand")
-      (practice-send *practice-command*))))
+      (practice-send (practice-current-command))
+      (practice-advance-command))))
 
 (defun practice-quit-on-hunger-thirst ()
   "Quit the game when hunger/thirst damage is detected (no one watching)."
@@ -171,7 +218,7 @@
         ;; Check for retry patterns (spell failed, lost concentration, etc.)
         ((and (not *practice-sleep-mode*)
               (practice-matches-any-pattern? text *practice-retry-patterns*))
-         (practice-send *practice-command*))
+         (practice-send (practice-current-command)) (practice-advance-command))
         ;; In sleep mode: check prompt for mana restoration
         (*practice-sleep-mode*
          (if (and mana (>= mana 100)) (practice-exit-sleep)))))))
@@ -185,16 +232,20 @@
 (defun practice-handler (args)
   (cond
     ((string=? args "stop") (practice-stop))
+    ((string=? args "patterns") (practice-list-retry-patterns))
+    ((string-prefix? "add " args)
+     (practice-add-retry-pattern (substring args 4 (length args))))
+    ((string-prefix? "remove " args)
+     (practice-remove-retry-pattern (substring args 7 (length args))))
     ((> (length args) 0) (practice-start args))
     (#t
      (if *practice-mode*
        (practice-echo
-        (concat "Currently practicing: " *practice-command*
+        (concat "Currently practicing: " (join *practice-command* " | ")
          (if *practice-sleep-mode* " (sleeping)" "")))
        (practice-echo "Not practicing. Use /p <command> to start.")))))
 
 (register-slash-command "/practice" practice-handler "Practice mode" :usage
- "/p <command> | /p stop | /p" :section
- "Features\nRetries on failure\nSleeps when mana low, wakes at 100%\nQuits on hunger/thirst damage"
- :config "(practice-add-retry-pattern \"pattern\")")
+ "/p <cmd> | /p <a> | <b> | /p stop | /p add|remove|patterns" :section
+ "Features\nRetries on failure, alternates with |\nSleeps when mana low, wakes at 100%\nQuits on hunger/thirst damage")
 
