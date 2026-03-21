@@ -46,6 +46,9 @@ Build output goes to `build/`.
 # Multiple load files
 ./build/src/bloom-telnet -l tintin.lisp -l practice.lisp mud.example.com 4000
 
+# Load TinTin++ with config files (--tintin / -t)
+./build/src/bloom-telnet -l tintin.lisp --tintin ~/cf.tin -t ~/skarrah.tin mud.example.com 4000
+
 # Enable debug logging (module:LEVEL or *:LEVEL for all)
 ./build/src/bloom-telnet -L 'completion:DEBUG,*:WARN' mud.example.com 4000
 

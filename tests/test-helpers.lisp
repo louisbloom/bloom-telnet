@@ -41,6 +41,7 @@
         ((pair? result)
          (set! *sent-results* (append *sent-results* result)))))))
 (defun script-echo (title &rest args) nil)
+(defun register-cli-handler (&rest args) nil)
 
 ;; Slash command mock system — provides a minimal dispatcher so tests
 ;; that call (run-user-input "/cmd args") work without loading init.lisp.

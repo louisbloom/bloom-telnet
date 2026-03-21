@@ -6,7 +6,6 @@
  */
 
 #include <gc.h>
-#include <getopt.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -134,6 +133,8 @@ static void print_usage(const char *progname) {
           "Arguments:\n"
           "  hostname            Server hostname or IP address\n"
           "  port                Server port (default: 23)\n"
+          "\n"
+          "Loaded scripts may register additional flags (e.g. --tintin FILE).\n"
           "\n"
           "Commands (prefix with ':'):\n"
           "  :help               Show available commands\n"
@@ -389,48 +390,61 @@ int main(int argc, char *argv[]) {
   int load_file_count = 0;
   int load_file_capacity = 0;
 
-  /* Parse command line arguments */
-  static struct option long_options[] = {
-      {"help", no_argument, NULL, 'h'},
-      {"version", no_argument, NULL, 'v'},
-      {"load", required_argument, NULL, 'l'},
-      {"log", required_argument, NULL, 'L'},
-      {NULL, 0, NULL, 0},
-  };
+  /* Parse command line arguments.
+   * Manual parsing to support unknown --flag value pairs that Lisp scripts
+   * can register handlers for via (register-cli-handler). */
+  for (int i = 1; i < argc; i++) {
+    const char *arg = argv[i];
 
-  int opt;
-  while ((opt = getopt_long(argc, argv, "hvl:L:", long_options, NULL)) != -1) {
-    switch (opt) {
-    case 'h':
+    if (strcmp(arg, "-h") == 0 || strcmp(arg, "--help") == 0) {
       print_usage(argv[0]);
       return 0;
-    case 'v':
+    } else if (strcmp(arg, "-v") == 0 || strcmp(arg, "--version") == 0) {
       print_version();
       return 0;
-    case 'l':
+    } else if (strcmp(arg, "-l") == 0 || strcmp(arg, "--load") == 0) {
+      if (++i >= argc) {
+        fprintf(stderr, "Error: %s requires an argument\n", arg);
+        return 1;
+      }
       if (load_file_count >= load_file_capacity) {
         load_file_capacity = load_file_capacity ? load_file_capacity * 2 : 4;
         load_files = realloc(load_files, load_file_capacity * sizeof(char *));
       }
-      load_files[load_file_count++] = optarg;
-      break;
-    case 'L':
-      bloom_log_set_filter(optarg);
-      break;
-    default:
-      print_usage(argv[0]);
-      return 1;
-    }
-  }
-
-  for (int i = optind; i < argc; i++) {
-    if (!hostname) {
-      hostname = argv[i];
-    } else {
-      port = atoi(argv[i]);
-      if (port <= 0 || port > 65535) {
-        fprintf(stderr, "Invalid port: %s\n", argv[i]);
+      load_files[load_file_count++] = argv[i];
+    } else if (strcmp(arg, "-L") == 0 || strcmp(arg, "--log") == 0) {
+      if (++i >= argc) {
+        fprintf(stderr, "Error: %s requires an argument\n", arg);
         return 1;
+      }
+      bloom_log_set_filter(argv[i]);
+    } else if (strncmp(arg, "--", 2) == 0 && strlen(arg) > 2) {
+      /* Unknown long option: collect for Lisp dispatch */
+      const char *flag = arg + 2;
+      if (++i >= argc) {
+        fprintf(stderr, "Error: --%s requires an argument\n", flag);
+        return 1;
+      }
+      lisp_x_add_cli_arg(flag, argv[i]);
+    } else if (arg[0] == '-' && arg[1] != '\0' && arg[1] != '-') {
+      /* Unknown short option: single char after '-' */
+      /* Skip known short options that take no arg */
+      char short_flag[2] = {arg[1], '\0'};
+      if (++i >= argc) {
+        fprintf(stderr, "Error: -%s requires an argument\n", short_flag);
+        return 1;
+      }
+      lisp_x_add_cli_arg(short_flag, argv[i]);
+    } else {
+      /* Positional argument: hostname or port */
+      if (!hostname) {
+        hostname = arg;
+      } else {
+        port = atoi(arg);
+        if (port <= 0 || port > 65535) {
+          fprintf(stderr, "Invalid port: %s\n", arg);
+          return 1;
+        }
       }
     }
   }
@@ -541,6 +555,9 @@ int main(int argc, char *argv[]) {
       bloom_log(LOG_ERROR, "lisp", "Failed to load: %s", load_files[i]);
     }
   }
+
+  /* Dispatch CLI args to Lisp handlers registered by loaded scripts */
+  lisp_x_dispatch_cli_args();
 
   /* Connect if hostname provided */
   if (hostname) {

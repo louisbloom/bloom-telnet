@@ -104,4 +104,12 @@ void lisp_x_call_fkey_hook(int fkey_num);
  * Used by the event loop to compute select() timeout. */
 int lisp_x_next_timer_ms(void);
 
+/* Store a CLI argument for later dispatch to Lisp handlers.
+ * Called during arg parsing in main() for unknown --flag value pairs. */
+void lisp_x_add_cli_arg(const char *flag, const char *value);
+
+/* Dispatch collected CLI args to registered Lisp handlers.
+ * Called after all -l files are loaded. Returns number of errors. */
+int lisp_x_dispatch_cli_args(void);
+
 #endif /* BLOOM_TELNET_LISP_H */

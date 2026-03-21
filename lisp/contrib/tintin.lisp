@@ -210,6 +210,14 @@
 (add-hook 'telnet-input-transform-hook 'tintin-telnet-input-transform)
 (add-hook 'telnet-input-hook 'tintin-telnet-input-hook)
 
+;; Register --tintin / -t CLI handler for loading .tin config files
+(defun tintin-cli-read-handler (filename)
+  (let ((path (expand-path filename)))
+    (tintin-read-file path)
+    (script-echo (concat "Read " path))))
+
+(register-cli-handler "t" "tintin" 'tintin-cli-read-handler)
+
 ;; Announce activation (terminal is ready when this file loads via -l)
 (script-echo "TinTin++ emulation active")
 

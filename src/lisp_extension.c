@@ -33,6 +33,20 @@ static TuiRuntime *registered_runtime = NULL;
 /* Terminal echo callback */
 static TerminalEchoCallback echo_callback = NULL;
 
+/* CLI argument handler registry: hash table mapping flag name → handler symbol.
+ * Lisp scripts call (register-cli-handler short long handler) to register.
+ * After all -l files load, main.c calls lisp_x_dispatch_cli_args(). */
+static LispObject *cli_handler_table = NULL;
+
+/* Pending CLI args collected during main() arg parsing */
+typedef struct {
+  char flag[64];
+  char value[512];
+} CliArg;
+static CliArg *cli_pending_args = NULL;
+static int cli_pending_count = 0;
+static int cli_pending_capacity = 0;
+
 /* Update terminal window title to "bloom-telnet - session_name" */
 static void update_terminal_title(void) {
   if (!registered_runtime)
@@ -1303,6 +1317,114 @@ static LispObject *builtin_wake_event_loop(LispObject *args, Environment *env) {
   return NIL;
 }
 
+/* Builtin: (register-cli-handler short-flag long-flag handler-fn)
+ * Registers a Lisp function to handle a CLI flag.
+ * short-flag: single char string (e.g., "t") or nil
+ * long-flag: long name string (e.g., "tintin")
+ * handler-fn: symbol naming the handler function */
+static LispObject *builtin_register_cli_handler(LispObject *args,
+                                                Environment *env) {
+  (void)env;
+  if (!cli_handler_table) {
+    cli_handler_table = lisp_make_hash_table();
+  }
+
+  /* Parse args: (short long handler) */
+  LispObject *short_arg = lisp_car(args);
+  LispObject *long_arg = lisp_car(lisp_cdr(args));
+  LispObject *handler = lisp_car(lisp_cdr(lisp_cdr(args)));
+
+  if (!handler || handler->type != LISP_SYMBOL) {
+    return lisp_make_error("register-cli-handler: handler must be a symbol");
+  }
+
+  /* Register long flag */
+  if (long_arg && long_arg->type == LISP_STRING) {
+    hash_table_set_entry(cli_handler_table, long_arg, handler);
+  }
+
+  /* Register short flag */
+  if (short_arg && short_arg->type == LISP_STRING) {
+    hash_table_set_entry(cli_handler_table, short_arg, handler);
+  }
+
+  return NIL;
+}
+
+/* Store a CLI argument for later dispatch to Lisp handlers */
+void lisp_x_add_cli_arg(const char *flag, const char *value) {
+  if (cli_pending_count >= cli_pending_capacity) {
+    cli_pending_capacity = cli_pending_capacity ? cli_pending_capacity * 2 : 8;
+    cli_pending_args =
+        realloc(cli_pending_args, cli_pending_capacity * sizeof(CliArg));
+  }
+  CliArg *arg = &cli_pending_args[cli_pending_count++];
+  snprintf(arg->flag, sizeof(arg->flag), "%s", flag);
+  snprintf(arg->value, sizeof(arg->value), "%s", value);
+}
+
+/* Dispatch collected CLI args to registered Lisp handlers */
+int lisp_x_dispatch_cli_args(void) {
+  Environment *env = get_current_env();
+  if (!env || !cli_pending_args || cli_pending_count == 0)
+    return 0;
+
+  int errors = 0;
+  for (int i = 0; i < cli_pending_count; i++) {
+    CliArg *arg = &cli_pending_args[i];
+
+    /* Look up handler in registry */
+    LispObject *handler_sym = NULL;
+    if (cli_handler_table) {
+      LispObject *key = lisp_make_string(arg->flag);
+      struct HashEntry *he = hash_table_get_entry(cli_handler_table, key);
+      if (he)
+        handler_sym = he->value;
+    }
+
+    if (!handler_sym || handler_sym == NIL) {
+      bloom_log(LOG_ERROR, "cli", "Unknown flag: --%s", arg->flag);
+      if (echo_callback) {
+        char buf[256];
+        snprintf(buf, sizeof(buf), "Unknown flag: --%s\r\n", arg->flag);
+        echo_callback(buf, strlen(buf));
+      }
+      errors++;
+      continue;
+    }
+
+    /* Call (handler-sym "value") via eval */
+    char eval_buf[1024];
+    /* Escape backslashes and quotes in value for safe eval */
+    char escaped_value[768];
+    size_t ei = 0;
+    for (size_t vi = 0; arg->value[vi] && ei < sizeof(escaped_value) - 2;
+         vi++) {
+      if (arg->value[vi] == '\\' || arg->value[vi] == '"')
+        escaped_value[ei++] = '\\';
+      escaped_value[ei++] = arg->value[vi];
+    }
+    escaped_value[ei] = '\0';
+
+    snprintf(eval_buf, sizeof(eval_buf), "(%s \"%s\")",
+             handler_sym->value.symbol->name, escaped_value);
+    volatile LispObject *result = lisp_eval_string(eval_buf, env);
+    if (result && ((LispObject *)result)->type == LISP_ERROR) {
+      char *err = lisp_print((LispObject *)result);
+      bloom_log(LOG_ERROR, "cli", "Error handling --%s: %s", arg->flag, err);
+      errors++;
+    }
+  }
+
+  /* Free pending args */
+  free(cli_pending_args);
+  cli_pending_args = NULL;
+  cli_pending_count = 0;
+  cli_pending_capacity = 0;
+
+  return errors;
+}
+
 /* Register all builtins on the given environment */
 static void register_builtins(Environment *env) {
   REG("strip-ansi", builtin_strip_ansi);
@@ -1396,6 +1518,9 @@ static void register_builtins(Environment *env) {
   REG("run-hook", builtin_run_hook);
   REG("run-filter-hook", builtin_run_filter_hook);
   REG("run-transform-hook", builtin_run_transform_hook);
+
+  /* CLI argument handler registration */
+  REG("register-cli-handler", builtin_register_cli_handler);
 }
 
 #undef REG
