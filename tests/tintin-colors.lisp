@@ -69,3 +69,51 @@
  "\033[31;44m" "build-ansi-code fg+bg")
 (assert-equal (tintin-build-ansi-code nil nil)
  "" "build-ansi-code both nil")
+
+;; ============================================================================
+;; Custom named colors - #color / #uncolor
+;; ============================================================================
+;; Setup: clear any existing custom colors
+(set! *tintin-custom-colors* (make-hash-table))
+
+;; Test: define and resolve a simple RGB custom color
+(hash-set! *tintin-custom-colors* "failure" "<Fff6daa>")
+(assert-equal (tintin-parse-color-spec "failure")
+ '("38;2;255;109;170" nil) "custom color resolves RGB spec")
+
+;; Test: define and resolve a custom color with attributes
+(hash-set! *tintin-custom-colors* "info" "bold <Fff6dff>")
+(assert-equal (tintin-parse-color-spec "info")
+ '("1;38;2;255;109;255" nil) "custom color resolves bold + RGB spec")
+
+;; Test: custom color in fg:bg position
+(hash-set! *tintin-custom-colors* "success" "<F00ffb2>")
+(assert-equal (tintin-parse-color-spec "failure:blue")
+ '("38;2;255;109;170" "44") "custom color as fg with named bg")
+
+;; Test: custom colors on both sides of colon
+(hash-set! *tintin-custom-colors* "danger-bg" "red")
+(let ((result (tintin-parse-color-spec "success:danger-bg")))
+  (assert-equal (car result) "38;2;0;255;178" "custom color fg in fg:bg")
+  (assert-equal (cadr result) "41" "custom color bg resolves as bg"))
+
+;; Test: non-existent custom color falls through to normal parsing
+(assert-equal (tintin-parse-color-spec "red")
+ '("31" nil) "non-custom name still parses normally")
+
+;; Test: chained custom colors (name → name → spec)
+(hash-set! *tintin-custom-colors* "alias-color" "failure")
+(assert-equal (tintin-parse-color-spec "alias-color")
+ '("38;2;255;109;170" nil) "chained custom color resolves")
+
+;; Test: circular custom color definition doesn't infinite loop
+(hash-set! *tintin-custom-colors* "loop-a" "loop-b")
+(hash-set! *tintin-custom-colors* "loop-b" "loop-a")
+;; Should not hang; result is nil or falls through
+(let ((result (tintin-parse-color-spec "loop-a")))
+  (assert-true #t "circular custom color does not hang"))
+
+;; Cleanup
+(set! *tintin-custom-colors* (make-hash-table))
+
+(print "All color tests passed!")

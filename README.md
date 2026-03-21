@@ -115,6 +115,8 @@ When loaded with `--load tintin.lisp`, you get TinTin++ style commands at the pr
 #highlight {bold red} {dragon}    Color-highlight matching text
 #unhighlight {dragon}             Remove a highlight
 #var {target} {goblin}            Set a variable ($target expands in commands)
+#color {danger} {bold <Ffe3e78>}  Define a named color (use in #highlight specs)
+#uncolor {danger}                 Remove a named color
 #save {mysession}                 Save session state to a file
 #load {mysession}                 Restore a saved session
 #read {config.tin}                Import a TinTin++ config file
@@ -163,7 +165,7 @@ Each session has its own hook registry — hooks added via `add-hook` apply only
 #load {~/my-mud}              Restore it later
 ```
 
-The saved file contains `hash-set!` calls that repopulate the alias, action, highlight, and variable tables. Settings like speedwalk mode are also included. Loading merges into the current session — existing entries with the same keys are overwritten, but other entries are kept.
+The saved file contains `hash-set!` calls that repopulate the alias, action, highlight, variable, and custom color tables. Settings like speedwalk mode are also included. Loading merges into the current session — existing entries with the same keys are overwritten, but other entries are kept.
 
 ## Lisp Scripting
 

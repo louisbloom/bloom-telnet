@@ -89,6 +89,28 @@
         (cons first-entry
          (tintin-insert-action-alphabetically entry pattern (cdr sorted-list)))))))
 
+;; Sort custom color entries alphabetically by name
+(defun tintin-sort-colors-alphabetically (color-list)
+  "Sort custom color entries alphabetically by name for display."
+  (if (or (null? color-list) (= (length color-list) 0))
+    '()
+    (let ((sorted '()))
+      (do ((remaining color-list (cdr remaining))) ((null? remaining) sorted)
+        (let ((entry (car remaining))
+              (name (caar remaining)))
+          (set! sorted (tintin-insert-color-alphabetically entry name sorted)))))))
+
+;; Helper: Insert color entry into sorted list alphabetically by name
+(defun tintin-insert-color-alphabetically (entry name sorted-list)
+  (if (null? sorted-list)
+    (list entry)
+    (let ((first-entry (car sorted-list))
+          (first-name (caar sorted-list)))
+      (if (string<? name first-name)
+        (cons entry sorted-list)
+        (cons first-entry
+         (tintin-insert-color-alphabetically entry name (cdr sorted-list)))))))
+
 ;; ============================================================================
 ;; TABLE FORMATTING UTILITIES
 ;; ============================================================================
@@ -490,6 +512,35 @@
             (tintin-print-table data)))
         ""))))
 
+;; List all defined custom colors (sorted alphabetically)
+(defun tintin-list-colors ()
+  "Display formatted table of all defined custom colors."
+  (let ((color-entries (hash-entries *tintin-custom-colors*))
+        (count (hash-count *tintin-custom-colors*)))
+    (if (= count 0)
+      (progn (terminal-echo "No custom colors defined.\r\n") "")
+      (progn
+        (terminal-echo (concat "Colors (" (number->string count) "):\r\n"))
+        ;; Sort alphabetically before displaying
+        (let ((sorted (tintin-sort-colors-alphabetically color-entries)))
+          ;; Build data structure: headers + data rows
+          (let ((data (list (list "Name" "Color" "Preview"))))
+            ;; Add data rows
+            (do ((i 0 (+ i 1))) ((>= i (length sorted)))
+              (let* ((entry (list-ref sorted i))
+                     (name (car entry))
+                     (spec (cdr entry))
+                     ;; Build preview: apply color to sample text
+                     (parsed (tintin-parse-color-spec spec))
+                     (fg-codes (car parsed))
+                     (bg-codes (cadr parsed))
+                     (ansi-open (tintin-build-ansi-code fg-codes bg-codes))
+                     (preview (concat ansi-open "sample" "\033[0m")))
+                (set! data (append data (list (list name spec preview))))))
+            ;; Print table using generic printer
+            (tintin-print-table data)))
+        ""))))
+
 ;; List all defined actions (sorted alphabetically)
 (defun tintin-list-actions ()
   "Display formatted table of all defined actions."
@@ -516,3 +567,4 @@
             ;; Print table using generic printer
             (tintin-print-table data)))
         ""))))
+

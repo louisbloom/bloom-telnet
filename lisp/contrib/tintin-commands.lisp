@@ -243,6 +243,52 @@
         "")
       (progn (terminal-echo (concat "Action '" pattern "' not found\r\n")) ""))))
 
+;; Handle #color command (bloom extension, not in upstream TinTin++)
+;; args: (), (name), or (name spec)
+(defun tintin-handle-color (args)
+  "Handle #color command (list, show, or create custom named colors)."
+  (cond
+    ;; No arguments - list all custom colors
+    ((or (null? args) (= 0 (length args))) (tintin-list-colors))
+    ;; One argument - show specific color
+    ((= 1 (length args))
+     (let ((name (tintin-strip-braces (list-ref args 0))))
+       (let ((spec (hash-ref *tintin-custom-colors* name)))
+         (if spec
+           (let* ((parsed (tintin-parse-color-spec spec))
+                  (fg-codes (car parsed))
+                  (bg-codes (cadr parsed))
+                  (ansi-open (tintin-build-ansi-code fg-codes bg-codes))
+                  (preview (concat ansi-open "sample" "\033[0m")))
+             (terminal-echo
+              (concat "Color '" name "': " spec " " preview "\r\n"))
+             "")
+           (progn (terminal-echo (concat "Color '" name "' not found\r\n")) "")))))
+    ;; Two arguments - create custom color
+    (#t
+     (let ((name (tintin-strip-braces (list-ref args 0)))
+           (spec (tintin-strip-braces (list-ref args 1))))
+       (hash-set! *tintin-custom-colors* name spec)
+       (let* ((parsed (tintin-parse-color-spec spec))
+              (fg-codes (car parsed))
+              (bg-codes (cadr parsed))
+              (ansi-open (tintin-build-ansi-code fg-codes bg-codes))
+              (preview (concat ansi-open "sample" "\033[0m")))
+         (terminal-echo
+          (concat "Color '" name "' set to '" spec "' " preview "\r\n"))
+         "")))))
+
+;; Handle #uncolor command
+;; args: (name)
+(defun tintin-handle-uncolor (args)
+  "Handle #uncolor command (remove custom named color)."
+  (let ((name (tintin-strip-braces (list-ref args 0))))
+    (if (hash-ref *tintin-custom-colors* name)
+      (progn (hash-remove! *tintin-custom-colors* name)
+        (terminal-echo (concat "Color '" name "' removed\r\n"))
+        "")
+      (progn (terminal-echo (concat "Color '" name "' not found\r\n")) ""))))
+
 ;; ============================================================================
 ;; COMMAND REGISTRY
 ;; ============================================================================
@@ -260,6 +306,10 @@
   "#highlight or #highlight {pattern} or #highlight {pattern} {color}"))
 (hash-set! *tintin-commands* "unhighlight"
  (list tintin-handle-unhighlight 1 "#unhighlight {pattern}"))
+(hash-set! *tintin-commands* "color"
+ (list tintin-handle-color 2 "#color or #color {name} or #color {name} {spec}"))
+(hash-set! *tintin-commands* "uncolor"
+ (list tintin-handle-uncolor 1 "#uncolor {name}"))
 (hash-set! *tintin-commands* "save"
  (list tintin-handle-save 1 "#save {filename}"))
 (hash-set! *tintin-commands* "load"

@@ -12,6 +12,8 @@
 
 (define *tintin-actions* (make-hash-table))
 
+(define *tintin-custom-colors* (make-hash-table))
+
 (define *tintin-action-executing* #f)
 
 ;; Track last #if/#elseif result for #else/#elseif chaining

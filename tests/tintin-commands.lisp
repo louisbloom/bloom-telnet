@@ -346,5 +346,93 @@
 
 (print "Test 21 passed: nested alias depth-first ordering")
 
+;; ============================================================================
+;; Test 22: #color command - set custom color
+;; ============================================================================
+(reset-aliases)
+(set! *tintin-custom-colors* (make-hash-table))
+(clear-echoed)
+
+(tintin-process-command "#color {failure} {<Fff6daa>}")
+(assert-equal (hash-ref *tintin-custom-colors* "failure") "<Fff6daa>"
+  "#color sets custom color in hash table")
+(assert-true (some-echoed-contains "Color 'failure' set to")
+  "#color echoes confirmation")
+
+(print "Test 22 passed: #color set custom color")
+
+;; ============================================================================
+;; Test 23: #color command - show specific color
+;; ============================================================================
+(clear-echoed)
+(tintin-process-command "#color {failure}")
+(assert-true (some-echoed-contains "Color 'failure'")
+  "#color with one arg shows the color")
+
+(print "Test 23 passed: #color show specific color")
+
+;; ============================================================================
+;; Test 24: #color command - list all (no args)
+;; ============================================================================
+(hash-set! *tintin-custom-colors* "success" "<F00ffb2>")
+(clear-echoed)
+(tintin-process-command "#color")
+(assert-true (some-echoed-contains "Colors (")
+  "#color with no args lists all colors")
+
+(print "Test 24 passed: #color list all")
+
+;; ============================================================================
+;; Test 25: #uncolor command - remove custom color
+;; ============================================================================
+(clear-echoed)
+(tintin-process-command "#uncolor {failure}")
+(assert-nil (hash-ref *tintin-custom-colors* "failure")
+  "#uncolor removes custom color")
+(assert-true (some-echoed-contains "removed")
+  "#uncolor echoes confirmation")
+
+(print "Test 25 passed: #uncolor remove custom color")
+
+;; ============================================================================
+;; Test 26: #uncolor command - non-existent color
+;; ============================================================================
+(clear-echoed)
+(tintin-process-command "#uncolor {nonexistent}")
+(assert-true (some-echoed-contains "not found")
+  "#uncolor on missing color reports not found")
+
+(print "Test 26 passed: #uncolor non-existent")
+
+;; ============================================================================
+;; Test 27: #save serializes custom colors (round-trip)
+;; ============================================================================
+(set! *tintin-custom-colors* (make-hash-table))
+(hash-set! *tintin-custom-colors* "danger" "bold <Ffe3e78>")
+(hash-set! *tintin-custom-colors* "info" "bold <Fff6dff>")
+(set! *tintin-aliases* (make-hash-table))
+(set! *tintin-variables* (make-hash-table))
+(set! *tintin-highlights* (make-hash-table))
+(set! *tintin-actions* (make-hash-table))
+
+;; Save state to file
+(tintin-save-state "/tmp/bloom-test-save.lisp")
+
+;; Clear custom colors, then reload and verify round-trip
+(set! *tintin-custom-colors* (make-hash-table))
+(assert-equal (hash-count *tintin-custom-colors*) 0
+  "Custom colors cleared before reload")
+
+(load "/tmp/bloom-test-save.lisp")
+(assert-equal (hash-ref *tintin-custom-colors* "danger") "bold <Ffe3e78>"
+  "#save round-trip preserves 'danger' color")
+(assert-equal (hash-ref *tintin-custom-colors* "info") "bold <Fff6dff>"
+  "#save round-trip preserves 'info' color")
+
+(print "Test 27 passed: #save serializes custom colors")
+
+;; Cleanup
+(set! *tintin-custom-colors* (make-hash-table))
+
 (print "")
 (print "All command processing tests passed!")

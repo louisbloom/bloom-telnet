@@ -147,6 +147,17 @@
        (substring spec (+ colon-pos 1) (length spec)))
       (list spec nil))))
 
+;; Resolve custom color name to its spec, with depth guard
+(defun tintin-resolve-custom-color (text depth)
+  (if (>= depth 5)
+    nil
+    (let ((spec (hash-ref *tintin-custom-colors* text)))
+      (if (not spec)
+        nil
+        ;; Check if the resolved spec is itself a custom color
+        (let ((nested (hash-ref *tintin-custom-colors* spec)))
+          (if nested (tintin-resolve-custom-color spec (+ depth 1)) spec))))))
+
 ;; Parse single color component (foreground or background)
 ;; Returns ANSI code string (may include attributes)
 (defun tintin-parse-color-component (text is-bg)
@@ -154,6 +165,9 @@
     nil
     (let ((text-trimmed (tintin-trim text))
           (codes '()))
+      ;; Check for custom color name (resolve before any other parsing)
+      (let ((resolved (tintin-resolve-custom-color text-trimmed 0)))
+        (if resolved (set! text-trimmed resolved)))
       ;; Extract attributes first
       (let ((attr-codes (tintin-parse-attributes text-trimmed)))
         (set! codes attr-codes))
@@ -264,3 +278,4 @@
             (bg-part (list-ref parts 1)))
         (list (tintin-parse-color-component fg-part #f)
          (if bg-part (tintin-parse-color-component bg-part #t) nil))))))
+
