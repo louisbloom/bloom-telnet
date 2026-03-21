@@ -134,19 +134,81 @@
             (tintin-process-input cmd)))))))
 
 ;; ============================================================================
+;; SUMMARY HELPERS
+;; ============================================================================
+(defun tintin-join-with-comma (lst)
+  "Join a list of strings with ', '."
+  (if (null? lst)
+    ""
+    (let ((result (car lst)))
+      (do ((rest (cdr lst) (cdr rest))) ((null? rest) result)
+        (set! result (concat result ", " (car rest)))))))
+
+(defun tintin-read-summary (aliases highlights actions variables colors)
+  "Build summary string from count diffs. Only include non-zero counts."
+  (let ((parts '()))
+    (if (> colors 0)
+      (set! parts
+       (cons
+        (concat (number->string colors) (if (= colors 1) " color" " colors"))
+        parts)))
+    (if (> variables 0)
+      (set! parts
+       (cons
+        (concat (number->string variables)
+         (if (= variables 1) " variable" " variables")) parts)))
+    (if (> actions 0)
+      (set! parts
+       (cons
+        (concat (number->string actions)
+         (if (= actions 1) " action" " actions")) parts)))
+    (if (> highlights 0)
+      (set! parts
+       (cons
+        (concat (number->string highlights)
+         (if (= highlights 1) " highlight" " highlights")) parts)))
+    (if (> aliases 0)
+      (set! parts
+       (cons
+        (concat (number->string aliases) (if (= aliases 1) " alias" " aliases"))
+        parts)))
+    (if (null? parts) "" (concat ": " (tintin-join-with-comma parts)))))
+
+;; ============================================================================
 ;; COMMAND HANDLER
 ;; ============================================================================
 (defun tintin-handle-read (args)
   (let ((filename (tintin-strip-braces (list-ref args 0))))
     ;; Expand ~/path if present
     (set! filename (expand-path filename))
-    (condition-case err
-      (progn (tintin-read-file filename)
-        (terminal-echo (concat "Read '" filename "'\r\n"))
-        "")
-      (error
-       (terminal-echo
-        (concat "Failed to read '" filename "': " (error-message err) "\r\n")) ""))))
+    (if *tintin-reading-file*
+      ;; Nested #read: just read, outermost caller shows summary
+      (condition-case err (progn (tintin-read-file filename) "")
+        (error
+         (terminal-echo
+          (concat "Failed to read '" filename "': " (error-message err) "\r\n")) ""))
+      ;; Outermost #read: snapshot counts, set flag, read, show summary
+      (let ((prev-aliases (hash-count *tintin-aliases*))
+            (prev-highlights (hash-count *tintin-highlights*))
+            (prev-actions (hash-count *tintin-actions*))
+            (prev-variables (hash-count *tintin-variables*))
+            (prev-colors (hash-count *tintin-custom-colors*)))
+        (set! *tintin-reading-file* #t)
+        (condition-case err
+          (progn (tintin-read-file filename) (set! *tintin-reading-file* #f)
+            (terminal-echo
+             (concat "Read '" filename "'"
+              (tintin-read-summary
+               (- (hash-count *tintin-aliases*) prev-aliases)
+               (- (hash-count *tintin-highlights*) prev-highlights)
+               (- (hash-count *tintin-actions*) prev-actions)
+               (- (hash-count *tintin-variables*) prev-variables)
+               (- (hash-count *tintin-custom-colors*) prev-colors)) "\r\n"))
+            "")
+          (error (set! *tintin-reading-file* #f)
+           (terminal-echo
+            (concat "Failed to read '" filename "': " (error-message err)
+             "\r\n")) ""))))))
 
 ;; ============================================================================
 ;; COMMAND REGISTRY

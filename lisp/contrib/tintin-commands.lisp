@@ -53,6 +53,13 @@
               (if (string-prefix? prefix-lower cmd) (set! result cmd)))))))))
 
 ;; ============================================================================
+;; COMMAND ECHO (suppressed during #read)
+;; ============================================================================
+(defun tintin-command-echo (msg)
+  "Echo a command confirmation, suppressed during #read file loading."
+  (if (not *tintin-reading-file*) (terminal-echo msg)))
+
+;; ============================================================================
 ;; COMMAND HANDLERS
 ;; ============================================================================
 ;; Handle #alias command
@@ -69,7 +76,7 @@
          (if alias-data
            (let ((commands (car alias-data))
                  (priority (cadr alias-data)))
-             (terminal-echo
+             (tintin-command-echo
               (concat "Alias '" name "': " name " → " commands
                (if (= priority 5)
                  ""
@@ -82,7 +89,7 @@
            (commands (tintin-strip-braces (list-ref args 1)))
            (priority 5))
        (hash-set! *tintin-aliases* name (list commands priority))
-       (terminal-echo
+       (tintin-command-echo
         (concat "Alias '" name "' created: " name " → " commands
          (if (= priority 5)
            ""
@@ -102,7 +109,7 @@
        (let ((value (hash-ref *tintin-variables* name)))
          (if value
            (progn
-             (terminal-echo
+             (tintin-command-echo
               (concat "Variable '" name "': " name " = " value "\r\n"))
              "")
            (progn
@@ -112,7 +119,8 @@
      (let ((name (tintin-strip-braces (list-ref args 0)))
            (value (tintin-strip-braces (list-ref args 1))))
        (hash-set! *tintin-variables* name value)
-       (terminal-echo (concat "Variable '" name "' set to '" value "'\r\n"))
+       (tintin-command-echo
+        (concat "Variable '" name "' set to '" value "'\r\n"))
        ""))))
 
 ;; Handle #unalias command
@@ -122,7 +130,7 @@
   (let ((name (tintin-strip-braces (list-ref args 0))))
     (if (hash-ref *tintin-aliases* name)
       (progn (hash-remove! *tintin-aliases* name)
-        (terminal-echo (concat "Alias '" name "' removed\r\n"))
+        (tintin-command-echo (concat "Alias '" name "' removed\r\n"))
         "")
       (progn (terminal-echo (concat "Alias '" name "' not found\r\n")) ""))))
 
@@ -143,7 +151,7 @@
            (let ((fg-color (car highlight-data))
                  (bg-color (cadr highlight-data))
                  (priority (caddr highlight-data)))
-             (terminal-echo
+             (tintin-command-echo
               (concat "Highlight '" pattern "': " pattern " → "
                (if fg-color fg-color "") (if (and fg-color bg-color) ":" "")
                (if bg-color bg-color "")
@@ -171,7 +179,7 @@
             (list (if (string=? fg-part "") nil fg-part) bg-part priority))
            ;; Invalidate caches
            (set! *tintin-highlights-dirty* #t)
-           (terminal-echo
+           (tintin-command-echo
             (concat "Highlight '" pattern "' created: " pattern " → "
              color-spec
              (if (= priority 5)
@@ -188,7 +196,7 @@
         ;; Invalidate caches
         (hash-remove! *tintin-pattern-cache* pattern)
         (set! *tintin-highlights-dirty* #t)
-        (terminal-echo (concat "Highlight '" pattern "' removed\r\n"))
+        (tintin-command-echo (concat "Highlight '" pattern "' removed\r\n"))
         "")
       (progn (terminal-echo (concat "Highlight '" pattern "' not found\r\n"))
         ""))))
@@ -208,7 +216,7 @@
          (if action-data
            (let ((commands (car action-data))
                  (priority (cadr action-data)))
-             (terminal-echo
+             (tintin-command-echo
               (concat "Action '" pattern "': " pattern " → " commands
                (if (= priority 5)
                  ""
@@ -226,7 +234,7 @@
                5)))
        ;; Store as (commands-string priority)
        (hash-set! *tintin-actions* pattern (list commands priority))
-       (terminal-echo
+       (tintin-command-echo
         (concat "Action '" pattern "' created: " pattern " → " commands
          (if (= priority 5)
            ""
@@ -239,7 +247,7 @@
   (let ((pattern (tintin-strip-braces (list-ref args 0))))
     (if (hash-ref *tintin-actions* pattern)
       (progn (hash-remove! *tintin-actions* pattern)
-        (terminal-echo (concat "Action '" pattern "' removed\r\n"))
+        (tintin-command-echo (concat "Action '" pattern "' removed\r\n"))
         "")
       (progn (terminal-echo (concat "Action '" pattern "' not found\r\n")) ""))))
 
@@ -260,7 +268,7 @@
                   (bg-codes (cadr parsed))
                   (ansi-open (tintin-build-ansi-code fg-codes bg-codes))
                   (preview (concat ansi-open "sample" "\033[0m")))
-             (terminal-echo
+             (tintin-command-echo
               (concat "Color '" name "': " spec " " preview "\r\n"))
              "")
            (progn (terminal-echo (concat "Color '" name "' not found\r\n")) "")))))
@@ -274,7 +282,7 @@
               (bg-codes (cadr parsed))
               (ansi-open (tintin-build-ansi-code fg-codes bg-codes))
               (preview (concat ansi-open "sample" "\033[0m")))
-         (terminal-echo
+         (tintin-command-echo
           (concat "Color '" name "' set to '" spec "' " preview "\r\n"))
          "")))))
 
@@ -285,7 +293,7 @@
   (let ((name (tintin-strip-braces (list-ref args 0))))
     (if (hash-ref *tintin-custom-colors* name)
       (progn (hash-remove! *tintin-custom-colors* name)
-        (terminal-echo (concat "Color '" name "' removed\r\n"))
+        (tintin-command-echo (concat "Color '" name "' removed\r\n"))
         "")
       (progn (terminal-echo (concat "Color '" name "' not found\r\n")) ""))))
 
@@ -296,11 +304,12 @@
   "Handle #config command (list, show, or set configuration)."
   (cond
     ;; No arguments - list all settings
-    ((or (null? args) (= 0 (length args))) (terminal-echo "Configuration:\r\n")
-     (terminal-echo
+    ((or (null? args) (= 0 (length args)))
+     (tintin-command-echo "Configuration:\r\n")
+     (tintin-command-echo
       (concat "  speedwalk           "
        (if *tintin-speedwalk-enabled* "on" "off") "\r\n"))
-     (terminal-echo
+     (tintin-command-echo
       (concat "  speedwalk diagonals "
        (if *tintin-speedwalk-diagonals* "on" "off") "\r\n")) "")
     ;; One argument - show specific setting
@@ -308,11 +317,11 @@
      (let ((key (string-downcase (tintin-strip-braces (list-ref args 0)))))
        (cond
          ((string=? key "speedwalk")
-          (terminal-echo
+          (tintin-command-echo
            (concat "speedwalk = " (if *tintin-speedwalk-enabled* "on" "off")
             "\r\n")) "")
          ((string=? key "speedwalk diagonals")
-          (terminal-echo
+          (tintin-command-echo
            (concat "speedwalk diagonals = "
             (if *tintin-speedwalk-diagonals* "on" "off") "\r\n")) "")
          (#t (terminal-echo (concat "Unknown config: " key "\r\n")) ""))))
@@ -332,11 +341,11 @@
            (cond
              ((string=? key "speedwalk")
               (set! *tintin-speedwalk-enabled* bool-val)
-              (terminal-echo
+              (tintin-command-echo
                (concat "speedwalk = " (if bool-val "on" "off") "\r\n")) "")
              ((string=? key "speedwalk diagonals")
               (set! *tintin-speedwalk-diagonals* bool-val)
-              (terminal-echo
+              (tintin-command-echo
                (concat "speedwalk diagonals = " (if bool-val "on" "off") "\r\n")) "")
              (#t (terminal-echo (concat "Unknown config: " key "\r\n")) ""))))))))
 

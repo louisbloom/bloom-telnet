@@ -16,6 +16,8 @@
 
 (define *tintin-action-executing* #f)
 
+(define *tintin-reading-file* #f)
+
 ;; Performance caches for highlight processing
 (define *tintin-pattern-cache* (make-hash-table))
 

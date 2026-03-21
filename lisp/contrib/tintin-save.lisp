@@ -106,6 +106,6 @@
   (let ((filename (tintin-strip-braces (list-ref args 0))))
     (set! filename (expand-path filename))
     (tintin-save-state filename)
-    (terminal-echo (concat "Written to '" filename "'\r\n"))
+    (tintin-command-echo (concat "Written to '" filename "'\r\n"))
     ""))
 

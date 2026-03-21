@@ -213,8 +213,23 @@
 ;; Register --tintin / -t CLI handler for loading .tin config files
 (defun tintin-cli-read-handler (filename)
   (let ((path (expand-path filename)))
-    (tintin-read-file path)
-    (script-echo (concat "Read " path))))
+    (let ((prev-aliases (hash-count *tintin-aliases*))
+          (prev-highlights (hash-count *tintin-highlights*))
+          (prev-actions (hash-count *tintin-actions*))
+          (prev-variables (hash-count *tintin-variables*))
+          (prev-colors (hash-count *tintin-custom-colors*)))
+      (set! *tintin-reading-file* #t)
+      (condition-case err
+        (progn (tintin-read-file path) (set! *tintin-reading-file* #f)
+          (script-echo
+           (concat "Read " path
+            (tintin-read-summary (- (hash-count *tintin-aliases*) prev-aliases)
+             (- (hash-count *tintin-highlights*) prev-highlights)
+             (- (hash-count *tintin-actions*) prev-actions)
+             (- (hash-count *tintin-variables*) prev-variables)
+             (- (hash-count *tintin-custom-colors*) prev-colors)))))
+        (error (set! *tintin-reading-file* #f)
+         (script-echo (concat "Failed to read " path ": " (error-message err))))))))
 
 (register-cli-handler "t" "tintin" 'tintin-cli-read-handler)
 
