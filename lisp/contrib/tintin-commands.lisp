@@ -310,10 +310,8 @@
  (list tintin-handle-color 2 "#color or #color {name} or #color {name} {spec}"))
 (hash-set! *tintin-commands* "uncolor"
  (list tintin-handle-uncolor 1 "#uncolor {name}"))
-(hash-set! *tintin-commands* "save"
- (list tintin-handle-save 1 "#save {filename}"))
-(hash-set! *tintin-commands* "load"
- (list tintin-handle-load 1 "#load {filename}"))
+(hash-set! *tintin-commands* "write"
+ (list tintin-handle-write 1 "#write {filename}"))
 (hash-set! *tintin-commands* "action"
  (list tintin-handle-action 3
   "#action or #action {pattern} or #action {pattern} {commands} [priority]"))

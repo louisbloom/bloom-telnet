@@ -405,34 +405,79 @@
 (print "Test 26 passed: #uncolor non-existent")
 
 ;; ============================================================================
-;; Test 27: #save serializes custom colors (round-trip)
+;; Test 27: #write/#read round-trip (TinTin++ syntax)
 ;; ============================================================================
 (set! *tintin-custom-colors* (make-hash-table))
 (hash-set! *tintin-custom-colors* "danger" "bold <Ffe3e78>")
 (hash-set! *tintin-custom-colors* "info" "bold <Fff6dff>")
 (set! *tintin-aliases* (make-hash-table))
+(hash-set! *tintin-aliases* "k" (list "kill %0" 5))
+(hash-set! *tintin-aliases* "h" (list "hit $target" 5))
+(set! *tintin-variables* (make-hash-table))
+(hash-set! *tintin-variables* "target" "goblin")
+(set! *tintin-highlights* (make-hash-table))
+(hash-set! *tintin-highlights* "You%* fail%*" (list "<Fff6daa>" nil 5))
+(hash-set! *tintin-highlights* "^%* screams%*" (list "bold red" "blue" 5))
+(set! *tintin-actions* (make-hash-table))
+(hash-set! *tintin-actions* "%0 arrives." (list "look" 5))
+(hash-set! *tintin-actions* "%0 drops %1" (list "get %1" 3))
+
+;; Write state to file in TinTin++ syntax
+(tintin-save-state "/tmp/bloom-test-write.tin")
+
+;; Clear all state
+(set! *tintin-custom-colors* (make-hash-table))
+(set! *tintin-aliases* (make-hash-table))
 (set! *tintin-variables* (make-hash-table))
 (set! *tintin-highlights* (make-hash-table))
 (set! *tintin-actions* (make-hash-table))
 
-;; Save state to file
-(tintin-save-state "/tmp/bloom-test-save.lisp")
+;; Read it back via tintin-read-file (TinTin++ parser)
+(tintin-read-file "/tmp/bloom-test-write.tin")
 
-;; Clear custom colors, then reload and verify round-trip
-(set! *tintin-custom-colors* (make-hash-table))
-(assert-equal (hash-count *tintin-custom-colors*) 0
-  "Custom colors cleared before reload")
-
-(load "/tmp/bloom-test-save.lisp")
+;; Verify colors
 (assert-equal (hash-ref *tintin-custom-colors* "danger") "bold <Ffe3e78>"
-  "#save round-trip preserves 'danger' color")
+  "#write round-trip preserves 'danger' color")
 (assert-equal (hash-ref *tintin-custom-colors* "info") "bold <Fff6dff>"
-  "#save round-trip preserves 'info' color")
+  "#write round-trip preserves 'info' color")
 
-(print "Test 27 passed: #save serializes custom colors")
+;; Verify aliases
+(let ((alias-data (hash-ref *tintin-aliases* "k")))
+  (assert-equal (car alias-data) "kill %0"
+    "#write round-trip preserves alias 'k'"))
+
+;; Verify variables
+(assert-equal (hash-ref *tintin-variables* "target") "goblin"
+  "#write round-trip preserves variable 'target'")
+
+;; Verify highlights
+(let ((hl-data (hash-ref *tintin-highlights* "You%* fail%*")))
+  (assert-equal (car hl-data) "<Fff6daa>"
+    "#write round-trip preserves highlight fg color"))
+(let ((hl-data (hash-ref *tintin-highlights* "^%* screams%*")))
+  (assert-equal (car hl-data) "bold red"
+    "#write round-trip preserves highlight with fg:bg (fg)")
+  (assert-equal (cadr hl-data) "blue"
+    "#write round-trip preserves highlight with fg:bg (bg)"))
+
+;; Verify actions
+(let ((act-data (hash-ref *tintin-actions* "%0 arrives.")))
+  (assert-equal (car act-data) "look"
+    "#write round-trip preserves action"))
+(let ((act-data (hash-ref *tintin-actions* "%0 drops %1")))
+  (assert-equal (car act-data) "get %1"
+    "#write round-trip preserves action with priority")
+  (assert-equal (cadr act-data) 3
+    "#write round-trip preserves non-default priority"))
+
+(print "Test 27 passed: #write/#read round-trip")
 
 ;; Cleanup
 (set! *tintin-custom-colors* (make-hash-table))
+(set! *tintin-aliases* (make-hash-table))
+(set! *tintin-variables* (make-hash-table))
+(set! *tintin-highlights* (make-hash-table))
+(set! *tintin-actions* (make-hash-table))
 
 (print "")
 (print "All command processing tests passed!")

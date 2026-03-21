@@ -117,9 +117,8 @@ When loaded with `--load tintin.lisp`, you get TinTin++ style commands at the pr
 #var {target} {goblin}            Set a variable ($target expands in commands)
 #color {danger} {bold <Ffe3e78>}  Define a named color (use in #highlight specs)
 #uncolor {danger}                 Remove a named color
-#save {mysession}                 Save session state to a file
-#load {mysession}                 Restore a saved session
-#read {config.tin}                Import a TinTin++ config file
+#write {mysession.tin}            Write state to a TinTin++ config file
+#read {mysession.tin}             Read a TinTin++ config file
 ```
 
 ## Sessions
@@ -154,14 +153,14 @@ Each session has its own hook registry — hooks added via `add-hook` apply only
 
 ### Saving and Restoring
 
-`#save` / `#load` saves and restores TinTin++ state — aliases, actions, highlights, variables, and settings:
+`#write` / `#read` saves and restores TinTin++ state — aliases, actions, highlights, variables, and custom colors:
 
 ```
-#save {~/my-mud}              Save TinTin++ state to ~/my-mud
-#load {~/my-mud}              Restore it later
+#write {~/my-mud.tin}         Write state to a TinTin++ config file
+#read {~/my-mud.tin}          Read it back later
 ```
 
-The saved file contains `hash-set!` calls that repopulate the alias, action, highlight, variable, and custom color tables. Settings like speedwalk mode are also included. Loading merges into the current session — existing entries with the same keys are overwritten, but other entries are kept.
+The written file contains standard TinTin++ commands (`#alias`, `#action`, `#highlight`, `#variable`, `#color`). Reading merges into the current session — existing entries with the same keys are overwritten, but other entries are kept.
 
 ## Lisp Scripting
 
