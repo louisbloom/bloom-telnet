@@ -18,12 +18,6 @@
 #include <string.h>
 #include <time.h>
 
-/* Check if a Lisp object is callable (lambda, macro, or builtin) */
-static inline int lisp_is_callable(LispObject *obj) {
-  return obj && (obj->type == LISP_LAMBDA || obj->type == LISP_MACRO ||
-                 obj->type == LISP_BUILTIN);
-}
-
 /* Registered statusbar pointer for statusbar builtins */
 static TuiStatusBar *registered_statusbar = NULL;
 
@@ -1393,22 +1387,17 @@ int lisp_x_dispatch_cli_args(void) {
       continue;
     }
 
-    /* Call (handler-sym "value") via eval */
-    char eval_buf[1024];
-    /* Escape backslashes and quotes in value for safe eval */
-    char escaped_value[768];
-    size_t ei = 0;
-    for (size_t vi = 0; arg->value[vi] && ei < sizeof(escaped_value) - 2;
-         vi++) {
-      if (arg->value[vi] == '\\' || arg->value[vi] == '"')
-        escaped_value[ei++] = '\\';
-      escaped_value[ei++] = arg->value[vi];
+    /* Resolve symbol to function and call directly */
+    LispObject *handler_fn = env_lookup(env, handler_sym->value.symbol);
+    if (!handler_fn || !lisp_is_callable(handler_fn)) {
+      bloom_log(LOG_ERROR, "cli", "CLI handler for --%s is not callable",
+                arg->flag);
+      errors++;
+      continue;
     }
-    escaped_value[ei] = '\0';
 
-    snprintf(eval_buf, sizeof(eval_buf), "(%s \"%s\")",
-             handler_sym->value.symbol->name, escaped_value);
-    volatile LispObject *result = lisp_eval_string(eval_buf, env);
+    LispObject *value_arg = lisp_make_string(arg->value);
+    volatile LispObject *result = lisp_call_1(handler_fn, value_arg, env);
     if (result && ((LispObject *)result)->type == LISP_ERROR) {
       char *err = lisp_print((LispObject *)result);
       bloom_log(LOG_ERROR, "cli", "Error handling --%s: %s", arg->flag, err);
