@@ -19,35 +19,39 @@
 #include <bloom-boba/components/viewport.h>
 
 /* TelnetApp configuration */
-typedef struct {
-  int terminal_width;
-  int terminal_height;
-  const char *prompt; /* Initial prompt string */
-  int show_prompt;    /* Show prompt (default: 1) */
-  int history_size;   /* Input history size */
+typedef struct
+{
+    int terminal_width;
+    int terminal_height;
+    const char *prompt; /* Initial prompt string */
+    int show_prompt;    /* Show prompt (default: 1) */
+    int history_size;   /* Input history size */
 } TelnetAppConfig;
 
 /* TelnetApp model - composes viewport, textinput, and statusbar */
-typedef struct {
-  TuiModel base; /* Component base type */
+typedef struct
+{
+    TuiModel base; /* Component base type */
 
-  TuiViewport *viewport; /* Child: server output display (software scrolling) */
-  TuiTextInput *textinput; /* Child: user input */
-  TuiStatusBar *statusbar; /* Child: status line at bottom */
+    TuiViewport *viewport;   /* Child: server output display (software scrolling) */
+    TuiTextInput *textinput; /* Child: user input */
+    TuiStatusBar *statusbar; /* Child: status line at bottom */
 
-  int terminal_width;
-  int terminal_height;
+    int terminal_width;
+    int terminal_height;
 } TelnetAppModel;
 
 /* Custom message types for TelnetApp */
-typedef enum {
-  TELNET_APP_MSG_ECHO = TUI_MSG_CUSTOM_BASE + 100, /* Echo text to textview */
+typedef enum
+{
+    TELNET_APP_MSG_ECHO = TUI_MSG_CUSTOM_BASE + 100, /* Echo text to textview */
 } TelnetAppMsgType;
 
 /* Echo message data */
-typedef struct {
-  const char *text;
-  size_t len;
+typedef struct
+{
+    const char *text;
+    size_t len;
 } TelnetAppEchoData;
 
 /* Echo text to the textview (for terminal-echo builtin)

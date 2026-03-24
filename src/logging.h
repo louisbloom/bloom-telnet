@@ -9,7 +9,13 @@
 
 #include <stddef.h>
 
-typedef enum { LOG_DEBUG, LOG_INFO, LOG_WARN, LOG_ERROR } LogLevel;
+typedef enum
+{
+    LOG_DEBUG,
+    LOG_INFO,
+    LOG_WARN,
+    LOG_ERROR
+} LogLevel;
 
 /* Callback type for routing log output to the viewport */
 typedef void (*LogEchoFn)(const char *text, size_t len);

@@ -12,12 +12,13 @@
 #include "../include/telnet.h"
 #include <bloom-lisp/lisp.h>
 
-typedef struct Session {
-  int id;
-  char *name;
-  LispObject *hooks; /* Per-session hooks hash table */
-  Telnet *telnet;    /* Telnet connection (can be NULL) */
-  int connected;
+typedef struct Session
+{
+    int id;
+    char *name;
+    LispObject *hooks; /* Per-session hooks hash table */
+    Telnet *telnet;    /* Telnet connection (can be NULL) */
+    int connected;
 } Session;
 
 /* Initialize the session manager with the given base environment.
