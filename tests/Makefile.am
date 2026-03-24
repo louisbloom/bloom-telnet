@@ -37,6 +37,7 @@ TESTS = \
     tintin-highlights.lisp \
     tintin-speedwalk.lisp \
     tintin-alias-ordering.lisp \
+    test-case-completion.lisp \
     test_test_server.py
 
 TEST_EXTENSIONS = .lisp .py
@@ -63,4 +64,5 @@ EXTRA_DIST = \
     tintin-highlights.lisp \
     tintin-speedwalk.lisp \
     tintin-alias-ordering.lisp \
+    test-case-completion.lisp \
     test_test_server.py

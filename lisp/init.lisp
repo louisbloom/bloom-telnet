@@ -10,12 +10,12 @@
 (defvar *completion-max-results* 64
   "Maximum number of completion candidates to return per prefix.")
 
-;; Initialize trie root — each node is (leaf . children-hash).
-;; Leaf data is in car (nil if not a terminal), children in cdr (hash table).
-;; This structurally separates leaf data from child keys — no sentinel needed.
+;; Initialize trie root — each node is (leaf-list . children-hash).
+;; Leaf data is in car: nil if not terminal, else a list of (word seq slot) entries.
+;; Multiple case variants share the same trie path (lowercased).
 (define *completion-trie* (cons nil (make-hash-table)))
 
-;; Flat hash for O(1) duplicate detection: lowercase -> (original seq slot trie-node)
+;; Flat hash for O(1) duplicate detection: original-word -> (word seq slot trie-node)
 ;; The trie-node reference allows O(1) leaf updates on duplicates.
 (define *completion-words* (make-hash-table))
 
@@ -127,16 +127,17 @@
 ;; ============================================================================
 ;; TRIE FUNCTIONS
 ;; ============================================================================
-;; Each trie node is (leaf . children-hash):
-;;   car = leaf data (nil if not a terminal node, else (word seq slot))
+;; Each trie node is (leaf-list . children-hash):
+;;   car = nil if not terminal, else list of (word seq slot) entries
 ;;   cdr = hash table mapping single-char strings to child nodes
-;; Leaf data is structurally separate from child keys — no sentinel collision.
+;; Multiple case variants share one trie path; each gets its own entry in the list.
 (defun trie-make-node ()
   "Create a new trie node with no leaf and no children."
   (cons nil (make-hash-table)))
 
 (defun trie-insert! (root word leaf-data)
-  "Insert word into trie. Returns the terminal node."
+  "Insert word into trie, adding leaf-data to the terminal node's entry list.
+   Returns the terminal node."
   (let ((node root)
         (len (length word)))
     (do ((i 0 (+ i 1))) ((>= i len))
@@ -146,43 +147,53 @@
         (when (null? child) (set! child (trie-make-node))
           (hash-set! children ch child))
         (set! node child)))
-    (set-car! node leaf-data)
+    (set-car! node (cons leaf-data (car node)))
     node))
 
-(defun trie-remove! (root word)
-  "Remove word from trie, pruning empty nodes. Returns #t if removed."
-  (let ((len (length word)))
+(defun trie-leaf-remove (leaf-list word)
+  "Remove the entry with matching word from a leaf list."
+  (cond
+    ((null? leaf-list) nil)
+    ((string=? (car (car leaf-list)) word) (cdr leaf-list))
+    (#t (cons (car leaf-list) (trie-leaf-remove (cdr leaf-list) word)))))
+
+(defun trie-remove-entry! (root trie-key word)
+  "Remove a specific entry (by original word) from the trie node at trie-key.
+   Prunes empty nodes bottom-up. Returns #t if removed."
+  (let ((len (length trie-key)))
     (if (= len 0)
       #f
       ;; Build path of (node . char-key) pairs for cleanup
-      (let ((path (list (cons root (substring word 0 1))))
+      (let ((path (list (cons root (substring trie-key 0 1))))
             (node root)
             (found #t))
         ;; Walk to terminal node
         (do ((i 0 (+ i 1))) ((or (>= i len) (not found)))
-          (let ((child (hash-ref (cdr node) (substring word i (+ i 1)))))
+          (let ((child (hash-ref (cdr node) (substring trie-key i (+ i 1)))))
             (if (null? child)
               (set! found #f)
               (progn
                 (when (< (+ i 1) len)
                   (set! path
-                   (cons (cons child (substring word (+ i 1) (+ i 2))) path)))
+                   (cons (cons child (substring trie-key (+ i 1) (+ i 2))) path)))
                 (set! node child)))))
         (if (not found)
           #f
           (if (null? (car node))
             #f
-            (progn (set-car! node nil)
-              ;; Prune empty nodes bottom-up
-              (do ((remaining path (cdr remaining))) ((null? remaining))
-                (let* ((pair (car remaining))
-                       (parent (car pair))
-                       (key (cdr pair))
-                       (child (hash-ref (cdr parent) key)))
-                  (when
-                    (and child (null? (car child))
-                         (= (length (hash-keys (cdr child))) 0))
-                    (hash-remove! (cdr parent) key))))
+            (let ((new-leaf (trie-leaf-remove (car node) word)))
+              (set-car! node new-leaf)
+              ;; Prune empty nodes bottom-up (only if leaf list is now empty)
+              (when (null? new-leaf)
+                (do ((remaining path (cdr remaining))) ((null? remaining))
+                  (let* ((pair (car remaining))
+                         (parent (car pair))
+                         (key (cdr pair))
+                         (child (hash-ref (cdr parent) key)))
+                    (when
+                      (and child (null? (car child))
+                           (= (length (hash-keys (cdr child))) 0))
+                      (hash-remove! (cdr parent) key)))))
               #t)))))))
 
 (defun trie-walk-to (root prefix)
@@ -196,9 +207,9 @@
     (if found node nil)))
 
 (defun trie-collect (node)
-  "DFS collect all leaf entries under node."
+  "DFS collect all leaf entries under node (flattening leaf lists)."
   (let ((acc '()))
-    (let ((leaf (car node))) (when leaf (set! acc (cons leaf acc))))
+    (let ((leaf (car node))) (when leaf (set! acc (append leaf acc))))
     (let ((keys (hash-keys (cdr node))))
       (do ((remaining keys (cdr remaining))) ((null? remaining) acc)
         (set! acc
@@ -242,43 +253,46 @@
 ;; WORD STORE INSERT/QUERY
 ;; ============================================================================
 (defun add-word-to-store (word)
-  "Add a word to the completion store with FIFO eviction."
+  "Add a word to the completion store with FIFO eviction.
+   Each case variant is stored separately; the trie path is lowercased."
   (if (not (and (string? word) (>= (length word) 3)))
     0
     (let* ((lower (string-downcase word))
            (vec *completion-word-order*)
            (vec-size (length vec))
-           (existing (hash-ref *completion-words* lower)))
-      ;; If duplicate, clear its old buffer slot
+           (existing (hash-ref *completion-words* word)))
+      ;; If duplicate (same case), clear its old buffer slot
       (when existing (vector-set! vec (list-ref existing 2) nil))
       ;; Wrap index
       (when (>= *completion-word-order-index* vec-size)
         (set! *completion-word-order-index* 0))
       (let* ((slot *completion-word-order-index*)
-             (old-key (vector-ref vec slot)))
-        ;; Evict old word from both stores if slot is occupied
-        (when (string? old-key) (hash-remove! *completion-words* old-key)
-          (trie-remove! *completion-trie* old-key))
+             (old-entry (vector-ref vec slot)))
+        ;; Evict old word: remove from hash and its entry from trie leaf list
+        (when (string? old-entry) (hash-remove! *completion-words* old-entry)
+          (trie-remove-entry! *completion-trie* (string-downcase old-entry)
+           old-entry))
         ;; Bump seq
         (set! *completion-seq* (+ *completion-seq* 1))
         (let ((leaf (list word *completion-seq* slot)))
           (if existing
-            ;; DUPLICATE: update cached trie node directly (O(1), no trie walk)
+            ;; DUPLICATE: update entry in cached trie node's leaf list
             (let ((trie-node (list-ref existing 3)))
-              (set-car! trie-node leaf)
-              (hash-set! *completion-words* lower
+              (set-car! trie-node
+               (cons leaf (trie-leaf-remove (car trie-node) word)))
+              (hash-set! *completion-words* word
                (list word *completion-seq* slot trie-node)))
-            ;; NEW WORD: walk trie once, cache the terminal node
+            ;; NEW WORD: insert into trie (appends to leaf list at terminal node)
             (let ((trie-node (trie-insert! *completion-trie* lower leaf)))
-              (hash-set! *completion-words* lower
+              (hash-set! *completion-words* word
                (list word *completion-seq* slot trie-node)))))
-        ;; Store lowercase key in buffer slot
-        (vector-set! vec slot lower)
+        ;; Store original word in buffer slot (not lowercase)
+        (vector-set! vec slot word)
         ;; Track word count
         (if (null? existing)
-          (when (not (string? old-key))
+          (when (not (string? old-entry))
             (set! *completion-word-count* (+ *completion-word-count* 1)))
-          (when (string? old-key)
+          (when (string? old-entry)
             (set! *completion-word-count* (- *completion-word-count* 1))))
         ;; Advance index
         (set! *completion-word-order-index* (+ *completion-word-order-index* 1))
@@ -287,7 +301,9 @@
         1))))
 
 (defun get-completions-from-store (prefix)
-  "Retrieve words from store matching a prefix (case-insensitive)."
+  "Retrieve words from store matching a prefix (case-insensitive).
+   Results with a case-exact prefix match are prioritized first,
+   then remaining results. Both groups sorted by recency."
   (if (not (and (string? prefix) (> (length prefix) 0)))
     '()
     (let ((node (trie-walk-to *completion-trie* (string-downcase prefix))))
@@ -295,8 +311,19 @@
         '()
         (let* ((entries (trie-collect node))
                (sorted (merge-sort-by-seq-desc entries))
-               (limited (take-at-most *completion-max-results* sorted)))
-          (map car limited))))))
+               (plen (length prefix))
+               (matched '())
+               (unmatched '()))
+          ;; Partition by case-exact prefix match
+          (do ((remaining sorted (cdr remaining))) ((null? remaining))
+            (let ((word (car (car remaining))))
+              (if
+                (and (>= (length word) plen)
+                     (string=? (substring word 0 plen) prefix))
+                (set! matched (cons (car remaining) matched))
+                (set! unmatched (cons (car remaining) unmatched)))))
+          (let ((result (append (reverse matched) (reverse unmatched))))
+            (map car (take-at-most *completion-max-results* result))))))))
 
 (defvar *collect-words-max-length* 65536
   "Maximum text length for word collection. Texts longer than this are truncated.")
