@@ -155,10 +155,43 @@ Slash commands start with `/` and are dispatched before any other input processi
 
 bloom-telnet supports multiple sessions, each with its own telnet connection and hook registry. All sessions share a single Lisp environment. Manage via `telnet-session-create`, `telnet-session-switch`, `telnet-session-list`, `telnet-session-destroy`.
 
+### Event Loop and Sending
+
+bloom-boba owns the `select()`-based event loop. bloom-telnet plugs in via callbacks for telnet socket polling, stdin processing, timer ticks, and scheduled commands. Lisp code cannot access the socket directly — all sends route through the event loop and execute on the next iteration.
+
+Two builtins send text to the server:
+
+|                  | `telnet-send`                                          | `send-input`                                                            |
+| ---------------- | ------------------------------------------------------ | ----------------------------------------------------------------------- |
+| **What it does** | Queues raw text for the server                         | Queues text through the full input pipeline                             |
+| **Hooks run**    | None — bypasses all hooks                              | `user-input-hook` (filter) then `user-input-transform-hook` (transform) |
+| **Use when**     | You have the final command string                      | You want alias expansion, variable substitution, speedwalk, etc.        |
+| **Batching**     | Multiple calls in same tick are batched into one flush | Each call scheduled independently                                       |
+
+Both return immediately and neither adds to input history.
+
+**Use `send-input`** for anything a player would type at the prompt — it runs through the same hook pipeline as manual input:
+
+```
+send-input "kill goblin"
+  → user-input-hook (filter — can consume)
+  → user-input-transform-hook (alias expansion, speedwalk, variables)
+  → telnet socket
+```
+
+**Use `telnet-send`** when you've already built the exact string to send and want to skip hooks entirely:
+
+```
+telnet-send "kill goblin"
+  → pending buffer (batched with other telnet-send calls this tick)
+  → event loop flush
+  → telnet socket
+```
+
 ## Authors
 
 Thomas Christensen
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
+MIT License - see [COPYING](COPYING) for details.
