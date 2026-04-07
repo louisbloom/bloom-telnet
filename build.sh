@@ -62,7 +62,7 @@ setup_local_deps() {
 	# Verify bloom-lisp is available
 	if ! pkg-config --exists bloom-lisp 2>/dev/null; then
 		log_error "bloom-lisp not found. Install it to ~/.local or system-wide."
-		log_error "See: https://github.com/thomasc1971/bloom-lisp"
+		log_error "See: https://codeberg.org/thomasc/bloom-lisp"
 		return 1
 	fi
 
