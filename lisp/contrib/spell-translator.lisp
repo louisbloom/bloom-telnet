@@ -282,4 +282,3 @@
  "Commands\n(spell-add \"garbled\" \"correct\")\n(spell-remove \"garbled\")\n(spell-add-known \"word\")\n(spell-remove-known \"word\")"
  :section
  "Data\n*spell-dictionary* — garbled word overrides\n*known-spell-words* — words that skip translation")
-

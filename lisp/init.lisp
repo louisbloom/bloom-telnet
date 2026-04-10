@@ -890,4 +890,3 @@ Colors: header=pale pink, desc=pale cyan, section=lavender, details=slate blue"
 (register-slash-command "/help" slash-help-handler "Help" :desc
  "Show help for slash commands" :aliases '("/doc") :usage
  "/help — list all commands\n/help <cmd> — show details")
-

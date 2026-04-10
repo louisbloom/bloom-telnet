@@ -190,8 +190,7 @@
   (if (null? server-state)
     "\033[0m"
     (let ((result "\033[0m"))
-      (do ((remaining server-state (cdr remaining)))
-        ((null? remaining) result)
+      (do ((remaining server-state (cdr remaining))) ((null? remaining) result)
         (set! result (concat result (car remaining)))))))
 
 ;; Get all ANSI sequences from ansi-map at a given plain-text position
@@ -339,4 +338,3 @@
           (let ((result ""))
             (do ((k 0 (+ k 1))) ((>= k (length highlighted)) result)
               (set! result (concat result (list-ref highlighted k))))))))))
-

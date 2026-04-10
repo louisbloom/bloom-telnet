@@ -205,8 +205,7 @@
     '()
     ;; Simple insertion sort by priority
     (let ((sorted '()))
-      (do ((remaining action-list (cdr remaining)))
-        ((null? remaining) sorted)
+      (do ((remaining action-list (cdr remaining))) ((null? remaining) sorted)
         (let* ((entry (car remaining))
                (priority (caddr entry)))
           ;; Insert entry in sorted position

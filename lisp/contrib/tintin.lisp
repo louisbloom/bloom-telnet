@@ -235,4 +235,3 @@
 
 ;; Announce activation (terminal is ready when this file loads via -l)
 (script-echo "TinTin++ emulation active")
-

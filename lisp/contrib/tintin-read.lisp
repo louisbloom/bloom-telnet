@@ -215,4 +215,3 @@
 ;; ============================================================================
 (hash-set! *tintin-commands* "read"
  (list tintin-handle-read 1 "#read {filename}"))
-

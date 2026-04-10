@@ -108,4 +108,3 @@
     (tintin-save-state filename)
     (tintin-command-echo (concat "Written to '" filename "'\r\n"))
     ""))
-

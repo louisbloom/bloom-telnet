@@ -278,4 +278,3 @@
             (bg-part (list-ref parts 1)))
         (list (tintin-parse-color-component fg-part #f)
          (if bg-part (tintin-parse-color-component bg-part #t) nil))))))
-

@@ -112,8 +112,8 @@
              (tintin-command-echo
               (concat "Variable '" name "': " name " = " value "\r\n"))
              "")
-           (progn
-             (terminal-echo (concat "Variable '" name "' not found\r\n")) "")))))
+           (progn (terminal-echo (concat "Variable '" name "' not found\r\n"))
+             "")))))
     ;; Two arguments - create variable
     (#t
      (let ((name (tintin-strip-braces (list-ref args 0)))
@@ -222,8 +222,8 @@
                  ""
                  (concat " (priority: " (number->string priority) ")")) "\r\n"))
              "")
-           (progn
-             (terminal-echo (concat "Action '" pattern "' not found\r\n")) "")))))
+           (progn (terminal-echo (concat "Action '" pattern "' not found\r\n"))
+             "")))))
     ;; Two or three arguments - create action
     (#t
      (let* ((pattern (tintin-strip-braces (list-ref args 0)))
@@ -437,4 +437,3 @@
                 (progn
                   (terminal-echo (concat "Syntax error: " syntax-help "\r\n"))
                   "")))))))))
-

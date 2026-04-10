@@ -68,8 +68,7 @@
     '()
     ;; Simple insertion sort by pattern
     (let ((sorted '()))
-      (do ((remaining action-list (cdr remaining)))
-        ((null? remaining) sorted)
+      (do ((remaining action-list (cdr remaining))) ((null? remaining) sorted)
         (let ((entry (car remaining))
               (pattern (caar remaining)))
           ;; Insert entry in alphabetically sorted position
@@ -567,4 +566,3 @@
             ;; Print table using generic printer
             (tintin-print-table data)))
         ""))))
-
