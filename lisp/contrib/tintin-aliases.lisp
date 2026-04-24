@@ -141,7 +141,11 @@
                 ;; will apply other transforms (command prefixing, etc.) to our result.
                 (let ((processed (tintin-process-command-internal cmd)))
                   (if (and (string? processed) (not (string=? processed "")))
-                    (set! collected (cons processed collected)))))))))
+                    (set! collected (cons processed collected))))))))
+        ;; Restore depth so this is a true stack counter — otherwise each
+        ;; action firing that expands an alias would leak +1, eventually
+        ;; tripping the circular-alias limit.
+        (set! *tintin-alias-depth* base-depth))
       ;; Join collected results with semicolons
       (let ((reversed (reverse collected))
             (output ""))

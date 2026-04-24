@@ -83,6 +83,9 @@
          "Warning: Action triggered during action execution (skipped)\r\n")
         nil)
       (progn (set! *tintin-action-executing* #t)
+        ;; Actions are a fresh entry point from the event loop — reset depth
+        ;; the same way tintin-user-input-hook does for user input.
+        (set! *tintin-alias-depth* 0)
         ;; Process and send commands
         (condition-case err
           (progn
