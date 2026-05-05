@@ -27,12 +27,12 @@ void lisp_x_call_fkey_hook(int fkey_num) { (void)fkey_num; }
 static int tests_run = 0;
 static int tests_passed = 0;
 
-#define RUN_TEST(fn)                                                           \
-    do {                                                                        \
-        tests_run++;                                                            \
-        fn();                                                                   \
-        tests_passed++;                                                         \
-        printf("  PASS: %s\n", #fn);                                            \
+#define RUN_TEST(fn)                 \
+    do {                             \
+        tests_run++;                 \
+        fn();                        \
+        tests_passed++;              \
+        printf("  PASS: %s\n", #fn); \
     } while (0)
 
 /* ========================================================================
@@ -43,7 +43,8 @@ static const TuiComponent *g_comp = NULL;
 
 static TelnetAppModel *create_test_app(void)
 {
-    if (!g_comp) g_comp = telnet_app_component();
+    if (!g_comp)
+        g_comp = telnet_app_component();
     TelnetAppConfig cfg = {
         .terminal_width = 80,
         .terminal_height = 24,

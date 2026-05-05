@@ -7,9 +7,9 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #else
-#include <sys/socket.h>
-#include <netinet/in.h>
 #include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
 #endif
 
 /* Forward declaration - full definition in dynamic_buffer.h */
@@ -17,7 +17,8 @@ typedef struct DynamicBuffer DynamicBuffer;
 
 typedef struct Telnet Telnet;
 
-typedef enum {
+typedef enum
+{
     TELNET_STATE_DISCONNECTED,
     TELNET_STATE_CONNECTING,
     TELNET_STATE_CONNECTED,
