@@ -78,7 +78,7 @@ static void update_terminal_title(void)
 static LispObject *get_session_hooks(void)
 {
     Session *s = session_get_current();
-    if (!s || !s->hooks || s->hooks->type != LISP_HASH_TABLE) {
+    if (!s || !s->hooks || LISP_TYPE(s->hooks) != LISP_HASH_TABLE) {
         return NULL;
     }
     return s->hooks;
@@ -87,9 +87,9 @@ static LispObject *get_session_hooks(void)
 /* Check if fn already exists in a hook entry list (by pointer identity) */
 static int hooks_has_fn(LispObject *list, LispObject *fn)
 {
-    while (list != NIL && list->type == LISP_CONS) {
+    while (list != NIL && LISP_TYPE(list) == LISP_CONS) {
         LispObject *entry = lisp_car(list);
-        if (entry && entry->type == LISP_CONS && lisp_car(entry) == fn) {
+        if (entry && LISP_TYPE(entry) == LISP_CONS && lisp_car(entry) == fn) {
             return 1;
         }
         list = lisp_cdr(list);
@@ -104,13 +104,13 @@ static LispObject *hooks_insert_sorted(LispObject *fn, int priority,
     LispObject *entry = lisp_make_cons(fn, lisp_make_integer(priority));
 
     /* Empty list or insert before first element */
-    if (list == NIL || list->type != LISP_CONS) {
+    if (list == NIL || LISP_TYPE(list) != LISP_CONS) {
         return lisp_make_cons(entry, NIL);
     }
 
     /* Check if we should insert before the head */
     LispObject *head_entry = lisp_car(list);
-    int head_prio = (int)lisp_cdr(head_entry)->value.integer;
+    int head_prio = (int)LISP_INT_VAL(lisp_cdr(head_entry));
     if (priority < head_prio) {
         return lisp_make_cons(entry, list);
     }
@@ -121,9 +121,9 @@ static LispObject *hooks_insert_sorted(LispObject *fn, int priority,
     LispObject **tail = &result;
     int inserted = 0;
 
-    while (list != NIL && list->type == LISP_CONS) {
+    while (list != NIL && LISP_TYPE(list) == LISP_CONS) {
         LispObject *cur = lisp_car(list);
-        int cur_prio = (int)lisp_cdr(cur)->value.integer;
+        int cur_prio = (int)LISP_INT_VAL(lisp_cdr(cur));
 
         if (!inserted && priority < cur_prio) {
             *tail = lisp_make_cons(entry, NIL);
@@ -149,9 +149,9 @@ static LispObject *hooks_remove_fn(LispObject *list, LispObject *fn)
     LispObject *result = NIL;
     LispObject **tail = &result;
 
-    while (list != NIL && list->type == LISP_CONS) {
+    while (list != NIL && LISP_TYPE(list) == LISP_CONS) {
         LispObject *entry = lisp_car(list);
-        if (entry && entry->type == LISP_CONS && lisp_car(entry) == fn) {
+        if (entry && LISP_TYPE(entry) == LISP_CONS && lisp_car(entry) == fn) {
             /* Skip this entry — append rest and return */
             *tail = lisp_cdr(list);
             return result;
@@ -167,7 +167,7 @@ static LispObject *hooks_remove_fn(LispObject *list, LispObject *fn)
 /* Apply *default-hooks* entries into a hooks hash table */
 static void apply_default_hooks_to_table(LispObject *hooks_table)
 {
-    if (!hooks_table || hooks_table->type != LISP_HASH_TABLE) {
+    if (!hooks_table || LISP_TYPE(hooks_table) != LISP_HASH_TABLE) {
         return;
     }
     Environment *base = session_get_base_env();
@@ -175,24 +175,24 @@ static void apply_default_hooks_to_table(LispObject *hooks_table)
         return;
     }
     LispObject *defaults =
-        env_lookup(base, lisp_intern("*default-hooks*")->value.symbol);
+        env_lookup(base, LISP_SYM_VAL(lisp_intern("*default-hooks*")));
     if (!defaults || defaults == NIL) {
         return;
     }
 
     /* Walk list of (name-string fn . priority) triples */
-    while (defaults != NIL && defaults->type == LISP_CONS) {
+    while (defaults != NIL && LISP_TYPE(defaults) == LISP_CONS) {
         LispObject *triple = lisp_car(defaults);
-        if (triple && triple->type == LISP_CONS) {
+        if (triple && LISP_TYPE(triple) == LISP_CONS) {
             LispObject *name_obj = lisp_car(triple);
             LispObject *fn_and_prio = lisp_cdr(triple);
-            if (name_obj && name_obj->type == LISP_STRING && fn_and_prio &&
-                fn_and_prio->type == LISP_CONS) {
+            if (name_obj && LISP_TYPE(name_obj) == LISP_STRING && fn_and_prio &&
+                LISP_TYPE(fn_and_prio) == LISP_CONS) {
                 LispObject *fn = lisp_car(fn_and_prio);
                 LispObject *prio_obj = lisp_cdr(fn_and_prio);
                 int priority = 50;
-                if (prio_obj && prio_obj->type == LISP_INTEGER) {
-                    priority = (int)prio_obj->value.integer;
+                if (prio_obj && LISP_TYPE(prio_obj) == LISP_INTEGER) {
+                    priority = (int)LISP_INT_VAL(prio_obj);
                 }
 
                 struct HashEntry *he = hash_table_get_entry(hooks_table, name_obj);
@@ -336,11 +336,11 @@ static LispObject *builtin_strip_ansi(LispObject *args, Environment *env)
     }
 
     LispObject *text_obj = lisp_car(args);
-    if (text_obj->type != LISP_STRING) {
+    if (LISP_TYPE(text_obj) != LISP_STRING) {
         return lisp_make_error("strip-ansi: argument must be a string");
     }
 
-    const char *text = text_obj->value.string;
+    const char *text = LISP_STR_VAL(text_obj);
     size_t len = strlen(text);
     size_t out_len = 0;
 
@@ -362,11 +362,11 @@ static LispObject *builtin_terminal_echo(LispObject *args, Environment *env)
     }
 
     LispObject *text_obj = lisp_car(args);
-    if (text_obj->type != LISP_STRING) {
+    if (LISP_TYPE(text_obj) != LISP_STRING) {
         return lisp_make_error("terminal-echo: argument must be a string");
     }
 
-    const char *text = text_obj->value.string;
+    const char *text = LISP_STR_VAL(text_obj);
     size_t len = strlen(text);
 
     /* Use callback if registered (handles scroll region positioning) */
@@ -395,13 +395,13 @@ static LispObject *builtin_telnet_send(LispObject *args, Environment *env)
         return lisp_make_error("telnet-send requires 1 argument");
 
     LispObject *text_obj = lisp_car(args);
-    if (text_obj->type != LISP_STRING)
+    if (LISP_TYPE(text_obj) != LISP_STRING)
         return lisp_make_error("telnet-send: argument must be a string");
 
     if (!registered_runtime)
         return lisp_make_error("telnet-send: no runtime registered");
 
-    const char *text = text_obj->value.string;
+    const char *text = LISP_STR_VAL(text_obj);
     dynamic_buffer_append(pending_send_buf, text, strlen(text));
     dynamic_buffer_append(pending_send_buf, "\0", 1);
 
@@ -439,7 +439,7 @@ static LispObject *builtin_termcap(LispObject *args, Environment *env)
     }
 
     LispObject *key = lisp_car(args);
-    if (key->type != LISP_SYMBOL) {
+    if (LISP_TYPE(key) != LISP_SYMBOL) {
         return lisp_make_error("termcap: first argument must be a symbol");
     }
 
@@ -489,14 +489,15 @@ static LispObject *builtin_termcap(LispObject *args, Environment *env)
             return lisp_make_error("termcap: fg-color/bg-color need r g b");
         LispObject *b_obj = lisp_car(args);
 
-        if (r_obj->type != LISP_INTEGER || g_obj->type != LISP_INTEGER ||
-            b_obj->type != LISP_INTEGER) {
+        if (LISP_TYPE(r_obj) != LISP_INTEGER ||
+            LISP_TYPE(g_obj) != LISP_INTEGER ||
+            LISP_TYPE(b_obj) != LISP_INTEGER) {
             return lisp_make_error("termcap: color args must be integers");
         }
 
-        int r = (int)r_obj->value.integer;
-        int g = (int)g_obj->value.integer;
-        int b = (int)b_obj->value.integer;
+        int r = (int)LISP_INT_VAL(r_obj);
+        int g = (int)LISP_INT_VAL(g_obj);
+        int b = (int)LISP_INT_VAL(b_obj);
 
         const char *seq = (key == sym_tc_fg_color)
                               ? termcaps_format_fg_color(r, g, b)
@@ -519,11 +520,11 @@ static LispObject *builtin_load_system_file(LispObject *args,
     }
 
     LispObject *filename_obj = lisp_car(args);
-    if (filename_obj->type != LISP_STRING) {
+    if (LISP_TYPE(filename_obj) != LISP_STRING) {
         return lisp_make_error("load-system-file: argument must be a string");
     }
 
-    const char *filename = filename_obj->value.string;
+    const char *filename = LISP_STR_VAL(filename_obj);
     int result = load_lisp_system_file(filename, env);
 
     if (result) {
@@ -595,7 +596,7 @@ static int load_lisp_system_file(const char *filename, Environment *env)
         if (test) {
             fclose(test);
             LispObject *result = lisp_load_file(search_paths[i], env);
-            if (result && result->type == LISP_ERROR) {
+            if (result && LISP_TYPE(result) == LISP_ERROR) {
                 char *err_str = lisp_print(result);
                 bloom_log(LOG_ERROR, "lisp", "Error loading %s: %s", search_paths[i],
                           err_str);
@@ -636,11 +637,11 @@ static LispObject *builtin_bloom_log(LispObject *args, Environment *env)
 
     LispObject *msg_obj = lisp_car(args);
 
-    if (level_obj->type != LISP_SYMBOL)
+    if (LISP_TYPE(level_obj) != LISP_SYMBOL)
         return lisp_make_error("bloom-log: level must be a symbol");
-    if (tag_obj->type != LISP_STRING)
+    if (LISP_TYPE(tag_obj) != LISP_STRING)
         return lisp_make_error("bloom-log: tag must be a string");
-    if (msg_obj->type != LISP_STRING)
+    if (LISP_TYPE(msg_obj) != LISP_STRING)
         return lisp_make_error("bloom-log: message must be a string");
 
     LogLevel level;
@@ -656,7 +657,7 @@ static LispObject *builtin_bloom_log(LispObject *args, Environment *env)
         return lisp_make_error(
             "bloom-log: level must be 'debug, 'info, 'warn, or 'error");
 
-    bloom_log(level, tag_obj->value.string, "%s", msg_obj->value.string);
+    bloom_log(level, LISP_STR_VAL(tag_obj), "%s", LISP_STR_VAL(msg_obj));
     return NIL;
 }
 
@@ -669,10 +670,10 @@ static LispObject *builtin_set_log_filter(LispObject *args, Environment *env)
         return lisp_make_error("set-log-filter requires 1 argument");
 
     LispObject *spec_obj = lisp_car(args);
-    if (spec_obj->type != LISP_STRING)
+    if (LISP_TYPE(spec_obj) != LISP_STRING)
         return lisp_make_error("set-log-filter: argument must be a string");
 
-    bloom_log_set_filter(spec_obj->value.string);
+    bloom_log_set_filter(LISP_STR_VAL(spec_obj));
     return NIL;
 }
 
@@ -693,11 +694,11 @@ static LispObject *builtin_statusbar_set_mode(LispObject *args,
     }
 
     LispObject *text_obj = lisp_car(args);
-    if (text_obj->type != LISP_STRING) {
+    if (LISP_TYPE(text_obj) != LISP_STRING) {
         return lisp_make_error("statusbar-set-mode: argument must be a string");
     }
 
-    const char *text = text_obj->value.string;
+    const char *text = LISP_STR_VAL(text_obj);
     if (text[0] == '\0') {
         tui_statusbar_set_mode(registered_statusbar, NULL);
     } else {
@@ -718,12 +719,13 @@ static LispObject *builtin_statusbar_notify(LispObject *args,
     }
 
     LispObject *msg_obj = lisp_car(args);
-    if (msg_obj->type != LISP_STRING) {
+    if (LISP_TYPE(msg_obj) != LISP_STRING) {
         return lisp_make_error("statusbar-notify: argument must be a string");
     }
 
     if (registered_statusbar) {
-        tui_statusbar_set_notification(registered_statusbar, msg_obj->value.string);
+        tui_statusbar_set_notification(registered_statusbar,
+                                       LISP_STR_VAL(msg_obj));
     }
 
     return NIL;
@@ -756,11 +758,11 @@ static LispObject *builtin_session_create(LispObject *args, Environment *env)
     }
 
     LispObject *name_obj = lisp_car(args);
-    if (name_obj->type != LISP_STRING) {
+    if (LISP_TYPE(name_obj) != LISP_STRING) {
         return lisp_make_error("telnet-session-create: argument must be a string");
     }
 
-    Session *s = session_create(name_obj->value.string);
+    Session *s = session_create(LISP_STR_VAL(name_obj));
     if (!s) {
         return lisp_make_error("telnet-session-create: failed to create session");
     }
@@ -823,12 +825,12 @@ static LispObject *builtin_session_switch(LispObject *args, Environment *env)
     }
 
     LispObject *id_obj = lisp_car(args);
-    if (id_obj->type != LISP_INTEGER) {
+    if (LISP_TYPE(id_obj) != LISP_INTEGER) {
         return lisp_make_error(
             "telnet-session-switch: argument must be an integer");
     }
 
-    int id = (int)id_obj->value.integer;
+    int id = (int)LISP_INT_VAL(id_obj);
     Session *s = session_find_by_id(id);
     if (!s) {
         return lisp_make_error("telnet-session-switch: no session with that id");
@@ -849,11 +851,11 @@ static LispObject *builtin_session_name(LispObject *args, Environment *env)
         s = session_get_current();
     } else {
         LispObject *id_obj = lisp_car(args);
-        if (id_obj->type != LISP_INTEGER) {
+        if (LISP_TYPE(id_obj) != LISP_INTEGER) {
             return lisp_make_error(
                 "telnet-session-name: argument must be an integer");
         }
-        s = session_find_by_id((int)id_obj->value.integer);
+        s = session_find_by_id((int)LISP_INT_VAL(id_obj));
     }
 
     if (!s) {
@@ -872,12 +874,12 @@ static LispObject *builtin_session_destroy(LispObject *args, Environment *env)
     }
 
     LispObject *id_obj = lisp_car(args);
-    if (id_obj->type != LISP_INTEGER) {
+    if (LISP_TYPE(id_obj) != LISP_INTEGER) {
         return lisp_make_error(
             "telnet-session-destroy: argument must be an integer");
     }
 
-    int id = (int)id_obj->value.integer;
+    int id = (int)LISP_INT_VAL(id_obj);
 
     /* Capture name before destroy removes the session */
     Session *target = session_find_by_id(id);
@@ -920,20 +922,20 @@ static LispObject *builtin_add_hook(LispObject *args, Environment *env)
     LispObject *fn_obj = lisp_car(args);
     args = lisp_cdr(args);
 
-    if (name_obj->type != LISP_SYMBOL) {
+    if (LISP_TYPE(name_obj) != LISP_SYMBOL) {
         return lisp_make_error("add-hook: first argument must be a symbol");
     }
-    if (fn_obj->type != LISP_SYMBOL) {
+    if (LISP_TYPE(fn_obj) != LISP_SYMBOL) {
         return lisp_make_error("add-hook: second argument must be a symbol");
     }
 
     int priority = 50;
     if (args != NIL) {
         LispObject *prio_obj = lisp_car(args);
-        if (prio_obj->type != LISP_INTEGER) {
+        if (LISP_TYPE(prio_obj) != LISP_INTEGER) {
             return lisp_make_error("add-hook: priority must be an integer");
         }
-        priority = (int)prio_obj->value.integer;
+        priority = (int)LISP_INT_VAL(prio_obj);
     }
 
     LispObject *hooks_table = get_session_hooks();
@@ -944,12 +946,12 @@ static LispObject *builtin_add_hook(LispObject *args, Environment *env)
         if (!base) {
             return lisp_make_error("add-hook: no base environment");
         }
-        Symbol *default_hooks_sym = lisp_intern("*default-hooks*")->value.symbol;
+        Symbol *default_hooks_sym = LISP_SYM_VAL(lisp_intern("*default-hooks*"));
         LispObject *defaults = env_lookup(base, default_hooks_sym);
         if (!defaults) {
             defaults = NIL;
         }
-        LispObject *name_str = lisp_make_string(name_obj->value.symbol->name);
+        LispObject *name_str = lisp_make_string(LISP_SYM_VAL(name_obj)->name);
         LispObject *fn_and_prio =
             lisp_make_cons(fn_obj, lisp_make_integer(priority));
         LispObject *triple = lisp_make_cons(name_str, fn_and_prio);
@@ -987,10 +989,10 @@ static LispObject *builtin_remove_hook(LispObject *args, Environment *env)
 
     LispObject *fn_obj = lisp_car(args);
 
-    if (name_obj->type != LISP_SYMBOL) {
+    if (LISP_TYPE(name_obj) != LISP_SYMBOL) {
         return lisp_make_error("remove-hook: first argument must be a symbol");
     }
-    if (fn_obj->type != LISP_SYMBOL) {
+    if (LISP_TYPE(fn_obj) != LISP_SYMBOL) {
         return lisp_make_error("remove-hook: second argument must be a symbol");
     }
 
@@ -1019,7 +1021,7 @@ static LispObject *builtin_clear_hook(LispObject *args, Environment *env)
     }
 
     LispObject *name_obj = lisp_car(args);
-    if (name_obj->type != LISP_SYMBOL) {
+    if (LISP_TYPE(name_obj) != LISP_SYMBOL) {
         return lisp_make_error("clear-hook: argument must be a symbol");
     }
 
@@ -1042,7 +1044,7 @@ static LispObject *builtin_run_hook(LispObject *args, Environment *env)
     LispObject *name_obj = lisp_car(args);
     LispObject *hook_args = lisp_cdr(args);
 
-    if (name_obj->type != LISP_SYMBOL) {
+    if (LISP_TYPE(name_obj) != LISP_SYMBOL) {
         return lisp_make_error("run-hook: first argument must be a symbol");
     }
 
@@ -1051,27 +1053,28 @@ static LispObject *builtin_run_hook(LispObject *args, Environment *env)
         return NIL;
     }
 
-    const char *name = name_obj->value.symbol->name;
+    const char *name = LISP_SYM_VAL(name_obj)->name;
     struct HashEntry *he = hash_table_get_entry(hooks_table, name_obj);
     if (!he || !he->value || he->value == NIL) {
         return NIL;
     }
 
     LispObject *hook_list = he->value;
-    while (hook_list != NIL && hook_list->type == LISP_CONS) {
+    while (hook_list != NIL && LISP_TYPE(hook_list) == LISP_CONS) {
         LispObject *entry = lisp_car(hook_list);
         LispObject *fn_sym = lisp_car(entry);
 
         /* Resolve symbol to its current function value */
         LispObject *fn = NULL;
-        if (fn_sym && fn_sym->type == LISP_SYMBOL) {
-            fn = env_lookup(env, fn_sym->value.symbol);
+        if (fn_sym && LISP_TYPE(fn_sym) == LISP_SYMBOL) {
+            fn = env_lookup(env, LISP_SYM_VAL(fn_sym));
         }
         if (!fn || !lisp_is_callable(fn)) {
-            bloom_log(
-                LOG_ERROR, "hooks", "run-hook %s: handler '%s' is not callable", name,
-                (fn_sym && fn_sym->type == LISP_SYMBOL) ? fn_sym->value.symbol->name
-                                                        : "?");
+            bloom_log(LOG_ERROR, "hooks",
+                      "run-hook %s: handler '%s' is not callable", name,
+                      (fn_sym && LISP_TYPE(fn_sym) == LISP_SYMBOL)
+                          ? LISP_SYM_VAL(fn_sym)->name
+                          : "?");
             hook_list = lisp_cdr(hook_list);
             continue;
         }
@@ -1079,7 +1082,7 @@ static LispObject *builtin_run_hook(LispObject *args, Environment *env)
         /* Build call: (fn arg1 arg2 ...) */
         LispObject *call = lisp_make_cons(fn, hook_args);
         LispObject *result = lisp_eval(call, env);
-        if (result && result->type == LISP_ERROR) {
+        if (result && LISP_TYPE(result) == LISP_ERROR) {
             char *err_str = lisp_print(result);
             if (err_str) {
                 bloom_log(LOG_ERROR, "hooks", "run-hook %s: %s", name, err_str);
@@ -1110,7 +1113,7 @@ static LispObject *builtin_run_filter_hook(LispObject *args, Environment *env)
 
     LispObject *value = lisp_car(args);
 
-    if (name_obj->type != LISP_SYMBOL) {
+    if (LISP_TYPE(name_obj) != LISP_SYMBOL) {
         return lisp_make_error("run-filter-hook: first argument must be a symbol");
     }
 
@@ -1119,7 +1122,7 @@ static LispObject *builtin_run_filter_hook(LispObject *args, Environment *env)
         return value;
     }
 
-    const char *name = name_obj->value.symbol->name;
+    const char *name = LISP_SYM_VAL(name_obj)->name;
     struct HashEntry *he = hash_table_get_entry(hooks_table, name_obj);
     if (!he || !he->value || he->value == NIL) {
         return value;
@@ -1127,20 +1130,20 @@ static LispObject *builtin_run_filter_hook(LispObject *args, Environment *env)
 
     int consumed = 0;
     LispObject *hook_list = he->value;
-    while (hook_list != NIL && hook_list->type == LISP_CONS) {
+    while (hook_list != NIL && LISP_TYPE(hook_list) == LISP_CONS) {
         LispObject *entry = lisp_car(hook_list);
         LispObject *fn_sym = lisp_car(entry);
 
         /* Resolve symbol to its current function value */
         LispObject *fn = NULL;
-        if (fn_sym && fn_sym->type == LISP_SYMBOL) {
-            fn = env_lookup(env, fn_sym->value.symbol);
+        if (fn_sym && LISP_TYPE(fn_sym) == LISP_SYMBOL) {
+            fn = env_lookup(env, LISP_SYM_VAL(fn_sym));
         }
         if (!fn || !lisp_is_callable(fn)) {
             bloom_log(LOG_ERROR, "hooks",
                       "run-filter-hook %s: handler '%s' is not callable", name,
-                      (fn_sym && fn_sym->type == LISP_SYMBOL)
-                          ? fn_sym->value.symbol->name
+                      (fn_sym && LISP_TYPE(fn_sym) == LISP_SYMBOL)
+                          ? LISP_SYM_VAL(fn_sym)->name
                           : "?");
             hook_list = lisp_cdr(hook_list);
             continue;
@@ -1150,7 +1153,7 @@ static LispObject *builtin_run_filter_hook(LispObject *args, Environment *env)
         LispObject *call_args = lisp_make_cons(value, NIL);
         LispObject *call = lisp_make_cons(fn, call_args);
         LispObject *result = lisp_eval(call, env);
-        if (result && result->type == LISP_ERROR) {
+        if (result && LISP_TYPE(result) == LISP_ERROR) {
             char *err_str = lisp_print(result);
             if (err_str) {
                 bloom_log(LOG_ERROR, "hooks", "run-filter-hook %s: %s", name, err_str);
@@ -1181,7 +1184,7 @@ static LispObject *builtin_run_transform_hook(LispObject *args,
 
     LispObject *value = lisp_car(args);
 
-    if (name_obj->type != LISP_SYMBOL) {
+    if (LISP_TYPE(name_obj) != LISP_SYMBOL) {
         return lisp_make_error(
             "run-transform-hook: first argument must be a symbol");
     }
@@ -1191,43 +1194,43 @@ static LispObject *builtin_run_transform_hook(LispObject *args,
         return value;
     }
 
-    const char *name = name_obj->value.symbol->name;
+    const char *name = LISP_SYM_VAL(name_obj)->name;
     struct HashEntry *he = hash_table_get_entry(hooks_table, name_obj);
     if (!he || !he->value || he->value == NIL) {
         return value;
     }
 
     LispObject *hook_list = he->value;
-    while (hook_list != NIL && hook_list->type == LISP_CONS) {
+    while (hook_list != NIL && LISP_TYPE(hook_list) == LISP_CONS) {
         LispObject *entry = lisp_car(hook_list);
         LispObject *fn_sym = lisp_car(entry);
 
         /* Resolve symbol to its current function value */
         LispObject *fn = NULL;
-        if (fn_sym && fn_sym->type == LISP_SYMBOL) {
-            fn = env_lookup(env, fn_sym->value.symbol);
+        if (fn_sym && LISP_TYPE(fn_sym) == LISP_SYMBOL) {
+            fn = env_lookup(env, LISP_SYM_VAL(fn_sym));
         }
         if (!fn || !lisp_is_callable(fn)) {
             bloom_log(LOG_ERROR, "hooks",
                       "run-transform-hook %s: handler '%s' is not callable", name,
-                      (fn_sym && fn_sym->type == LISP_SYMBOL)
-                          ? fn_sym->value.symbol->name
+                      (fn_sym && LISP_TYPE(fn_sym) == LISP_SYMBOL)
+                          ? LISP_SYM_VAL(fn_sym)->name
                           : "?");
             hook_list = lisp_cdr(hook_list);
             continue;
         }
 
-        if (value != NIL && value->type == LISP_CONS) {
+        if (value != NIL && LISP_TYPE(value) == LISP_CONS) {
             /* List value: call handler once per element, collect results */
             LispObject *result_head = NIL;
             LispObject **result_tail = &result_head;
             LispObject *elem = value;
-            while (elem != NIL && elem->type == LISP_CONS) {
+            while (elem != NIL && LISP_TYPE(elem) == LISP_CONS) {
                 LispObject *item = lisp_car(elem);
                 LispObject *call_args = lisp_make_cons(item, NIL);
                 LispObject *call = lisp_make_cons(fn, call_args);
                 LispObject *result = lisp_eval(call, env);
-                if (result && result->type == LISP_ERROR) {
+                if (result && LISP_TYPE(result) == LISP_ERROR) {
                     char *err_str = lisp_print(result);
                     if (err_str) {
                         bloom_log(LOG_ERROR, "hooks", "run-transform-hook %s: %s", name,
@@ -1237,10 +1240,10 @@ static LispObject *builtin_run_transform_hook(LispObject *args,
                     *result_tail = lisp_make_cons(item, NIL);
                     result_tail = &LISP_CDR(*result_tail);
                 } else if (result != NIL) {
-                    if (result->type == LISP_CONS) {
+                    if (LISP_TYPE(result) == LISP_CONS) {
                         /* Handler returned a list — splice elements in */
                         LispObject *sub = result;
-                        while (sub != NIL && sub->type == LISP_CONS) {
+                        while (sub != NIL && LISP_TYPE(sub) == LISP_CONS) {
                             LispObject *sub_item = lisp_car(sub);
                             if (sub_item != NIL) {
                                 *result_tail = lisp_make_cons(sub_item, NIL);
@@ -1262,7 +1265,7 @@ static LispObject *builtin_run_transform_hook(LispObject *args,
             LispObject *call_args = lisp_make_cons(value, NIL);
             LispObject *call = lisp_make_cons(fn, call_args);
             LispObject *result = lisp_eval(call, env);
-            if (result && result->type == LISP_ERROR) {
+            if (result && LISP_TYPE(result) == LISP_ERROR) {
                 char *err_str = lisp_print(result);
                 if (err_str) {
                     bloom_log(LOG_ERROR, "hooks", "run-transform-hook %s: %s", name,
@@ -1282,7 +1285,7 @@ static LispObject *builtin_run_transform_hook(LispObject *args,
 
 /* Helper: register a builtin using interned symbol */
 #define REG(name, func)                              \
-    env_define(env, lisp_intern(name)->value.symbol, \
+    env_define(env, LISP_SYM_VAL(lisp_intern(name)), \
                lisp_make_builtin(func, name), pkg_core)
 
 /* Send a hook result (string or list of strings) to telnet */
@@ -1291,15 +1294,15 @@ void lisp_x_send_hook_result(LispObject *result, Telnet *telnet)
     if (!result || result == NIL || !telnet)
         return;
 
-    if (result->type == LISP_STRING) {
-        const char *s = result->value.string;
+    if (LISP_TYPE(result) == LISP_STRING) {
+        const char *s = LISP_STR_VAL(result);
         telnet_send_with_crlf(telnet, s, strlen(s));
-    } else if (result->type == LISP_CONS) {
+    } else if (LISP_TYPE(result) == LISP_CONS) {
         LispObject *elem = result;
-        while (elem != NIL && elem->type == LISP_CONS) {
+        while (elem != NIL && LISP_TYPE(elem) == LISP_CONS) {
             LispObject *item = lisp_car(elem);
-            if (item && item->type == LISP_STRING) {
-                const char *s = item->value.string;
+            if (item && LISP_TYPE(item) == LISP_STRING) {
+                const char *s = LISP_STR_VAL(item);
                 telnet_send_with_crlf(telnet, s, strlen(s));
             }
             elem = lisp_cdr(elem);
@@ -1350,12 +1353,12 @@ static LispObject *builtin_send_input(LispObject *args, Environment *env)
     if (args == NIL)
         return lisp_make_error("send-input requires a string argument");
     LispObject *text_obj = lisp_car(args);
-    if (!text_obj || text_obj->type != LISP_STRING)
+    if (!text_obj || LISP_TYPE(text_obj) != LISP_STRING)
         return lisp_make_error("send-input: argument must be a string");
     if (!registered_runtime)
         return lisp_make_error("send-input: no runtime registered");
 
-    char *text = strdup(text_obj->value.string);
+    char *text = strdup(LISP_STR_VAL(text_obj));
     if (!text)
         return lisp_make_error("send-input: out of memory");
 
@@ -1394,17 +1397,17 @@ static LispObject *builtin_register_cli_handler(LispObject *args,
     LispObject *long_arg = lisp_car(lisp_cdr(args));
     LispObject *handler = lisp_car(lisp_cdr(lisp_cdr(args)));
 
-    if (!handler || handler->type != LISP_SYMBOL) {
+    if (!handler || LISP_TYPE(handler) != LISP_SYMBOL) {
         return lisp_make_error("register-cli-handler: handler must be a symbol");
     }
 
     /* Register long flag */
-    if (long_arg && long_arg->type == LISP_STRING) {
+    if (long_arg && LISP_TYPE(long_arg) == LISP_STRING) {
         hash_table_set_entry(cli_handler_table, long_arg, handler);
     }
 
     /* Register short flag */
-    if (short_arg && short_arg->type == LISP_STRING) {
+    if (short_arg && LISP_TYPE(short_arg) == LISP_STRING) {
         hash_table_set_entry(cli_handler_table, short_arg, handler);
     }
 
@@ -1456,7 +1459,7 @@ int lisp_x_dispatch_cli_args(void)
         }
 
         /* Resolve symbol to function and call directly */
-        LispObject *handler_fn = env_lookup(env, handler_sym->value.symbol);
+        LispObject *handler_fn = env_lookup(env, LISP_SYM_VAL(handler_sym));
         if (!handler_fn || !lisp_is_callable(handler_fn)) {
             bloom_log(LOG_ERROR, "cli", "CLI handler for --%s is not callable",
                       arg->flag);
@@ -1466,7 +1469,7 @@ int lisp_x_dispatch_cli_args(void)
 
         LispObject *value_arg = lisp_make_string(arg->value);
         volatile LispObject *result = lisp_call_1(handler_fn, value_arg, env);
-        if (result && ((LispObject *)result)->type == LISP_ERROR) {
+        if (result && LISP_TYPE((LispObject *)result) == LISP_ERROR) {
             char *err = lisp_print((LispObject *)result);
             bloom_log(LOG_ERROR, "cli", "Error handling --%s: %s", arg->flag, err);
             errors++;
@@ -1626,12 +1629,12 @@ int lisp_x_init(void)
     register_builtins(base_env);
 
     /* Version string accessible from Lisp */
-    env_define(base_env, lisp_intern("*version*")->value.symbol,
+    env_define(base_env, LISP_SYM_VAL(lisp_intern("*version*")),
                lisp_make_string(BLOOM_TELNET_VERSION), pkg_core);
 
     /* Initialize *default-hooks* in base env (collects hooks registered
      * during init.lisp before any session exists) */
-    env_define(base_env, lisp_intern("*default-hooks*")->value.symbol, NIL,
+    env_define(base_env, LISP_SYM_VAL(lisp_intern("*default-hooks*")), NIL,
                pkg_core);
 
     /* Default session is created later in lisp_x_load_init() once the
@@ -1677,15 +1680,15 @@ int lisp_x_load_file(const char *filepath)
     /* Derive package name from filename and set *package* */
     char pkg_name[256];
     derive_package_name(effective_path, pkg_name, sizeof(pkg_name));
-    LispObject *saved_pkg = env_lookup(env, sym_star_package_star->value.symbol);
-    env_set(env, sym_star_package_star->value.symbol, lisp_intern(pkg_name));
+    LispObject *saved_pkg = env_lookup(env, LISP_SYM_VAL(sym_star_package_star));
+    env_set(env, LISP_SYM_VAL(sym_star_package_star), lisp_intern(pkg_name));
 
     int ret;
 
     /* If path is absolute, load directly */
     if (path_is_absolute(effective_path)) {
         LispObject *result = lisp_load_file(effective_path, env);
-        if (result && result->type == LISP_ERROR) {
+        if (result && LISP_TYPE(result) == LISP_ERROR) {
             char *err_str = lisp_print(result);
             bloom_log(LOG_ERROR, "lisp", "Error loading %s: %s", filepath, err_str);
             ret = -1;
@@ -1699,7 +1702,7 @@ int lisp_x_load_file(const char *filepath)
 
     /* Restore *package* */
     if (saved_pkg) {
-        env_set(env, sym_star_package_star->value.symbol, saved_pkg);
+        env_set(env, LISP_SYM_VAL(sym_star_package_star), saved_pkg);
     }
 
     return ret;
@@ -1764,7 +1767,7 @@ void lisp_x_call_telnet_input_hook(const char *text, size_t len)
     }
 
     LispObject *hook =
-        env_lookup(env, lisp_intern("telnet-input-hook")->value.symbol);
+        env_lookup(env, LISP_SYM_VAL(lisp_intern("telnet-input-hook")));
     if (!lisp_is_callable(hook)) {
         bloom_log(LOG_DEBUG, "hooks", "input-hook: hook not found or wrong type");
         return;
@@ -1774,7 +1777,7 @@ void lisp_x_call_telnet_input_hook(const char *text, size_t len)
               stripped_len);
 
     volatile LispObject *text_arg = lisp_make_string(stripped_text);
-    if (!text_arg || ((LispObject *)text_arg)->type == LISP_ERROR) {
+    if (!text_arg || LISP_TYPE((LispObject *)text_arg) == LISP_ERROR) {
         bloom_log(LOG_DEBUG, "hooks", "input-hook: failed to create string arg");
         return;
     }
@@ -1783,7 +1786,7 @@ void lisp_x_call_telnet_input_hook(const char *text, size_t len)
     volatile LispObject *call_expr = lisp_make_cons(hook, (LispObject *)args);
     LispObject *result = lisp_eval((LispObject *)call_expr, env);
 
-    if (result && result->type == LISP_ERROR) {
+    if (result && LISP_TYPE(result) == LISP_ERROR) {
         char *err_str = lisp_print(result);
         if (err_str) {
             bloom_log(LOG_ERROR, "hooks", "telnet-input-hook: %s", err_str);
@@ -1801,7 +1804,7 @@ int lisp_x_call_user_input_hook(const char *text, size_t len)
     }
 
     LispObject *hook =
-        env_lookup(env, lisp_intern("user-input-hook")->value.symbol);
+        env_lookup(env, LISP_SYM_VAL(lisp_intern("user-input-hook")));
     if (!lisp_is_callable(hook)) {
         bloom_log(LOG_DEBUG, "hooks",
                   "user-input-hook: hook not found or wrong type");
@@ -1811,7 +1814,7 @@ int lisp_x_call_user_input_hook(const char *text, size_t len)
     bloom_log(LOG_DEBUG, "hooks", "user-input-hook: calling with %zu bytes", len);
 
     volatile LispObject *text_arg = lisp_make_string(text);
-    if (!text_arg || ((LispObject *)text_arg)->type == LISP_ERROR) {
+    if (!text_arg || LISP_TYPE((LispObject *)text_arg) == LISP_ERROR) {
         bloom_log(LOG_DEBUG, "hooks",
                   "user-input-hook: failed to create string arg");
         return 0;
@@ -1821,7 +1824,7 @@ int lisp_x_call_user_input_hook(const char *text, size_t len)
     volatile LispObject *call_expr = lisp_make_cons(hook, (LispObject *)args);
     LispObject *result = lisp_eval((LispObject *)call_expr, env);
 
-    if (result && result->type == LISP_ERROR) {
+    if (result && LISP_TYPE(result) == LISP_ERROR) {
         char *err_str = lisp_print(result);
         if (err_str) {
             bloom_log(LOG_ERROR, "hooks", "user-input-hook: %s", err_str);
@@ -1840,14 +1843,14 @@ void lisp_x_run_timers(void)
     if (!env)
         return;
 
-    LispObject *fn = env_lookup(env, lisp_intern("run-timers")->value.symbol);
+    LispObject *fn = env_lookup(env, LISP_SYM_VAL(lisp_intern("run-timers")));
     if (!lisp_is_callable(fn))
         return;
 
     volatile LispObject *call = lisp_make_cons(fn, NIL);
     LispObject *result = lisp_eval((LispObject *)call, env);
 
-    if (result && result->type == LISP_ERROR) {
+    if (result && LISP_TYPE(result) == LISP_ERROR) {
         char *err_str = lisp_print(result);
         if (err_str) {
             bloom_log(LOG_ERROR, "hooks", "run-timers: %s", err_str);
@@ -1864,15 +1867,15 @@ int lisp_x_next_timer_ms(void)
         return -1;
 
     LispObject *cached =
-        env_lookup(env, lisp_intern("*timer-next-fire-ms*")->value.symbol);
+        env_lookup(env, LISP_SYM_VAL(lisp_intern("*timer-next-fire-ms*")));
     if (!cached || cached == NIL)
         return -1;
 
     long long fire_time = -1;
-    if (cached->type == LISP_INTEGER)
-        fire_time = cached->value.integer;
-    else if (cached->type == LISP_NUMBER)
-        fire_time = (long long)cached->value.number;
+    if (LISP_TYPE(cached) == LISP_INTEGER)
+        fire_time = LISP_INT_VAL(cached);
+    else if (LISP_TYPE(cached) == LISP_NUMBER)
+        fire_time = (long long)LISP_NUM_VAL(cached);
 
     if (fire_time < 0)
         return -1;
@@ -1899,8 +1902,8 @@ const char *lisp_x_call_telnet_input_transform_hook(const char *text,
         return text;
     }
 
-    LispObject *hook =
-        env_lookup(env, lisp_intern("telnet-input-transform-hook")->value.symbol);
+    LispObject *hook = env_lookup(
+        env, LISP_SYM_VAL(lisp_intern("telnet-input-transform-hook")));
     if (!lisp_is_callable(hook)) {
         *out_len = len;
         return text;
@@ -1916,7 +1919,7 @@ const char *lisp_x_call_telnet_input_transform_hook(const char *text,
     telnet_filter_temp_buffer[len] = '\0';
 
     volatile LispObject *arg = lisp_make_string(telnet_filter_temp_buffer);
-    if (!arg || ((LispObject *)arg)->type == LISP_ERROR) {
+    if (!arg || LISP_TYPE((LispObject *)arg) == LISP_ERROR) {
         *out_len = len;
         return text;
     }
@@ -1925,7 +1928,7 @@ const char *lisp_x_call_telnet_input_transform_hook(const char *text,
     volatile LispObject *call_expr = lisp_make_cons(hook, (LispObject *)args);
     LispObject *result = lisp_eval((LispObject *)call_expr, env);
 
-    if (!result || result->type == LISP_ERROR) {
+    if (!result || LISP_TYPE(result) == LISP_ERROR) {
         char *err_str = lisp_print(result);
         if (err_str) {
             bloom_log(LOG_ERROR, "hooks", "telnet-input-transform-hook: %s", err_str);
@@ -1934,12 +1937,12 @@ const char *lisp_x_call_telnet_input_transform_hook(const char *text,
         return text;
     }
 
-    if (result->type != LISP_STRING) {
+    if (LISP_TYPE(result) != LISP_STRING) {
         *out_len = len;
         return text;
     }
 
-    const char *transformed = result->value.string;
+    const char *transformed = LISP_STR_VAL(result);
     size_t transformed_len = strlen(transformed);
 
     if (ensure_buffer_size(&telnet_filter_buffer, &telnet_filter_buffer_size,
@@ -1963,14 +1966,14 @@ LispObject *lisp_x_call_user_input_transform_hook(const char *text)
         return lisp_make_string(text ? text : "");
     }
 
-    LispObject *hook =
-        env_lookup(env, lisp_intern("user-input-transform-hook")->value.symbol);
+    LispObject *hook = env_lookup(
+        env, LISP_SYM_VAL(lisp_intern("user-input-transform-hook")));
     if (!lisp_is_callable(hook)) {
         return lisp_make_string(text);
     }
 
     volatile LispObject *text_arg = lisp_make_string(text);
-    if (!text_arg || ((LispObject *)text_arg)->type == LISP_ERROR) {
+    if (!text_arg || LISP_TYPE((LispObject *)text_arg) == LISP_ERROR) {
         return lisp_make_string(text);
     }
 
@@ -1978,7 +1981,7 @@ LispObject *lisp_x_call_user_input_transform_hook(const char *text)
     volatile LispObject *call_expr = lisp_make_cons(hook, (LispObject *)args);
     LispObject *result = lisp_eval((LispObject *)call_expr, env);
 
-    if (!result || result->type == LISP_ERROR) {
+    if (!result || LISP_TYPE(result) == LISP_ERROR) {
         char *err_str = lisp_print(result);
         if (err_str) {
             bloom_log(LOG_ERROR, "hooks", "user-input-transform-hook: %s", err_str);
@@ -2001,9 +2004,9 @@ int lisp_x_get_input_history_size(void)
     }
 
     LispObject *value =
-        env_lookup(env, lisp_intern("*input-history-size*")->value.symbol);
-    if (value && value->type == LISP_INTEGER) {
-        int size = (int)value->value.integer;
+        env_lookup(env, LISP_SYM_VAL(lisp_intern("*input-history-size*")));
+    if (value && LISP_TYPE(value) == LISP_INTEGER) {
+        int size = (int)LISP_INT_VAL(value);
         if (size > 0) {
             return size;
         }
@@ -2039,7 +2042,7 @@ int lisp_x_eval_and_echo(const char *code, DynamicBuffer *buf)
     /* Evaluate */
     LispObject *result = lisp_eval_string(code, env);
 
-    if (result && result->type == LISP_ERROR) {
+    if (result && LISP_TYPE(result) == LISP_ERROR) {
         dynamic_buffer_append_str(buf, "; Error: ");
         char *err_str = lisp_print(result);
         if (err_str) {
@@ -2108,9 +2111,9 @@ const char *lisp_x_get_word_chars(void)
         return NULL;
 
     LispObject *value =
-        env_lookup(env, lisp_intern("*word-chars*")->value.symbol);
-    if (value && value->type == LISP_STRING)
-        return value->value.string;
+        env_lookup(env, LISP_SYM_VAL(lisp_intern("*word-chars*")));
+    if (value && LISP_TYPE(value) == LISP_STRING)
+        return LISP_STR_VAL(value);
     return NULL;
 }
 
@@ -2122,9 +2125,9 @@ const char *lisp_x_get_prompt(void)
         return "> ";
     }
 
-    LispObject *value = env_lookup(env, lisp_intern("*prompt*")->value.symbol);
-    if (value && value->type == LISP_STRING) {
-        return value->value.string;
+    LispObject *value = env_lookup(env, LISP_SYM_VAL(lisp_intern("*prompt*")));
+    if (value && LISP_TYPE(value) == LISP_STRING) {
+        return LISP_STR_VAL(value);
     }
     return "> ";
 }
@@ -2136,27 +2139,29 @@ int lisp_x_get_color(const char *var_name, int *r, int *g, int *b)
     if (!env || !var_name || !r || !g || !b)
         return -1;
 
-    LispObject *val = env_lookup(env, lisp_intern(var_name)->value.symbol);
-    if (!val || val->type != LISP_CONS)
+    LispObject *val = env_lookup(env, LISP_SYM_VAL(lisp_intern(var_name)));
+    if (!val || LISP_TYPE(val) != LISP_CONS)
         return -1;
 
     LispObject *r_obj = lisp_car(val);
     LispObject *rest = lisp_cdr(val);
-    if (!r_obj || r_obj->type != LISP_INTEGER || !rest || rest->type != LISP_CONS)
+    if (!r_obj || LISP_TYPE(r_obj) != LISP_INTEGER || !rest ||
+        LISP_TYPE(rest) != LISP_CONS)
         return -1;
 
     LispObject *g_obj = lisp_car(rest);
     rest = lisp_cdr(rest);
-    if (!g_obj || g_obj->type != LISP_INTEGER || !rest || rest->type != LISP_CONS)
+    if (!g_obj || LISP_TYPE(g_obj) != LISP_INTEGER || !rest ||
+        LISP_TYPE(rest) != LISP_CONS)
         return -1;
 
     LispObject *b_obj = lisp_car(rest);
-    if (!b_obj || b_obj->type != LISP_INTEGER)
+    if (!b_obj || LISP_TYPE(b_obj) != LISP_INTEGER)
         return -1;
 
-    *r = (int)r_obj->value.integer;
-    *g = (int)g_obj->value.integer;
-    *b = (int)b_obj->value.integer;
+    *r = (int)LISP_INT_VAL(r_obj);
+    *g = (int)LISP_INT_VAL(g_obj);
+    *b = (int)LISP_INT_VAL(b_obj);
     return 0;
 }
 
@@ -2171,7 +2176,7 @@ char **lisp_x_complete_prefix(const char *prefix)
 
     /* Look up completion-hook */
     LispObject *hook =
-        env_lookup(env, lisp_intern("completion-hook")->value.symbol);
+        env_lookup(env, LISP_SYM_VAL(lisp_intern("completion-hook")));
     if (!lisp_is_callable(hook)) {
         bloom_log(LOG_DEBUG, "completion", "hook not found or wrong type");
         return NULL;
@@ -2185,10 +2190,10 @@ char **lisp_x_complete_prefix(const char *prefix)
     volatile LispObject *call_expr = lisp_make_cons(hook, (LispObject *)args);
     LispObject *result = lisp_eval((LispObject *)call_expr, env);
 
-    if (!result || result->type == LISP_ERROR || result == NIL) {
+    if (!result || LISP_TYPE(result) == LISP_ERROR || result == NIL) {
         if (!result)
             bloom_log(LOG_DEBUG, "completion", "eval returned NULL");
-        else if (result->type == LISP_ERROR)
+        else if (LISP_TYPE(result) == LISP_ERROR)
             bloom_log(LOG_DEBUG, "completion", "eval error: %s", lisp_print(result));
         else
             bloom_log(LOG_DEBUG, "completion", "eval returned NIL");
@@ -2198,7 +2203,7 @@ char **lisp_x_complete_prefix(const char *prefix)
     /* Convert result list to char** array */
     int count = 0;
     LispObject *p = result;
-    while (p != NIL && p->type == LISP_CONS) {
+    while (p != NIL && LISP_TYPE(p) == LISP_CONS) {
         count++;
         p = lisp_cdr(p);
     }
@@ -2217,10 +2222,10 @@ char **lisp_x_complete_prefix(const char *prefix)
 
     int i = 0;
     p = result;
-    while (p != NIL && p->type == LISP_CONS && i < count) {
+    while (p != NIL && LISP_TYPE(p) == LISP_CONS && i < count) {
         LispObject *item = lisp_car(p);
-        if (item && item->type == LISP_STRING) {
-            completions[i] = strdup(item->value.string);
+        if (item && LISP_TYPE(item) == LISP_STRING) {
+            completions[i] = strdup(LISP_STR_VAL(item));
         } else {
             completions[i] = strdup("");
         }
