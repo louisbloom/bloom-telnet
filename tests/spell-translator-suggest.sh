@@ -203,6 +203,7 @@ BEGIN {
     overrides["hpkadawahjfouq"] = "thaumaturgic"  # hunspell suggests "liturgical"
     overrides["iaza"]           = "nova"          # cipher: noeo
     overrides["izoahuzz"]       = "negative"      # "resist negative"; cipher: negotiee; hunspell only suggests "negotiate"
+    overrides["jiyajudig"]      = "unfocus"       # cipher output "unfocus" is correct; hunspell wrongly upgrades to "unfocused"
     overrides["oculoqarquyl"]   = "decalcify"     # cipher: decolcify; hunspell suggests "decollete"
     overrides["paghz"]          = "haste"         # cipher: hoste; hunspell ranks "host" first
     overrides["pzah"]           = "heat"          # "channel heat"; hunspell ranks "hot" first

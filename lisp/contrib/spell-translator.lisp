@@ -55,7 +55,7 @@
 ;; If any word in the utterance matches a known spell word, skip translation.
 
 ;; Auto-generated known-spell-words from readable utterance analysis
-;; Generated: Wed May  6 01:10:39 PM +07 2026
+;; Generated: Wed May  6 01:16:14 PM +07 2026
 (defvar *known-spell-words* '(
   "resist"
   "lightning"
@@ -101,7 +101,7 @@
 
 ;; Auto-generated dictionary overrides for cipher ambiguity corrections
 ;; Based on analysis of telnet logs with Levenshtein-ranked hunspell suggestions
-;; Generated: Wed May  6 01:10:35 PM +07 2026
+;; Generated: Wed May  6 01:16:10 PM +07 2026
 
 (hash-set! *spell-dictionary* "abrahuyaqh" "artifact")
 (hash-set! *spell-dictionary* "abraq" "arc")
@@ -127,7 +127,7 @@
 (hash-set! *spell-dictionary* "iaza" "nova")
 (hash-set! *spell-dictionary* "izjfahiouqar" "neurological")
 (hash-set! *spell-dictionary* "izoahuzz" "negative")
-(hash-set! *spell-dictionary* "jiyajudig" "unfocused")
+(hash-set! *spell-dictionary* "jiyajudig" "unfocus")
 (hash-set! *spell-dictionary* "ocandusagz" "grease")
 (hash-set! *spell-dictionary* "oculoayunso" "deafen")
 (hash-set! *spell-dictionary* "oculoqarquyl" "decalcify")
