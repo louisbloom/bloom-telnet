@@ -127,12 +127,12 @@ static LispObject *hooks_insert_sorted(LispObject *fn, int priority,
 
         if (!inserted && priority < cur_prio) {
             *tail = lisp_make_cons(entry, NIL);
-            tail = &((*tail)->value.cons.cdr);
+            tail = &LISP_CDR(*tail);
             inserted = 1;
         }
 
         *tail = lisp_make_cons(cur, NIL);
-        tail = &((*tail)->value.cons.cdr);
+        tail = &LISP_CDR(*tail);
         list = lisp_cdr(list);
     }
 
@@ -157,7 +157,7 @@ static LispObject *hooks_remove_fn(LispObject *list, LispObject *fn)
             return result;
         }
         *tail = lisp_make_cons(entry, NIL);
-        tail = &((*tail)->value.cons.cdr);
+        tail = &LISP_CDR(*tail);
         list = lisp_cdr(list);
     }
 
@@ -1235,7 +1235,7 @@ static LispObject *builtin_run_transform_hook(LispObject *args,
                     }
                     /* On error, keep original element */
                     *result_tail = lisp_make_cons(item, NIL);
-                    result_tail = &(*result_tail)->value.cons.cdr;
+                    result_tail = &LISP_CDR(*result_tail);
                 } else if (result != NIL) {
                     if (result->type == LISP_CONS) {
                         /* Handler returned a list — splice elements in */
@@ -1244,13 +1244,13 @@ static LispObject *builtin_run_transform_hook(LispObject *args,
                             LispObject *sub_item = lisp_car(sub);
                             if (sub_item != NIL) {
                                 *result_tail = lisp_make_cons(sub_item, NIL);
-                                result_tail = &(*result_tail)->value.cons.cdr;
+                                result_tail = &LISP_CDR(*result_tail);
                             }
                             sub = lisp_cdr(sub);
                         }
                     } else {
                         *result_tail = lisp_make_cons(result, NIL);
-                        result_tail = &(*result_tail)->value.cons.cdr;
+                        result_tail = &LISP_CDR(*result_tail);
                     }
                 }
                 /* nil results are filtered out */
