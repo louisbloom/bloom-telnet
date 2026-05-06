@@ -202,12 +202,14 @@ BEGIN {
     overrides["gqarzg"]         = "scales"        # "scales of the dragon"; hunspell ranks "soles" first
     overrides["hpkadawahjfouq"] = "thaumaturgic"  # hunspell suggests "liturgical"
     overrides["iaza"]           = "nova"          # cipher: noeo
+    overrides["izoahuzz"]       = "negative"      # "resist negative"; cipher: negotiee; hunspell only suggests "negotiate"
     overrides["oculoqarquyl"]   = "decalcify"     # cipher: decolcify; hunspell suggests "decollete"
     overrides["paghz"]          = "haste"         # cipher: hoste; hunspell ranks "host" first
     overrides["pzah"]           = "heat"          # "channel heat"; hunspell ranks "hot" first
     overrides["qaiyjcandus"]    = "conjure"       # "conjure elemental"; hunspell ties at confute/confuse/conjure
     overrides["qpaui"]          = "chain"         # "chain lightning"; hunspell ties chin/coin/chain at Lev 1
     overrides["ruzuio"]         = "living"        # "armor of living bone"; hunspell ties lining/living at Lev 1
+    overrides["sagg"]           = "pass"          # "pass door"; cipher: poss (real word, hunspell never flags)
     overrides["tkadabfug"]      = "kaubris"       # hunspell suggests "hubris"
     overrides["uiygruzuguai"]   = "infravision"   # hunspell suggests "infrasonic"
     overrides["uizug"]          = "invis"         # cipher: ineis; MUD spell shorthand
@@ -225,6 +227,16 @@ NR==FNR {
     sugs = $2
     if (sugs == "") sugs = "(no suggestions)"
     miss[$1] = sugs
+    next
+}
+# Overrides apply regardless of whether the cipher output happens to be a
+# real English word (e.g. sagg -> poss is correctly spelled by hunspell, so
+# without this branch the override would never fire).
+$1 in overrides && !emitted[$1] {
+    corrected = overrides[$1]
+    sugs = ($2 in miss) ? miss[$2] : "(cipher: " $2 ")"
+    printf "%-22s -> %-22s  hunspell: %s\n", $1, corrected, sugs
+    emitted[$1] = 1
     next
 }
 $2 in miss {
@@ -257,6 +269,16 @@ $2 in miss {
         }
     }
     if (emit) printf "%-22s -> %-22s  hunspell: %s\n", $1, corrected, sugs
+}
+# Guarantee every override is emitted, even if its garbled form never
+# appeared in the logs (or only appeared in mixed-readable utterances that
+# the garbled-classifier filtered out).
+END {
+    for (g in overrides) {
+        if (!emitted[g]) {
+            printf "%-22s -> %-22s  hunspell: (override)\n", g, overrides[g]
+        }
+    }
 }
 ' "$MISS" "$PAIRS" | sort
 
