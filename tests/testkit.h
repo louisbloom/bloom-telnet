@@ -81,6 +81,7 @@ static TuiComponent testkit_noop_component = {
     .init = testkit_noop_init,
     .update = testkit_noop_update,
     .view = testkit_noop_view,
+    .cursor = NULL, /* test stub abstains; runtime keeps cursor hidden */
     .free = testkit_noop_free,
 };
 

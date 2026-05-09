@@ -169,8 +169,8 @@ static TuiUpdateResult telnet_app_update(TuiModel *model, TuiMsg msg)
 
 /* Render TelnetApp to output buffer
  *
- * Uses absolute cursor positioning for both viewport and textinput.
- * No scroll regions - full software control of rendering.
+ * Uses absolute cursor positioning for every child. Cursor placement is
+ * decoupled from render order — telnet_app_cursor() handles it.
  */
 static void telnet_app_view(const TuiModel *model, DynamicBuffer *out)
 {
@@ -178,14 +178,23 @@ static void telnet_app_view(const TuiModel *model, DynamicBuffer *out)
     if (!app || !out)
         return;
 
-    /* Render viewport (fills top of screen) */
+    /* Layered render: viewport (top), statusbar (bottom), textinput. */
     tui_viewport_view(app->viewport, out);
-
-    /* Render statusbar (bottom row) */
     tui_statusbar_view(app->statusbar, out);
-
-    /* Render textinput last so cursor is left at prompt */
     tui_textinput_view(app->textinput, out);
+}
+
+/* Cursor placement: delegate to whichever child currently owns focus.
+ * In viewport-focused mode the cursor is hidden until C-SPC enters
+ * copy-mode (tui_viewport_cursor_pos abstains otherwise). */
+static TuiCursor telnet_app_cursor(const TuiModel *model)
+{
+    const TelnetAppModel *app = (const TelnetAppModel *)model;
+    if (!app)
+        return tui_cursor_hidden();
+    if (app->focused_widget == 1)
+        return tui_viewport_cursor_pos(app->viewport);
+    return tui_textinput_cursor_pos(app->textinput);
 }
 
 /* Echo text to the viewport */
@@ -307,6 +316,7 @@ static const TuiComponent telnet_app_component_instance = {
     .init = telnet_app_init,
     .update = telnet_app_update,
     .view = telnet_app_view,
+    .cursor = telnet_app_cursor,
     .free = telnet_app_free,
 };
 
