@@ -83,7 +83,6 @@ static void update_divider_color(void)
     if (!g_app)
         return;
     int r, g, b;
-    char color_buf[32];
     if (g_connected) {
         if (lisp_x_get_color("*color-divider-connected*", &r, &g, &b) < 0) {
             r = COLOR_DIVIDER_CONNECTED_R;
@@ -97,8 +96,10 @@ static void update_divider_color(void)
             b = COLOR_DIVIDER_DISCONNECTED_B;
         }
     }
-    ansi_format_fg_color_rgb(color_buf, sizeof(color_buf), r, g, b);
-    tui_textinput_set_divider_color(g_textinput, color_buf);
+    TuiStyle s = tui_style_foreground(tui_style_new(),
+                                      tui_color_rgb(r, g, b));
+    tui_textinput_set_focused_divider_style(g_textinput, s);
+    tui_textinput_set_blurred_divider_style(g_textinput, s);
 }
 
 /* Cleanup function called at exit.
@@ -233,7 +234,7 @@ static void process_line(const char *line)
         process_command(line, g_telnet, &g_connected, &g_quit_requested,
                         g_term_cols, g_term_rows, echo_to_viewport);
         if (g_quit_requested && g_runtime) {
-            tui_runtime_quit(g_runtime);
+            tui_runtime_schedule(g_runtime, tui_cmd_quit());
         }
         if (g_connected != was_connected) {
             update_divider_color();

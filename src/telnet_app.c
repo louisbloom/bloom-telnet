@@ -63,10 +63,9 @@ static TuiInitResult telnet_app_init(void *cfg)
     /* Configure layout using dynamic height queries */
     telnet_app_set_terminal_size(app, app->terminal_width, app->terminal_height);
 
-    /* Initial focus: textinput. Shift-Tab toggles to viewport for copy-mode. */
+    /* Initial focus matches component defaults (textinput focused,
+     * viewport blurred); Shift-Tab toggles in update(). */
     app->focused_widget = 0;
-    tui_textinput_set_focus(app->textinput, 1);
-    tui_viewport_set_focused(app->viewport, 0);
 
     if (config) {
         if (config->prompt) {
@@ -131,9 +130,14 @@ static TuiUpdateResult telnet_app_update(TuiModel *model, TuiMsg msg)
         if (msg.data.key.key == TUI_KEY_TAB &&
             (msg.data.key.mods & TUI_MOD_SHIFT)) {
             app->focused_widget ^= 1;
-            tui_textinput_set_focus(app->textinput, app->focused_widget == 0);
-            tui_viewport_set_focused(app->viewport, app->focused_widget == 1);
-            return tui_update_result_none();
+            TuiMsg ti = app->focused_widget == 0 ? tui_msg_focus()
+                                                 : tui_msg_blur();
+            TuiMsg vp = app->focused_widget == 1 ? tui_msg_focus()
+                                                 : tui_msg_blur();
+            TuiUpdateResult ri = tui_textinput_update(app->textinput, ti);
+            TuiUpdateResult rv = tui_viewport_component()->update(
+                (TuiModel *)app->viewport, vp);
+            return (TuiUpdateResult){ .cmd = tui_cmd_batch2(ri.cmd, rv.cmd) };
         }
 
         /* Page up/down scroll the viewport regardless of focus. */
