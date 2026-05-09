@@ -10,6 +10,7 @@
 #include "logging.h"
 #include "path_utils.h"
 #include "session.h"
+#include "telnet_app.h"
 #include <bloom-boba/cmd.h>
 #include <bloom-boba/components/statusbar.h>
 #include <bloom-boba/dynamic_buffer.h>
@@ -65,7 +66,14 @@ static void update_terminal_title(void)
     const char *name = s ? s->name : "default";
     char title[256];
     snprintf(title, sizeof(title), "bloom-telnet - %s", name);
-    tui_runtime_exec(registered_runtime, tui_cmd_set_window_title(title));
+
+    /* v2: window title is declared on TuiView. Stash it on the model;
+     * the next flush picks it up. Wake the event loop so the title is
+     * applied without waiting for input. */
+    TelnetAppModel *app = (TelnetAppModel *)tui_runtime_model(registered_runtime);
+    if (app)
+        telnet_app_set_window_title(app, title);
+    tui_runtime_wakeup(registered_runtime);
 }
 
 /* ========================================================================

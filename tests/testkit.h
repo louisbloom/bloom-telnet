@@ -69,10 +69,10 @@ static TuiUpdateResult testkit_noop_update(TuiModel *model, TuiMsg msg)
     return tui_update_result_none();
 }
 
-static void testkit_noop_view(const TuiModel *model, DynamicBuffer *out)
+static TuiView testkit_noop_view(const TuiModel *model, DynamicBuffer *out)
 {
     (void)model;
-    (void)out;
+    return tui_view_default(out);
 }
 
 static void testkit_noop_free(TuiModel *model) { (void)model; }
@@ -81,7 +81,6 @@ static TuiComponent testkit_noop_component = {
     .init = testkit_noop_init,
     .update = testkit_noop_update,
     .view = testkit_noop_view,
-    .cursor = NULL, /* test stub abstains; runtime keeps cursor hidden */
     .free = testkit_noop_free,
 };
 

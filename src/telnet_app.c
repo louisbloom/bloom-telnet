@@ -97,6 +97,7 @@ static void telnet_app_free(TuiModel *model)
     if (app->statusbar) {
         tui_statusbar_free(app->statusbar);
     }
+    free(app->window_title);
     free(app);
 }
 
@@ -167,34 +168,35 @@ static TuiUpdateResult telnet_app_update(TuiModel *model, TuiMsg msg)
     return tui_update_result_none();
 }
 
-/* Render TelnetApp to output buffer
+/* Render TelnetApp.
  *
- * Uses absolute cursor positioning for every child. Cursor placement is
- * decoupled from render order — telnet_app_cursor() handles it.
+ * Returns a TuiView that declares alt-screen + cell-motion mouse +
+ * Kitty keyboard enhancements per frame, plus the cursor (delegated to
+ * whichever child currently owns focus) and any pending window title.
+ *
+ * In viewport-focused mode the cursor is hidden until C-SPC enters
+ * copy-mode (tui_viewport_cursor_pos abstains otherwise).
  */
-static void telnet_app_view(const TuiModel *model, DynamicBuffer *out)
+static TuiView telnet_app_view(const TuiModel *model, DynamicBuffer *out)
 {
     const TelnetAppModel *app = (const TelnetAppModel *)model;
     if (!app || !out)
-        return;
+        return tui_view_default(out);
 
     /* Layered render: viewport (top), statusbar (bottom), textinput. */
     tui_viewport_view(app->viewport, out);
     tui_statusbar_view(app->statusbar, out);
     tui_textinput_view(app->textinput, out);
-}
 
-/* Cursor placement: delegate to whichever child currently owns focus.
- * In viewport-focused mode the cursor is hidden until C-SPC enters
- * copy-mode (tui_viewport_cursor_pos abstains otherwise). */
-static TuiCursor telnet_app_cursor(const TuiModel *model)
-{
-    const TelnetAppModel *app = (const TelnetAppModel *)model;
-    if (!app)
-        return tui_cursor_hidden();
-    if (app->focused_widget == 1)
-        return tui_viewport_cursor_pos(app->viewport);
-    return tui_textinput_cursor_pos(app->textinput);
+    TuiView v = tui_view_default(out);
+    v.alt_screen = 1;
+    v.mouse_mode = TUI_MOUSE_MODE_CELL_MOTION;
+    v.kbd_enhancements = TUI_KBD_KITTY;
+    v.window_title = app->window_title;
+    v.cursor = (app->focused_widget == 1)
+                   ? tui_viewport_cursor_pos(app->viewport)
+                   : tui_textinput_cursor_pos(app->textinput);
+    return v;
 }
 
 /* Echo text to the viewport */
@@ -279,6 +281,16 @@ void telnet_app_set_prompt(TelnetAppModel *app, const char *prompt)
     }
 }
 
+/* Set the window title. The next view() will surface it via
+ * TuiView.window_title; the runtime emits OSC 2 on the next flush. */
+void telnet_app_set_window_title(TelnetAppModel *app, const char *title)
+{
+    if (!app)
+        return;
+    free(app->window_title);
+    app->window_title = title ? strdup(title) : NULL;
+}
+
 /* Scroll up by N lines */
 void telnet_app_scroll_up(TelnetAppModel *app, int lines)
 {
@@ -316,7 +328,6 @@ static const TuiComponent telnet_app_component_instance = {
     .init = telnet_app_init,
     .update = telnet_app_update,
     .view = telnet_app_view,
-    .cursor = telnet_app_cursor,
     .free = telnet_app_free,
 };
 

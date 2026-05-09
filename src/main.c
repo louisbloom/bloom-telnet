@@ -515,11 +515,11 @@ int main(int argc, char *argv[])
         .show_prompt = 1,
         .history_size = lisp_x_get_input_history_size(),
     };
+    /* alt-screen, mouse mode, and Kitty keyboard enhancements are now
+     * declared on TuiView (see telnet_app_view) — no longer
+     * runtime-config fields. */
     TuiRuntimeConfig runtime_config = {
-        .use_alternate_screen = 1,
         .raw_mode = 1,
-        .enable_mouse = 1,
-        .enable_keyboard_enhancement = 1,
         .output = stdout,
         .cmd_handler = handle_app_cmd,
         .cmd_handler_data = NULL,

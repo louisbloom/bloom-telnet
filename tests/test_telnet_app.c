@@ -118,8 +118,9 @@ static void test_component_with_runtime(void)
         .show_prompt = 1,
         .history_size = 10,
     };
+    /* alt-screen is now declared on TuiView (see telnet_app_view) — no
+     * longer a runtime-config field. */
     TuiRuntimeConfig rt_cfg = {
-        .use_alternate_screen = 0,
         .output = devnull,
     };
 

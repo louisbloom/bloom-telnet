@@ -42,6 +42,10 @@ typedef struct
 
     /* 0 = textinput, 1 = viewport. Shift-Tab toggles. */
     int focused_widget;
+
+    /* Surfaced as TuiView.window_title each frame. Owned (strdup'd);
+     * NULL = leave the window title alone. */
+    char *window_title;
 } TelnetAppModel;
 
 /* Custom message types for TelnetApp */
@@ -77,6 +81,11 @@ TuiStatusBar *telnet_app_get_statusbar(TelnetAppModel *app);
 
 /* Set the prompt string */
 void telnet_app_set_prompt(TelnetAppModel *app, const char *prompt);
+
+/* Set the window title. Pass NULL to clear. The title is surfaced as
+ * TuiView.window_title on the next view(); call tui_runtime_wakeup() if
+ * you need it applied immediately while the event loop is idle. */
+void telnet_app_set_window_title(TelnetAppModel *app, const char *title);
 
 /* Scrolling control */
 void telnet_app_scroll_up(TelnetAppModel *app, int lines);
