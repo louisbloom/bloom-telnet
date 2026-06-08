@@ -12,27 +12,29 @@
            (string=? ch "6") (string=? ch "7") (string=? ch "8")
            (string=? ch "9"))))
 
-;; Recursive helper for splitting commands
-(defun tintin-split-loop (str pos len depth current results)
+;; Recursive helper for splitting commands.
+;; Tracks the start index of the current segment instead of accumulating it
+;; char-by-char; each command is sliced out with a single substring (O(n)
+;; overall instead of O(n^2) from repeated concat).
+(defun tintin-split-loop (str pos len depth seg-start results)
   (if (>= pos len)
     ;; Done - add final command if any and return reversed list
-    (if (not (string=? current ""))
-      (reverse (cons current results))
-      (reverse results))
+    (let ((current (substring str seg-start len)))
+      (if (not (string=? current ""))
+        (reverse (cons current results))
+        (reverse results)))
     ;; Process current character
     (let ((ch (string-ref str pos)))
       (cond
         ((char=? ch #\{)
-         (tintin-split-loop str (+ pos 1) len (+ depth 1)
-          (concat current (char->string ch)) results))
+         (tintin-split-loop str (+ pos 1) len (+ depth 1) seg-start results))
         ((char=? ch #\})
-         (tintin-split-loop str (+ pos 1) len (- depth 1)
-          (concat current (char->string ch)) results))
+         (tintin-split-loop str (+ pos 1) len (- depth 1) seg-start results))
         ((and (char=? ch #\;) (= depth 0))
-         (tintin-split-loop str (+ pos 1) len depth "" (cons current results)))
+         (tintin-split-loop str (+ pos 1) len depth (+ pos 1)
+          (cons (substring str seg-start pos) results)))
         (#t
-         (tintin-split-loop str (+ pos 1) len depth
-          (concat current (char->string ch)) results))))))
+         (tintin-split-loop str (+ pos 1) len depth seg-start results))))))
 
 (defun tintin-split-commands (str)
   "Split command string by semicolons, respecting brace nesting.
@@ -58,7 +60,7 @@
   (if (not (string? str))
     '()
     ;; Split commands and trim whitespace from each
-    (map tintin-trim (tintin-split-loop str 0 (length str) 0 "" '()))))
+    (map tintin-trim (tintin-split-loop str 0 (length str) 0 0 '()))))
 
 ;; ============================================================================
 ;; BRACED ARGUMENT EXTRACTION
@@ -245,28 +247,40 @@
     str
     (let ((len (length str))
           (pos 0)
-          (result ""))
-      (do () ((>= pos len) result)
+          (run-start 0)
+          (out (open-output-string)))
+      ;; Literal runs between variables are copied with a single substring;
+      ;; only variable boundaries break the run. O(m) instead of O(m^2).
+      (do ()
+        ((>= pos len)
+         (if (< run-start len)
+           (port-write-string out (substring str run-start len)))
+         (get-output-string out))
         (let ((ch (string-ref str pos)))
           (if (char=? ch #\$)
-            ;; Extract variable name
-            (let ((var-start (+ pos 1))
-                  (var-end (+ pos 1)))
-              ;; Find end of variable name
-              (do ()
-                ((or (>= var-end len)
-                     (not (tintin-is-varname-char? (string-ref str var-end)))))
-                (set! var-end (+ var-end 1)))
-              (if (= var-start var-end)
-                ;; No variable name after $, keep literal $
-                (progn (set! result (concat result "$")) (set! pos (+ pos 1)))
-                ;; Variable name found, try to expand
-                (let* ((var-name (substring str var-start var-end))
-                       (var-value (hash-ref *tintin-variables* var-name)))
-                  (if var-value
-                    (set! result (concat result var-value))
-                    (set! result (concat result "$" var-name)))
-                  (set! pos var-end))))
-            ;; Regular character
-            (progn (set! result (concat result (char->string ch)))
-              (set! pos (+ pos 1)))))))))
+            ;; Flush the literal run accumulated before this $
+            (progn
+              (if (< run-start pos)
+                (port-write-string out (substring str run-start pos)))
+              ;; Extract variable name
+              (let ((var-start (+ pos 1))
+                    (var-end (+ pos 1)))
+                ;; Find end of variable name
+                (do ()
+                  ((or (>= var-end len)
+                       (not (tintin-is-varname-char? (string-ref str var-end)))))
+                  (set! var-end (+ var-end 1)))
+                (if (= var-start var-end)
+                  ;; No variable name after $, keep literal $
+                  (progn (port-write-string out "$") (set! pos (+ pos 1)))
+                  ;; Variable name found, try to expand
+                  (let* ((var-name (substring str var-start var-end))
+                         (var-value (hash-ref *tintin-variables* var-name)))
+                    (if var-value
+                      (port-write-string out var-value)
+                      (progn (port-write-string out "$")
+                        (port-write-string out var-name)))
+                    (set! pos var-end)))
+                (set! run-start pos)))
+            ;; Regular character - stays in the current run
+            (set! pos (+ pos 1))))))))

@@ -222,6 +222,15 @@ static DynamicBuffer *ansi_strip_buf = NULL;
 static DynamicBuffer *telnet_filter_buf = NULL;
 static DynamicBuffer *telnet_filter_temp_buf = NULL;
 
+/* Reusable storage for tab-completion candidates. The candidate strings are
+ * packed back-to-back in completion_arena; completion_ptrs holds borrowed
+ * pointers into that arena (NULL-terminated). Both are reused across Tab
+ * presses instead of malloc/strdup/free per press. The pointers returned by
+ * lisp_x_complete_prefix() are valid only until the next call. */
+static DynamicBuffer *completion_arena = NULL;
+static char **completion_ptrs = NULL;
+static int completion_ptrs_cap = 0;
+
 /* Helper: get the environment for Lisp evaluation (always base env) */
 static Environment *get_current_env(void) { return session_get_base_env(); }
 
@@ -1639,6 +1648,14 @@ void lisp_x_cleanup(void)
         pending_send_scheduled = 0;
     }
 
+    if (completion_arena) {
+        dynamic_buffer_destroy(completion_arena);
+        completion_arena = NULL;
+    }
+    free(completion_ptrs);
+    completion_ptrs = NULL;
+    completion_ptrs_cap = 0;
+
     registered_status_sink = NULL;
     registered_runtime = NULL;
 
@@ -2113,26 +2130,58 @@ char **lisp_x_complete_prefix(const char *prefix)
 
     bloom_log(LOG_DEBUG, "completion", "%d candidates", count);
 
-    char **completions = malloc((count + 1) * sizeof(char *));
-    if (!completions) {
-        return NULL;
+    /* Lazily create the reusable arena */
+    if (!completion_arena) {
+        completion_arena = dynamic_buffer_create(256);
+        if (!completion_arena) {
+            return NULL;
+        }
     }
 
+    /* Grow the pointer array if needed (amortized; +1 for the NULL terminator) */
+    if (completion_ptrs_cap < count + 1) {
+        int new_cap = completion_ptrs_cap ? completion_ptrs_cap * 2 : 16;
+        while (new_cap < count + 1) {
+            new_cap *= 2;
+        }
+        char **grown = realloc(completion_ptrs, new_cap * sizeof(char *));
+        if (!grown) {
+            return NULL;
+        }
+        completion_ptrs = grown;
+        completion_ptrs_cap = new_cap;
+    }
+
+    /* Pass 1: pack all candidate strings into the arena, recording each one's
+     * byte offset in the pointer slot (the arena may realloc as it grows, so
+     * we can't take addresses yet). */
+    dynamic_buffer_clear(completion_arena);
     int i = 0;
     p = result;
     while (p != NIL && LISP_TYPE(p) == LISP_CONS && i < count) {
         LispObject *item = lisp_car(p);
-        if (item && LISP_TYPE(item) == LISP_STRING) {
-            completions[i] = strdup(LISP_STR_VAL(item));
-        } else {
-            completions[i] = strdup("");
+        const char *s =
+            (item && LISP_TYPE(item) == LISP_STRING) ? LISP_STR_VAL(item) : "";
+        size_t offset = dynamic_buffer_len(completion_arena);
+        /* Append the string plus its NUL terminator so each is a C string */
+        if (dynamic_buffer_append(completion_arena, s, strlen(s)) != 0 ||
+            dynamic_buffer_append(completion_arena, "", 1) != 0) {
+            return NULL;
         }
+        completion_ptrs[i] = (char *)(uintptr_t)offset;
         i++;
         p = lisp_cdr(p);
     }
-    completions[i] = NULL;
 
-    return completions;
+    /* Pass 2: now the arena is final, rebase the recorded offsets to real
+     * pointers into its buffer. */
+    char *base = (char *)dynamic_buffer_data(completion_arena);
+    for (int j = 0; j < count; j++) {
+        completion_ptrs[j] = base + (uintptr_t)completion_ptrs[j];
+    }
+    completion_ptrs[count] = NULL;
+
+    return completion_ptrs;
 }
 
 /* Register terminal echo callback */

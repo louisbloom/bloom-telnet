@@ -16,6 +16,7 @@
 #include <bloom-boba/component.h>
 #include <bloom-boba/components/textinput.h>
 #include <bloom-boba/components/viewport.h>
+#include <bloom-boba/dynamic_buffer.h>
 #include <bloom-boba/style.h>
 #include <stdint.h>
 
@@ -60,6 +61,10 @@ typedef struct TelnetAppModel
     /* Right-aligned title rendered into the top divider. Owned (strdup'd);
      * NULL or empty = bare divider. Set via telnet_app_set_status_text(). */
     char *status_text;
+
+    /* Reusable scratch buffer for composing the divider title each frame,
+     * avoiding a per-frame malloc/free. Owned; freed in telnet_app_free. */
+    DynamicBuffer *title_buf;
 } TelnetAppModel;
 
 /* Custom message types for TelnetApp */

@@ -75,27 +75,37 @@
 (defun tintin-parse-ansi (line)
   (let ((len (length line))
         (pos 0)
-        (plain "")
+        (run-start 0)
         (plain-pos 0)
-        (ansi-map '()))
-    (do () ((>= pos len) (cons plain (reverse ansi-map)))
+        (ansi-map '())
+        (out (open-output-string)))
+    ;; Plain-text runs between ANSI sequences are copied with a single
+    ;; substring; only an ANSI sequence breaks the run. A lone ESC that is
+    ;; not a valid sequence stays inside the run (same as before). O(m).
+    (do ()
+      ((>= pos len)
+       (if (< run-start len)
+         (port-write-string out (substring line run-start len)))
+       (cons (get-output-string out) (reverse ansi-map)))
       (let ((ch (string-ref line pos)))
         (if (char=? ch #\escape)
           ;; Try to parse ANSI sequence
           (let ((seq-end (tintin-find-ansi-end line pos len)))
             (if seq-end
-              ;; Valid ANSI sequence - record in map at current plain-text position
-              (let ((seq (substring line pos seq-end)))
-                (set! ansi-map (cons (cons plain-pos seq) ansi-map))
-                (set! pos seq-end))
-              ;; Not valid ANSI - treat as regular character
-              (progn (set! plain (concat plain (char->string ch)))
-                (set! plain-pos (+ plain-pos 1))
-                (set! pos (+ pos 1)))))
-          ;; Regular character
-          (progn (set! plain (concat plain (char->string ch)))
-            (set! plain-pos (+ plain-pos 1))
-            (set! pos (+ pos 1))))))))
+              ;; Valid ANSI sequence - flush the plain run before it, then
+              ;; record the code at the current plain-text position
+              (progn
+                (if (< run-start pos)
+                  (progn (port-write-string out (substring line run-start pos))
+                    (set! plain-pos (+ plain-pos (- pos run-start)))))
+                (set! ansi-map
+                 (cons (cons plain-pos (substring line pos seq-end)) ansi-map))
+                (set! pos seq-end)
+                (set! run-start pos))
+              ;; Not valid ANSI - keep the ESC in the run, advance
+              (set! pos (+ pos 1))))
+          ;; Regular character - stays in the current run
+          (set! pos (+ pos 1)))))))
 
 ;; ============================================================================
 ;; PHASE 2: COLLECT MATCHES
@@ -219,7 +229,7 @@
 ;; Returns the fully rendered string with proper ANSI codes.
 (defun tintin-render-highlighted-line (plain-text ansi-map match-ranges)
   (let ((len (length plain-text))
-        (result "")
+        (out (open-output-string))
         (server-state '())
         (current-highlight nil)
         (pos 0))
@@ -227,43 +237,46 @@
       ((>= pos len)
        ;; If we're still in a highlight at end, close it and restore server state
        (if current-highlight
-         (set! result (concat result (tintin-emit-server-state server-state))))
+         (port-write-string out (tintin-emit-server-state server-state)))
        ;; Emit any trailing ANSI codes at the end position
        (let ((trailing (tintin-get-ansi-at-pos pos ansi-map)))
          (do ((remaining trailing (cdr remaining))) ((null? remaining))
            (let ((seq (car remaining)))
              (set! server-state (tintin-update-server-state server-state seq))
              ;; Always emit trailing codes (they're after all text)
-             (set! result (concat result seq))))) result)
+             (port-write-string out seq))))
+       (get-output-string out))
       ;; Process any ANSI codes at this position (update server state)
       (let ((ansi-seqs (tintin-get-ansi-at-pos pos ansi-map)))
         (do ((remaining ansi-seqs (cdr remaining))) ((null? remaining))
           (let ((seq (car remaining)))
             (set! server-state (tintin-update-server-state server-state seq))
             ;; Always emit server ANSI (server colors punch through highlights)
-            (set! result (concat result seq))
+            (port-write-string out seq)
             ;; After a server reset inside a highlight, re-apply highlight color
             (if (and current-highlight (tintin-is-reset-code? seq))
-              (set! result (concat result (car current-highlight)))))))
+              (port-write-string out (car current-highlight))))))
       ;; Determine winning highlight at this position
       (let ((winner (tintin-winning-highlight-at pos match-ranges)))
         (cond
           ;; Case 1: Entering a highlight (was not highlighted, now is)
           ((and winner (not current-highlight)) (set! current-highlight winner)
-           (set! result (concat result "\033[0m" (car winner))))
+           (port-write-string out "\033[0m")
+           (port-write-string out (car winner)))
           ;; Case 2: Changing highlight (different highlight now wins)
           ((and winner current-highlight
                 (not (string=? (car winner) (car current-highlight))))
            (set! current-highlight winner)
-           (set! result (concat result "\033[0m" (car winner))))
+           (port-write-string out "\033[0m")
+           (port-write-string out (car winner)))
           ;; Case 3: Leaving highlight (was highlighted, now isn't)
           ((and (not winner) current-highlight)
-           (set! result (concat result (tintin-emit-server-state server-state)))
+           (port-write-string out (tintin-emit-server-state server-state))
            (set! current-highlight nil))
           ;; Case 4: Same highlight or no highlight - no transition needed
           (#t nil)))
       ;; Emit the character
-      (set! result (concat result (char->string (string-ref plain-text pos))))
+      (port-write-char out (string-ref plain-text pos))
       (set! pos (+ pos 1)))))
 
 ;; ============================================================================
@@ -335,6 +348,7 @@
               (set! highlighted (cons (tintin-highlight-line line) highlighted))))
           ;; Reverse since we cons'd in reverse order, then join
           (set! highlighted (reverse highlighted))
-          (let ((result ""))
-            (do ((k 0 (+ k 1))) ((>= k (length highlighted)) result)
-              (set! result (concat result (list-ref highlighted k))))))))))
+          (let ((out (open-output-string)))
+            (do ((k 0 (+ k 1)))
+              ((>= k (length highlighted)) (get-output-string out))
+              (port-write-string out (list-ref highlighted k)))))))))

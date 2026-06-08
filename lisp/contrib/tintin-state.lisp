@@ -25,6 +25,12 @@
 
 (define *tintin-highlights-dirty* #t)
 
+;; Same priority-sort cache for actions: rebuilt only when an action is
+;; added or removed, not on every server line.
+(define *tintin-sorted-actions-cache* nil)
+
+(define *tintin-actions-dirty* #t)
+
 (defvar *tintin-speedwalk-enabled* #t
   "When non-nil, enable speedwalk expansion (e.g., 3n2e → n;n;n;e;e).
 

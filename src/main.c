@@ -117,14 +117,12 @@ static int g_tab_index = 0;
 static int g_tab_word_start = -1;
 static int g_tab_processed = 0;
 
+/* Clear tab-completion cycling state. The completion strings/array are
+ * borrowed from lisp_x_complete_prefix()'s reusable storage (valid only until
+ * the next call), so we drop the reference here rather than freeing it. */
 static void free_tab_completions(void)
 {
-    if (g_tab_completions) {
-        for (int i = 0; i < g_tab_count; i++)
-            free(g_tab_completions[i]);
-        free(g_tab_completions);
-        g_tab_completions = NULL;
-    }
+    g_tab_completions = NULL;
     g_tab_count = 0;
     g_tab_index = 0;
     g_tab_word_start = -1;

@@ -240,6 +240,7 @@
                5)))
        ;; Store as (commands-string priority)
        (hash-set! *tintin-actions* pattern (list commands priority))
+       (set! *tintin-actions-dirty* #t)
        (tintin-command-echo
         (concat "Action '" pattern "' created: " pattern " → " commands
          (if (= priority 5)
@@ -253,6 +254,7 @@
   (let ((pattern (tintin-strip-braces (list-ref args 0))))
     (if (hash-ref *tintin-actions* pattern)
       (progn (hash-remove! *tintin-actions* pattern)
+        (set! *tintin-actions-dirty* #t)
         (tintin-command-echo (concat "Action '" pattern "' removed\r\n"))
         "")
       (progn (terminal-echo (concat "Action '" pattern "' not found\r\n")) ""))))

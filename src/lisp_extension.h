@@ -74,7 +74,10 @@ const char *lisp_x_get_word_chars(void);
 const char *lisp_x_get_prompt(void);
 
 /* Get completions for a prefix string.
- * Returns NULL-terminated array of strings (caller must free each + array). */
+ * Returns a NULL-terminated array of strings borrowed from internal reusable
+ * storage. The caller must NOT free it; the result (array and strings) is
+ * valid only until the next call to this function. Returns NULL if there are
+ * no completions. */
 char **lisp_x_complete_prefix(const char *prefix);
 
 /* Extract RGB from a Lisp '(r g b) defvar.

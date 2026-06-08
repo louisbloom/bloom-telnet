@@ -128,9 +128,14 @@
   executes matching actions in priority order (lower priority first)."
   (if (or (not (string? line)) (= (hash-count *tintin-actions*) 0))
     nil
-    ;; Get all actions sorted by priority (low to high)
-    (let ((action-entries (hash-entries *tintin-actions*)))
-      (let ((sorted (tintin-sort-actions-by-priority action-entries)))
+    ;; Re-sort only when the action set changed; otherwise reuse the cache
+    (progn
+      (if *tintin-actions-dirty*
+        (progn
+          (set! *tintin-sorted-actions-cache*
+           (tintin-sort-actions-by-priority (hash-entries *tintin-actions*)))
+          (set! *tintin-actions-dirty* #f)))
+      (let ((sorted *tintin-sorted-actions-cache*))
         ;; Try all patterns and execute all that match
         (do ((i 0 (+ i 1))) ((>= i (length sorted)))
           (let* ((entry (list-ref sorted i))

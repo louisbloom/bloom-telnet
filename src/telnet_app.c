@@ -50,6 +50,15 @@ static TuiInitResult telnet_app_init(void *cfg)
         return tui_init_result_none(NULL);
     }
 
+    /* Reusable scratch buffer for per-frame divider title composition */
+    app->title_buf = dynamic_buffer_create(64);
+    if (!app->title_buf) {
+        tui_textinput_free(app->textinput);
+        tui_viewport_free(app->viewport);
+        free(app);
+        return tui_init_result_none(NULL);
+    }
+
     /* Border style flanking the textinput. main.c overrides via
      * telnet_app_set_border_color() on connect/disconnect. */
     app->border_style = tui_style_faint(tui_style_new(), 1);
@@ -89,6 +98,9 @@ static void telnet_app_free(TuiModel *model)
     }
     free(app->window_title);
     free(app->status_text);
+    if (app->title_buf) {
+        dynamic_buffer_destroy(app->title_buf);
+    }
     free(app);
 }
 
@@ -200,7 +212,8 @@ static void render_border_at(DynamicBuffer *out, int row, int width,
 static void render_border_at_right_titled(DynamicBuffer *out, int row,
                                           int width, const TuiBorder *border,
                                           int top, const TuiStyle *style,
-                                          const char *title)
+                                          const char *title,
+                                          DynamicBuffer *scratch)
 {
     if (!title || !*title || !border) {
         render_border_at(out, row, width, border, top, style, NULL,
@@ -210,23 +223,19 @@ static void render_border_at_right_titled(DynamicBuffer *out, int row,
     const char *edge = top ? border->top : border->bottom;
     if (!edge)
         edge = "";
-    size_t tlen = strlen(title);
-    size_t elen = strlen(edge);
-    /* Composed title: " " + title + " " + edge */
-    char *titled = (char *)malloc(tlen + elen + 3);
-    if (!titled) {
+    /* Composed title: " " + title + " " + edge, built into the reusable
+     * scratch buffer so the render path does no per-frame heap churn. */
+    dynamic_buffer_clear(scratch);
+    if (dynamic_buffer_append(scratch, " ", 1) != 0 ||
+        dynamic_buffer_append_str(scratch, title) != 0 ||
+        dynamic_buffer_append(scratch, " ", 1) != 0 ||
+        dynamic_buffer_append_str(scratch, edge) != 0) {
         render_border_at(out, row, width, border, top, style, title,
                          TUI_BORDER_TITLE_RIGHT, 0, 0);
         return;
     }
-    titled[0] = ' ';
-    memcpy(titled + 1, title, tlen);
-    titled[1 + tlen] = ' ';
-    memcpy(titled + 2 + tlen, edge, elen);
-    titled[2 + tlen + elen] = '\0';
-    render_border_at(out, row, width, border, top, style, titled,
-                     TUI_BORDER_TITLE_RIGHT, 0, 0);
-    free(titled);
+    render_border_at(out, row, width, border, top, style,
+                     dynamic_buffer_data(scratch), TUI_BORDER_TITLE_RIGHT, 0, 0);
 }
 
 /* Render TelnetApp.
@@ -249,7 +258,8 @@ static TuiView telnet_app_view(const TuiModel *model, DynamicBuffer *out)
     tui_viewport_view(app->viewport, out);
     render_border_at_right_titled(out, app->top_border_row,
                                   app->terminal_width, &TUI_BORDER_NORMAL, 1,
-                                  &app->border_style, app->status_text);
+                                  &app->border_style, app->status_text,
+                                  app->title_buf);
     tui_textinput_view(app->textinput, out);
     render_border_at(out, app->bottom_border_row, app->terminal_width,
                      &TUI_BORDER_NORMAL, 0, &app->border_style, NULL,
