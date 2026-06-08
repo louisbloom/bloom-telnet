@@ -215,51 +215,15 @@ static void apply_default_hooks_to_table(LispObject *hooks_table)
     }
 }
 
-/* Static buffers for hook processing */
-static char *ansi_strip_buffer = NULL;
-static size_t ansi_strip_buffer_size = 0;
-
-static char *telnet_filter_buffer = NULL;
-static size_t telnet_filter_buffer_size = 0;
-
-static char *telnet_filter_temp_buffer = NULL;
-static size_t telnet_filter_temp_buffer_size = 0;
-
-static char *user_input_hook_buffer = NULL;
-static size_t user_input_hook_buffer_size = 0;
+/* Reusable scratch buffers for hook processing. These grow to a steady-state
+ * size and are reused across calls, so the underlying allocations stabilize
+ * and stop reallocating after warmup. */
+static DynamicBuffer *ansi_strip_buf = NULL;
+static DynamicBuffer *telnet_filter_buf = NULL;
+static DynamicBuffer *telnet_filter_temp_buf = NULL;
 
 /* Helper: get the environment for Lisp evaluation (always base env) */
 static Environment *get_current_env(void) { return session_get_base_env(); }
-
-/* Utility function to ensure a buffer is large enough */
-static int ensure_buffer_size(char **buffer, size_t *buffer_size,
-                              size_t required_size)
-{
-    if (!buffer || !buffer_size) {
-        return -1;
-    }
-
-    if (!*buffer || *buffer_size < required_size) {
-        size_t new_size = required_size;
-        if (*buffer_size > 0) {
-            new_size = *buffer_size;
-            while (new_size < required_size) {
-                new_size *= 2;
-            }
-        } else {
-            if (new_size < 4096) {
-                new_size = 4096;
-            }
-        }
-        char *new_buffer = realloc(*buffer, new_size);
-        if (!new_buffer) {
-            return -1;
-        }
-        *buffer = new_buffer;
-        *buffer_size = new_size;
-    }
-    return 0;
-}
 
 /* Strip ANSI escape sequences from input */
 static char *strip_ansi_codes(const char *input, size_t len, size_t *out_len)
@@ -270,20 +234,11 @@ static char *strip_ansi_codes(const char *input, size_t len, size_t *out_len)
         return NULL;
     }
 
-    if (!ansi_strip_buffer || ansi_strip_buffer_size < len + 1) {
-        size_t new_size = len + 1;
-        if (new_size < 4096) {
-            new_size = 4096;
-        }
-        char *new_buffer = realloc(ansi_strip_buffer, new_size);
-        if (!new_buffer) {
-            if (out_len)
-                *out_len = 0;
-            return NULL;
-        }
-        ansi_strip_buffer = new_buffer;
-        ansi_strip_buffer_size = new_size;
+    if (dynamic_buffer_ensure_size(ansi_strip_buf, len + 1) < 0) {
+        *out_len = 0;
+        return NULL;
     }
+    char *out = ansi_strip_buf->data;
 
     size_t out_pos = 0;
     int in_escape = 0;
@@ -322,15 +277,16 @@ static char *strip_ansi_codes(const char *input, size_t len, size_t *out_len)
         }
 
         if (c >= 0x20 || c == '\n' || c == '\r' || c == '\t') {
-            if (out_pos < ansi_strip_buffer_size - 1) {
-                ansi_strip_buffer[out_pos++] = c;
+            if (out_pos < ansi_strip_buf->size - 1) {
+                out[out_pos++] = c;
             }
         }
     }
 
-    ansi_strip_buffer[out_pos] = '\0';
+    out[out_pos] = '\0';
+    ansi_strip_buf->len = out_pos;
     *out_len = out_pos;
-    return ansi_strip_buffer;
+    return out;
 }
 
 /* Builtin: strip-ansi - Remove ANSI escape sequences from text */
@@ -1563,23 +1519,13 @@ int lisp_x_init(void)
         return -1;
     }
 
-    /* Allocate static buffers */
-    ansi_strip_buffer_size = 4096;
-    ansi_strip_buffer = malloc(ansi_strip_buffer_size);
-
-    telnet_filter_buffer_size = 4096;
-    telnet_filter_buffer = malloc(telnet_filter_buffer_size);
-
-    telnet_filter_temp_buffer_size = 4096;
-    telnet_filter_temp_buffer = malloc(telnet_filter_temp_buffer_size);
-
-    user_input_hook_buffer_size = 4096;
-    user_input_hook_buffer = malloc(user_input_hook_buffer_size);
-
+    /* Allocate reusable scratch buffers */
+    ansi_strip_buf = dynamic_buffer_create(4096);
+    telnet_filter_buf = dynamic_buffer_create(4096);
+    telnet_filter_temp_buf = dynamic_buffer_create(4096);
     pending_send_buf = dynamic_buffer_create(256);
 
-    if (!ansi_strip_buffer || !telnet_filter_buffer ||
-        !telnet_filter_temp_buffer || !user_input_hook_buffer ||
+    if (!ansi_strip_buf || !telnet_filter_buf || !telnet_filter_temp_buf ||
         !pending_send_buf) {
         bloom_log(LOG_ERROR, "lisp", "Failed to allocate buffers");
         lisp_x_cleanup();
@@ -1672,28 +1618,19 @@ int lisp_x_load_file(const char *filepath)
 /* Cleanup Lisp interpreter */
 void lisp_x_cleanup(void)
 {
-    if (ansi_strip_buffer) {
-        free(ansi_strip_buffer);
-        ansi_strip_buffer = NULL;
-        ansi_strip_buffer_size = 0;
+    if (ansi_strip_buf) {
+        dynamic_buffer_destroy(ansi_strip_buf);
+        ansi_strip_buf = NULL;
     }
 
-    if (telnet_filter_buffer) {
-        free(telnet_filter_buffer);
-        telnet_filter_buffer = NULL;
-        telnet_filter_buffer_size = 0;
+    if (telnet_filter_buf) {
+        dynamic_buffer_destroy(telnet_filter_buf);
+        telnet_filter_buf = NULL;
     }
 
-    if (telnet_filter_temp_buffer) {
-        free(telnet_filter_temp_buffer);
-        telnet_filter_temp_buffer = NULL;
-        telnet_filter_temp_buffer_size = 0;
-    }
-
-    if (user_input_hook_buffer) {
-        free(user_input_hook_buffer);
-        user_input_hook_buffer = NULL;
-        user_input_hook_buffer_size = 0;
+    if (telnet_filter_temp_buf) {
+        dynamic_buffer_destroy(telnet_filter_temp_buf);
+        telnet_filter_temp_buf = NULL;
     }
 
     if (pending_send_buf) {
@@ -1870,16 +1807,14 @@ const char *lisp_x_call_telnet_input_transform_hook(const char *text,
         return text;
     }
 
-    if (ensure_buffer_size(&telnet_filter_temp_buffer,
-                           &telnet_filter_temp_buffer_size, len + 1) < 0) {
+    dynamic_buffer_clear(telnet_filter_temp_buf);
+    if (dynamic_buffer_append(telnet_filter_temp_buf, text, len) < 0 ||
+        dynamic_buffer_append(telnet_filter_temp_buf, "\0", 1) < 0) {
         *out_len = len;
         return text;
     }
 
-    memcpy(telnet_filter_temp_buffer, text, len);
-    telnet_filter_temp_buffer[len] = '\0';
-
-    volatile LispObject *arg = lisp_make_string(telnet_filter_temp_buffer);
+    volatile LispObject *arg = lisp_make_string(telnet_filter_temp_buf->data);
     if (!arg || LISP_TYPE((LispObject *)arg) == LISP_ERROR) {
         *out_len = len;
         return text;
@@ -1906,17 +1841,16 @@ const char *lisp_x_call_telnet_input_transform_hook(const char *text,
     const char *transformed = LISP_STR_VAL(result);
     size_t transformed_len = strlen(transformed);
 
-    if (ensure_buffer_size(&telnet_filter_buffer, &telnet_filter_buffer_size,
-                           transformed_len + 1) < 0) {
+    dynamic_buffer_clear(telnet_filter_buf);
+    if (dynamic_buffer_append(telnet_filter_buf, transformed,
+                              transformed_len) < 0 ||
+        dynamic_buffer_append(telnet_filter_buf, "\0", 1) < 0) {
         *out_len = len;
         return text;
     }
-
-    memcpy(telnet_filter_buffer, transformed, transformed_len);
-    telnet_filter_buffer[transformed_len] = '\0';
     *out_len = transformed_len;
 
-    return telnet_filter_buffer;
+    return telnet_filter_buf->data;
 }
 
 /* Call user-input-transform-hook */
