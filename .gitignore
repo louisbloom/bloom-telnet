@@ -62,4 +62,6 @@ CLAUDE.md
 compile_commands.json
 crush.json
 .crushignore
+.crush/*
+!.crush/skills/
 AGENTS.md
