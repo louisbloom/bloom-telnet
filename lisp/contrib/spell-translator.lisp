@@ -1,10 +1,5 @@
 ;;; spell-translator.lisp --- Translate garbled spell utterances (ROM 2.4 cipher)
 ;;;
-;;; This script was created for Carrion Fields MUD (https://carrionfields.net/)
-;;;
-;;; Usage:
-;;;   (load "contrib/spell-translator.lisp")
-;;;
 ;;; When someone casts a spell, you see:
 ;;;   Det utters the words, 'qaiyjcandus zrzwunsohar'.
 ;;;
@@ -54,8 +49,9 @@
 ;; When you're the same class as the caster, you see the real spell name.
 ;; If any word in the utterance matches a known spell word, skip translation.
 
-;; Auto-generated known-spell-words from readable utterance analysis
-;; Generated: Wed May  6 07:02:54 PM +07 2026
+;; Known spell words — when you're the same class as the caster, you see
+;; the real spell name. If any word in the utterance matches a known spell
+;; word, skip translation.
 (defvar *known-spell-words*
   '("resist"
     "armor"
@@ -64,7 +60,7 @@
     "lightning"
     "protection"
     "identify"
-    "dispel" "cure" "invis")) ; injected: invis (hunspell-rejected), cure (not yet in logs)
+    "dispel" "cure" "invis"))
 
 ;; Check if utterance contains any known spell word
 (defun known-spell? (phrase)
@@ -102,9 +98,8 @@
 ;; Users can add entries with (spell-add "garbled" "correct")
 (defvar *spell-dictionary* (make-hash-table))
 
-;; Auto-generated dictionary overrides for cipher ambiguity corrections
-;; Based on analysis of telnet logs with Levenshtein-ranked hunspell suggestions
-;; Generated: Wed May  6 07:02:50 PM +07 2026
+;; Dictionary overrides for cipher ambiguity corrections
+;; (garbled → correct)
 (hash-set! *spell-dictionary* "abrahuyaqh" "artifact")
 (hash-set! *spell-dictionary* "abraq" "arc")
 (hash-set! *spell-dictionary* "abraqpai" "archon")
