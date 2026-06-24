@@ -337,15 +337,23 @@
 ;; Register the filter hook
 (add-hook 'telnet-input-transform-hook 'spell-translator-filter)
 
-;; Startup message
-(script-echo "Spell translator active"
- :section
- "Commands
+(defvar *spell-translator-commands-section*
+  "Commands
 (spell-add \"garbled\" \"correct\")
 (spell-remove \"garbled\")
 (spell-add-known \"word\")
 (spell-remove-known \"word\")"
- :section
- "Data
+  "Commands section for spell translator startup banner.")
+
+(defvar *spell-translator-data-section*
+  "Data
 *spell-dictionary* — garbled word overrides
-*known-spell-words* — words that skip translation")
+*known-spell-words* — words that skip translation"
+  "Data section for spell translator startup banner.")
+
+;; Startup message
+(script-echo "Spell translator active"
+ :section
+ *spell-translator-commands-section*
+ :section
+ *spell-translator-data-section*)

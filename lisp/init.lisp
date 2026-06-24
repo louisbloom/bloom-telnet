@@ -849,6 +849,11 @@ Colors: header=pale pink, desc=pale cyan, section=lavender, details=slate blue"
       (do ((i 0 (+ i 1))) ((>= i count) result)
         (set! result (concat result str))))))
 
+(defvar *slash-help-usage*
+  "/help — list all commands
+/help <cmd> — show details"
+  "Usage text for /help command.")
+
 ;; ============================================================================
 ;; STARTUP MESSAGE
 ;; ============================================================================
@@ -873,6 +878,10 @@ Colors: header=pale pink, desc=pale cyan, section=lavender, details=slate blue"
    (concat "Terminal\n" term-info)))
 
 ;; Register /help after startup banner so its banner appears second
-(register-slash-command "/help" slash-help-handler "Help" :desc
- "Show help for slash commands" :aliases '("/doc") :usage
- "/help — list all commands\n/help <cmd> — show details")
+(register-slash-command "/help" slash-help-handler "Help"
+ :desc
+ "Show help for slash commands"
+ :aliases
+ '("/doc")
+ :usage
+ *slash-help-usage*)
