@@ -76,6 +76,8 @@ fi
 
 export PKG_CONFIG_PATH="$MINGW_PREFIX/lib/pkgconfig:$MINGW_PREFIX/lib64/pkgconfig:${PKG_CONFIG_PATH:-}"
 
+rm -f config.status config.log config.h stamp-h1
+
 echo "==> ./autogen.sh"
 ./autogen.sh
 
