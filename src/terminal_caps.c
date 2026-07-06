@@ -182,13 +182,26 @@ static void detect_from_environment(void)
         strncpy(g_caps.term_program, term_program, sizeof(g_caps.term_program) - 1);
     }
 
-    /* Check for dumb terminal */
+    /* Check for dumb terminal.
+     * On Windows, $TERM is typically unset in PowerShell and cmd.exe —
+     * that does not mean the terminal is dumb.  Windows 10+ consoles
+     * support ANSI escape sequences, so fall through to detect_color_level()
+     * which checks WT_SESSION, $COLORTERM, etc. */
+#ifdef _WIN32
+    if (term && strcmp(term, "dumb") == 0) {
+        g_caps.is_dumb_terminal = 1;
+        g_caps.color_level = TERM_COLOR_NONE;
+    } else {
+        detect_color_level();
+    }
+#else
     if (!term || strcmp(term, "dumb") == 0 || term[0] == '\0') {
         g_caps.is_dumb_terminal = 1;
         g_caps.color_level = TERM_COLOR_NONE;
     } else {
         detect_color_level();
     }
+#endif
 
     detect_unicode_level();
     g_caps.detected_from_env = 1;
@@ -253,6 +266,15 @@ static void detect_color_level(void)
         /* Any non-dumb terminal gets at least 8 colors */
         g_caps.color_level = TERM_COLOR_8;
     }
+
+#ifdef _WIN32
+    /* On Windows with no $TERM (e.g. PowerShell), none of the above
+     * checks matched.  Windows 10+ consoles support at least 16-color
+     * ANSI, so default to that rather than leaving color disabled. */
+    if (g_caps.color_level == TERM_COLOR_NONE) {
+        g_caps.color_level = TERM_COLOR_16;
+    }
+#endif
 }
 
 /* Detect unicode level from locale environment */
