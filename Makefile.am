@@ -15,6 +15,8 @@ EXTRA_DIST = \
     COPYING \
     .clang-format \
     TODO.md \
+    scripts/make-dist-zip.sh \
+    .github/workflows/windows.yml \
     emacs/Makefile.am \
     emacs/README.md \
     emacs/COPYING \
@@ -139,3 +141,9 @@ bear:
 	}
 	$(MAKE) clean
 	bear --output $(top_srcdir)/compile_commands.json -- $(MAKE)
+
+# Portable Windows ZIP — assembles a self-contained package with all
+# runtime DLLs, Lisp scripts, and Emacs integration. Used by CI releases.
+.PHONY: dist-portable
+dist-portable:
+	@sh "$(top_srcdir)/scripts/make-dist-zip.sh" "$(abs_builddir)" "$(abs_top_srcdir)"
