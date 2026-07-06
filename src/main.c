@@ -18,6 +18,10 @@
 #include <signal.h>
 #include <termios.h>
 #include <unistd.h>
+#else
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <windows.h>
 #endif
 
 #include "../include/telnet.h"
@@ -469,6 +473,10 @@ static int run_event_loop(void) { return tui_runtime_run(g_runtime); }
 
 int main(int argc, char *argv[])
 {
+#ifdef _WIN32
+    SetConsoleOutputCP(CP_UTF8);
+#endif
+
     const char *hostname = NULL;
     int port = 23;
     const char **load_files = NULL;

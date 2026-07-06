@@ -22,6 +22,8 @@
 #include <sys/select.h>
 #include <termios.h>
 #include <unistd.h>
+#else
+#include <windows.h>
 #endif
 
 /* Static state */
@@ -268,6 +270,15 @@ static void detect_unicode_level(void)
     }
 
     if (!locale || locale[0] == '\0') {
+#ifdef _WIN32
+        /* On Windows, locale env vars are typically unset. Check the console
+         * codepage — if it's UTF-8 (65001), we have full unicode support. */
+        if (GetConsoleOutputCP() == CP_UTF8) {
+            g_caps.unicode_level = TERM_UNICODE_FULL;
+            strncpy(g_caps.encoding, "UTF-8", sizeof(g_caps.encoding) - 1);
+            return;
+        }
+#endif
         g_caps.unicode_level = TERM_UNICODE_NONE;
         strncpy(g_caps.encoding, "ASCII", sizeof(g_caps.encoding) - 1);
         return;
