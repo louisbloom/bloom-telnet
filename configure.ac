@@ -105,7 +105,6 @@ AC_CHECK_FUNCS([memset socket select getaddrinfo])
 dnl Output files
 AC_CONFIG_FILES([
     Makefile
-    include/Makefile
     src/Makefile
     lisp/Makefile
     emacs/Makefile

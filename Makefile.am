@@ -1,6 +1,6 @@
 # Makefile.am - Top-level automake file for mudlark
 
-SUBDIRS = include src lisp emacs tests
+SUBDIRS = src lisp emacs tests
 
 ACLOCAL_AMFLAGS = -I m4
 
