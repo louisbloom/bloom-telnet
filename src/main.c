@@ -417,23 +417,26 @@ static void handle_app_cmd(TuiCmd *cmd, void *user_data)
 /* Handle incoming telnet data. Returns 0 on success, -1 on disconnect */
 static int handle_telnet_data(char *recv_buffer, size_t buffer_size)
 {
-    int received = telnet_receive(g_telnet, recv_buffer, buffer_size - 1);
+    for (;;) {
+        int received = telnet_receive(g_telnet, recv_buffer, buffer_size - 1);
 
-    if (received < 0) {
-        g_connected = 0;
-        if (g_server_echo) {
-            g_server_echo = 0;
-            tui_textinput_set_echo_mode(g_textinput, 0);
-            Environment *env = (Environment *)lisp_x_get_environment();
-            if (env)
-                lisp_eval_string("(status-mode-remove 'echo-off)", env);
+        if (received < 0) {
+            g_connected = 0;
+            if (g_server_echo) {
+                g_server_echo = 0;
+                tui_textinput_set_echo_mode(g_textinput, 0);
+                Environment *env = (Environment *)lisp_x_get_environment();
+                if (env)
+                    lisp_eval_string("(status-mode-remove 'echo-off)", env);
+            }
+            update_divider_color();
+            echo_to_viewport("\n*** Connection lost ***\n", 25);
+            return -1;
         }
-        update_divider_color();
-        echo_to_viewport("\n*** Connection lost ***\n", 25);
-        return -1;
-    }
 
-    if (received > 0) {
+        if (received == 0)
+            break;
+
         recv_buffer[received] = '\0';
 
         /* Check for echo state change (password mode toggle) */
@@ -459,10 +462,10 @@ static int handle_telnet_data(char *recv_buffer, size_t buffer_size)
 
         /* Append filtered data to viewport */
         telnet_app_echo(g_app, filtered, filtered_len);
-
-        /* Re-render full screen */
-        tui_runtime_flush(g_runtime);
     }
+
+    /* Re-render full screen after processing all available data */
+    tui_runtime_flush(g_runtime);
 
     return 0;
 }
