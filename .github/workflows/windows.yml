@@ -1,0 +1,127 @@
+name: Windows
+
+on:
+  push:
+    branches: [master]
+    tags: ["v*"]
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-test:
+    name: Build & Test (${{ matrix.label }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: x86_64
+            runner: windows-latest
+            msystem: UCRT64
+            arch: ucrt-x86_64
+    runs-on: ${{ matrix.runner }}
+    defaults:
+      run:
+        shell: msys2 {0}
+
+    steps:
+      - name: Checkout mudlark
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Checkout ditty (dependency)
+        uses: actions/checkout@v5
+        with:
+          repository: chestso/ditty
+          path: ditty
+          fetch-depth: 0
+
+      - name: Checkout boba (dependency)
+        uses: actions/checkout@v5
+        with:
+          repository: chestso/boba
+          path: boba
+          fetch-depth: 0
+
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: ${{ matrix.msystem }}
+          update: true
+          install: >-
+            base-devel git mingw-w64-${{ matrix.arch }}-toolchain
+            autoconf automake libtool make pkg-config
+            mingw-w64-${{ matrix.arch }}-gc
+            mingw-w64-${{ matrix.arch }}-pcre2
+            ncurses zip p7zip
+
+      - name: Build & install boba
+        working-directory: boba
+        run: |
+          ./autogen.sh
+          mkdir build && cd build
+          sh ../configure --prefix="$MINGW_PREFIX"
+          make -j"$(nproc)"
+          make check
+          make install
+
+      - name: Build & install ditty
+        working-directory: ditty
+        run: |
+          ./autogen.sh
+          mkdir build && cd build
+          sh ../configure --prefix="$MINGW_PREFIX"
+          make -j"$(nproc)"
+          make check
+          make install
+
+      - name: Build mudlark
+        run: |
+          ./autogen.sh
+          mkdir build && cd build
+          if [ "${{ startsWith(github.ref, 'refs/tags/v') }}" = "true" ]; then
+            sh ../configure --enable-release
+          else
+            sh ../configure
+          fi
+          make -j"$(nproc)"
+
+      - name: Run tests
+        run: make -C build check
+
+      - name: Build portable ZIP
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          make -C build dist-portable
+          ls -la mudlark-*-windows-*.zip
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: mudlark-windows-${{ matrix.label }}
+          path: mudlark-*-windows-*.zip
+          if-no-files-found: error
+          retention-days: ${{ startsWith(github.ref, 'refs/tags/v') && 1 || 30 }}
+
+  release:
+    name: Publish release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download x86_64 artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: mudlark-windows-x86_64
+          path: artifacts/x86_64
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v3
+        with:
+          files: |
+            artifacts/x86_64/mudlark-*-windows-*.zip
+          generate_release_notes: false
+          fail_on_unmatched_files: true
