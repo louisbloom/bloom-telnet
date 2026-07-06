@@ -125,7 +125,7 @@ setlocal
 set "HERE=%~dp0"
 set "MUDLARK_HOME=%HERE%share\mudlark"
 for %%I in ("%HERE%mudlark.exe") do set "MUDLARK_EXE=%%~fI"
-start "" /b "%MUDLARK_EXE%" %*
+"%MUDLARK_EXE%" %*
 endlocal
 LAUNCHER
 
@@ -171,8 +171,8 @@ if [ "$ZIPPED" -ne 1 ]; then
 	win_stage="$(cygpath -w "$STAGE_DIR" 2>/dev/null || echo "$STAGE_DIR")"
 	win_zip="$(cygpath -w "$ZIP_FILE" 2>/dev/null || echo "$ZIP_FILE")"
 	powershell.exe -NoProfile -Command \
-		"Compress-Archive -Path '$win_stage\\*' -DestinationPath '$win_zip' -Force" \
-		&& ZIPPED=1
+		"Compress-Archive -Path '$win_stage\\*' -DestinationPath '$win_zip' -Force" &&
+		ZIPPED=1
 fi
 if [ "$ZIPPED" -ne 1 ]; then
 	echo "ERROR: Cannot create ZIP (tried zip, 7z, PowerShell)" >&2
