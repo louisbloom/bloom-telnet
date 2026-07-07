@@ -15,8 +15,13 @@ Then connect with:
 import socket
 import select
 import sys
+import time
 
 PORT = 4449
+
+# Delay before sending the welcome banner (seconds). Simulates a slow
+# server that sends IAC negotiation first, then the banner after a pause.
+BANNER_DELAY = 0.2
 
 # Telnet protocol constants (RFC 854)
 IAC = 255  # Interpret As Command
@@ -152,6 +157,8 @@ class TelnetConnection:
         """Send welcome banner once, after NAWS has been received."""
         if not self.banner_sent:
             self.banner_sent = True
+            if BANNER_DELAY > 0:
+                time.sleep(BANNER_DELAY)
             self.send(self.server.get_welcome_banner(self.terminal_width))
             self.send(PROMPT)
 

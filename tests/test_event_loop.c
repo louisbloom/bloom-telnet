@@ -248,6 +248,102 @@ static void test_telnet_send_multiple_via_socketpair(void)
 }
 
 /* ========================================================================
+ * Tests: telnet_receive with IAC-only data
+ *
+ * Regression test for the "missing welcome banner" bug. When a server
+ * sends only IAC negotiation bytes (no text), telnet_receive strips them
+ * all and must loop internally to call recv() again — hitting
+ * EWOULDBLOCK/WSAEWOULDBLOCK which re-arms the socket event. Without
+ * this loop, the stripped-IAC recv would return 0, and on Windows the
+ * FD_READ event would never re-fire, so a delayed banner would be
+ * silently dropped.
+ * ======================================================================== */
+
+static void test_telnet_receive_iac_only_then_text(void)
+{
+    int capture_fd;
+    Telnet *t = testkit_create_telnet(&capture_fd);
+
+    /* Set the telnet (client) socket to non-blocking so recv() returns
+     * EWOULDBLOCK when no data is available, matching real usage. */
+#ifdef _WIN32
+    u_long mode = 1;
+    ioctlsocket(t->socket, FIONBIO, &mode);
+#else
+    int flags = fcntl(t->socket, F_GETFL, 0);
+    fcntl(t->socket, F_SETFL, flags | O_NONBLOCK);
+#endif
+
+    /* Send IAC negotiation only — no text data.
+     * IAC WILL SGA (server offers Suppress Go Ahead) */
+    unsigned char iac_data[] = { 255, 251, 3 };
+    int sent = send(capture_fd, (const char *)iac_data, sizeof(iac_data), 0);
+    assert(sent == (int)sizeof(iac_data));
+
+    /* telnet_receive must strip all IAC bytes and loop internally
+     * until recv() returns WSAEWOULDBLOCK/EAGAIN, then return 0.
+     * This ensures the socket buffer is fully drained. On Windows
+     * with WSAEventSelect, the would-block recv is what re-arms
+     * FD_READ — without it, a delayed banner would be silently
+     * dropped because FD_READ would never fire again. */
+    char recv_buf[256];
+    int received = telnet_receive(t, recv_buf, sizeof(recv_buf) - 1);
+    assert(received == 0);
+
+    /* Send text data (the delayed banner). */
+    const char *banner = "Welcome!\r\n";
+    size_t banner_len = strlen(banner);
+    sent = send(capture_fd, banner, (int)banner_len, 0);
+    assert(sent == (int)banner_len);
+
+    /* telnet_receive should now return the text data. */
+    received = telnet_receive(t, recv_buf, sizeof(recv_buf) - 1);
+    assert(received == (int)banner_len);
+    assert(memcmp(recv_buf, banner, banner_len) == 0);
+
+    telnet_destroy(t);
+#ifdef _WIN32
+    closesocket(capture_fd);
+#else
+    close(capture_fd);
+#endif
+}
+
+static void test_telnet_receive_iac_mixed_with_text(void)
+{
+    int capture_fd;
+    Telnet *t = testkit_create_telnet(&capture_fd);
+
+#ifdef _WIN32
+    u_long mode = 1;
+    ioctlsocket(t->socket, FIONBIO, &mode);
+#else
+    int flags = fcntl(t->socket, F_GETFL, 0);
+    fcntl(t->socket, F_SETFL, flags | O_NONBLOCK);
+#endif
+
+    /* Send IAC negotiation followed by text in one chunk. */
+    unsigned char mixed[] = {
+        255, 251, 3, /* IAC WILL SGA */
+        'H', 'e', 'l', 'l', 'o'
+    };
+    int sent = send(capture_fd, (const char *)mixed, sizeof(mixed), 0);
+    assert(sent == (int)sizeof(mixed));
+
+    char recv_buf[256];
+    int received = telnet_receive(t, recv_buf, sizeof(recv_buf) - 1);
+    assert(received == 5);
+    assert(memcmp(recv_buf, "Hello", 5) == 0);
+
+    telnet_destroy(t);
+#ifdef _WIN32
+    closesocket(capture_fd);
+#else
+    close(capture_fd);
+#endif
+}
+
+/* ========================================================================
  * Tests: Full event loop path — schedule callback that sends to telnet
  *
  * Simulates the telnet-send flow: callback is scheduled, drain executes
@@ -439,6 +535,11 @@ int main(void)
     printf("\n  Telnet socketpair send:\n");
     RUN_TEST(test_telnet_send_via_socketpair);
     RUN_TEST(test_telnet_send_multiple_via_socketpair);
+
+    /* telnet_receive IAC stripping regression */
+    printf("\n  Telnet receive IAC stripping:\n");
+    RUN_TEST(test_telnet_receive_iac_only_then_text);
+    RUN_TEST(test_telnet_receive_iac_mixed_with_text);
 
     /* Full event loop path */
     printf("\n  Event loop integration:\n");

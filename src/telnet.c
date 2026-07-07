@@ -565,103 +565,117 @@ int telnet_receive(Telnet *t, char *buffer, size_t bufsize)
     if (!t || t->socket < 0)
         return -1;
 
-    int received = recv(t->socket, buffer, bufsize, 0);
+    for (;;) {
+        int received = recv(t->socket, buffer, bufsize, 0);
 
-    /* Log raw received data */
-    if (received > 0) {
-        telnet_log_data(t, "RECV", (unsigned char *)buffer, received);
-    }
+        /* Log raw received data */
+        if (received > 0) {
+            telnet_log_data(t, "RECV", (unsigned char *)buffer, received);
+        }
 
-    if (received < 0) {
-        /* Error from recv() */
+        if (received < 0) {
+            /* Error from recv() */
 #ifdef _WIN32
-        int error = WSAGetLastError();
-        if (error == WSAEWOULDBLOCK || error == WSAEINPROGRESS ||
-            error == WSAEINTR) {
-            /* Would block or interrupted - no data available, not an error */
-            return 0;
-        }
-        mudlark_log(LOG_ERROR, "telnet", "recv() returned -1, WSAGetLastError=%d",
-                    error);
+            int error = WSAGetLastError();
+            if (error == WSAEWOULDBLOCK || error == WSAEINPROGRESS ||
+                error == WSAEINTR) {
+                /* Would block or interrupted - no data available, not an
+                 * error */
+                return 0;
+            }
+            mudlark_log(LOG_ERROR, "telnet",
+                        "recv() returned -1, WSAGetLastError=%d", error);
 #else
-        if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
-            /* Would block or interrupted - no data available, not an error */
-            return 0;
-        }
-        mudlark_log(LOG_ERROR, "telnet", "recv() returned -1, errno=%d (%s)", errno,
-                    strerror(errno));
+            if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
+                /* Would block or interrupted - no data available, not an
+                 * error */
+                return 0;
+            }
+            mudlark_log(LOG_ERROR, "telnet",
+                        "recv() returned -1, errno=%d (%s)", errno,
+                        strerror(errno));
 #endif
-        /* Connection error */
-        telnet_disconnect(t);
-        return -1;
-    } else if (received == 0) {
-        /* recv() returning 0 means graceful close (peer sent FIN) */
-        mudlark_log(LOG_ERROR, "telnet",
-                    "recv() returned 0 (peer closed connection)");
-        telnet_disconnect(t);
-        return -1;
-    }
-
-    /* Parse Telnet commands (state persists across recv calls) */
-    size_t pos = 0;
-
-    for (int i = 0; i < received; i++) {
-        unsigned char c = buffer[i];
-
-        switch (t->data_state) {
-        case TELNET_DATA_NORMAL:
-            if (c == IAC) {
-                t->data_state = TELNET_DATA_IAC;
-            } else {
-                buffer[pos++] = c;
-            }
-            break;
-
-        case TELNET_DATA_IAC:
-            switch (c) {
-            case IAC:
-                buffer[pos++] = IAC;
-                t->data_state = TELNET_DATA_NORMAL;
-                break;
-            case WILL:
-                t->data_state = TELNET_DATA_WILL;
-                break;
-            case WONT:
-                t->data_state = TELNET_DATA_WONT;
-                break;
-            case DO:
-                t->data_state = TELNET_DATA_DO;
-                break;
-            case DONT:
-                t->data_state = TELNET_DATA_DONT;
-                break;
-            case SE:
-            case NOP:
-            default:
-                t->data_state = TELNET_DATA_NORMAL;
-                break;
-            }
-            break;
-
-        case TELNET_DATA_WILL:
-            if (c == OPT_ECHO)
-                t->server_echo = 1;
-            t->data_state = TELNET_DATA_NORMAL;
-            break;
-        case TELNET_DATA_WONT:
-            if (c == OPT_ECHO)
-                t->server_echo = 0;
-            t->data_state = TELNET_DATA_NORMAL;
-            break;
-        case TELNET_DATA_DO:
-        case TELNET_DATA_DONT:
-            t->data_state = TELNET_DATA_NORMAL;
-            break;
+            /* Connection error */
+            telnet_disconnect(t);
+            return -1;
+        } else if (received == 0) {
+            /* recv() returning 0 means graceful close (peer sent FIN) */
+            mudlark_log(LOG_ERROR, "telnet",
+                        "recv() returned 0 (peer closed connection)");
+            telnet_disconnect(t);
+            return -1;
         }
-    }
 
-    buffer[pos] = '\0';
-    return pos;
+        /* Parse Telnet commands (state persists across recv calls) */
+        size_t pos = 0;
+
+        for (int i = 0; i < received; i++) {
+            unsigned char c = buffer[i];
+
+            switch (t->data_state) {
+            case TELNET_DATA_NORMAL:
+                if (c == IAC) {
+                    t->data_state = TELNET_DATA_IAC;
+                } else {
+                    buffer[pos++] = c;
+                }
+                break;
+
+            case TELNET_DATA_IAC:
+                switch (c) {
+                case IAC:
+                    buffer[pos++] = IAC;
+                    t->data_state = TELNET_DATA_NORMAL;
+                    break;
+                case WILL:
+                    t->data_state = TELNET_DATA_WILL;
+                    break;
+                case WONT:
+                    t->data_state = TELNET_DATA_WONT;
+                    break;
+                case DO:
+                    t->data_state = TELNET_DATA_DO;
+                    break;
+                case DONT:
+                    t->data_state = TELNET_DATA_DONT;
+                    break;
+                case SE:
+                case NOP:
+                default:
+                    t->data_state = TELNET_DATA_NORMAL;
+                    break;
+                }
+                break;
+
+            case TELNET_DATA_WILL:
+                if (c == OPT_ECHO)
+                    t->server_echo = 1;
+                t->data_state = TELNET_DATA_NORMAL;
+                break;
+            case TELNET_DATA_WONT:
+                if (c == OPT_ECHO)
+                    t->server_echo = 0;
+                t->data_state = TELNET_DATA_NORMAL;
+                break;
+            case TELNET_DATA_DO:
+            case TELNET_DATA_DONT:
+                t->data_state = TELNET_DATA_NORMAL;
+                break;
+            }
+        }
+
+        if (pos > 0) {
+            buffer[pos] = '\0';
+            return pos;
+        }
+
+        /* All received bytes were IAC negotiation. Loop and recv again
+         * so that we either find text data or hit WSAEWOULDBLOCK/EAGAIN
+         * — the would-block return is what re-arms the socket event
+         * (WSAEventSelect on Windows, select() readiness on Unix).
+         * Without this loop, a server that sends negotiation first and
+         * the banner later would have its banner silently missed. */
+    }
 }
 
 int telnet_get_server_echo(Telnet *t) { return t ? t->server_echo : 0; }
