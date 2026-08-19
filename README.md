@@ -60,6 +60,15 @@ Build output goes to `build/`.
 
 Note: The `-l`/`--load` option expects just the filename (e.g., `tintin` or `tintin.lisp`), not a path. The `.lisp` extension is added automatically if omitted. The system searches `lisp/` and `lisp/contrib/` automatically.
 
+### Telnet I/O Logging
+
+mudlark logs raw telnet traffic (send and receive) to `~/telnet-logs/` by default. Toggle it with `*enable-telnet-logging*` and change the directory with `*telnet-log-directory*` (both in `lisp/init.lisp`). Each log entry carries an ISO 8601 timestamp with millisecond precision:
+
+```
+[2026-08-19T14:23:05.123] RECV: <data>
+[2026-08-19T14:23:05.456] SEND: <data>
+```
+
 ## Commands
 
 Once running, use these commands (prefixed with `:`):

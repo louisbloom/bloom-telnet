@@ -79,6 +79,18 @@ static void get_timestamp_iso(char *buffer, size_t size)
     strftime(buffer, size, "%Y-%m-%dT%H-%M-%S", tm_info);
 }
 
+/* Get timestamp for log entries with millisecond precision:
+ * YYYY-MM-DDTHH:MM:SS.mmm */
+static void get_timestamp_entry(char *buffer, size_t size)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    struct tm *tm_info = localtime(&ts.tv_sec);
+    char time_part[32];
+    strftime(time_part, sizeof(time_part), "%Y-%m-%dT%H:%M:%S", tm_info);
+    snprintf(buffer, size, "%s.%03ld", time_part, ts.tv_nsec / 1000000);
+}
+
 /* Open log file for telnet session */
 static int telnet_open_log(Telnet *t, const char *log_dir)
 {
@@ -174,9 +186,7 @@ static void telnet_log_data(Telnet *t, const char *direction,
 
     /* Get timestamp for this log line */
     char timestamp[32];
-    time_t now = time(NULL);
-    struct tm *tm_info = localtime(&now);
-    strftime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%S", tm_info);
+    get_timestamp_entry(timestamp, sizeof(timestamp));
 
     /* Write log line: [timestamp] DIRECTION: <data> */
     fprintf(t->log_file, "[%s] %s: ", timestamp, direction);
