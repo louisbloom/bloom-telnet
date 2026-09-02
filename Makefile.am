@@ -1,6 +1,6 @@
 # Makefile.am - Top-level automake file for mudlark
 
-SUBDIRS = src lisp emacs tests
+SUBDIRS = include src lisp emacs tests
 
 ACLOCAL_AMFLAGS = -I m4
 
@@ -16,6 +16,7 @@ EXTRA_DIST = \
     .clang-format \
     TODO.md \
     scripts/make-dist-zip.sh \
+    scripts/build-ucrt64.sh \
     .github/workflows/windows.yml \
     emacs/Makefile.am \
     emacs/README.md \

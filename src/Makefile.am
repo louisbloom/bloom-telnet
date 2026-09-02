@@ -35,11 +35,13 @@ mudlark_SOURCES = \
     lisp_extension.h \
     logging.c \
     logging.h \
+    colors.h \
     commands.c \
     commands.h \
     terminal_caps.c \
     telnet_app.c \
-    telnet_app.h
+    telnet_app.h \
+    telnet_internal.h
 
 mudlark_CPPFLAGS = \
     -I$(top_srcdir)/include \

@@ -100,6 +100,17 @@ AM_TESTS_ENVIRONMENT = \
     export MUDLARK_BIN;
 
 EXTRA_DIST = \
+    testkit.h \
+    test_server.py \
+    bench-data \
+    init.lisp \
+    practice.lisp \
+    script-echo.lisp \
+    session.lisp \
+    spell-translator.lisp \
+    status.lisp \
+    test_completion_pipeline.lisp \
+    test_word_scan.lisp \
     run-test.sh \
     run-bench.sh \
     test-helpers.lisp \

@@ -30,6 +30,14 @@ AS_IF([test -z "$MUDLARK_VERSION"],
       [MUDLARK_VERSION="$PACKAGE_VERSION"])
 AC_SUBST([MUDLARK_VERSION])
 AC_MSG_NOTICE([mudlark version: $MUDLARK_VERSION])
+dnl Derive the automake VERSION (and thus the dist tarball name and the
+dnl PACKAGE_VERSION/VERSION macros in config.h) from the version recomputed
+dnl above, not the one baked into configure by autoreconf.  Without this,
+dnl `make dist` after a tag still names the tarball with the autoreconf-time
+dnl version, so shipping a new release requires re-running autogen.sh.
+PACKAGE_VERSION="$MUDLARK_VERSION"
+VERSION="$MUDLARK_VERSION"
+
 dnl MUDLARK_VERSION is exposed to source via the compile-time-generated
 dnl mudlark_version.h (see src/Makefile.am), not via config.h.
 
@@ -105,6 +113,7 @@ AC_CHECK_FUNCS([memset socket select getaddrinfo])
 dnl Output files
 AC_CONFIG_FILES([
     Makefile
+    include/Makefile
     src/Makefile
     lisp/Makefile
     emacs/Makefile
